@@ -13,6 +13,8 @@ La référence du projet est `docs/cahier-des-charges.md` : la relire avant chaq
 - TypeScript strict, pas de `any`. Chaque règle métier a ses tests.
 - Un seul lot à la fois (section 9 du cahier des charges). Ne pas commencer le lot suivant sans l'accord explicite de l'utilisateur.
 - Ne rien inventer : ce qui est ambigu ou manquant (notamment l'API Splash360) est signalé avant de coder.
+- Toute décision structurante est tracée dans un ADR (`docs/adr/`).
+- Le client (mobile, web) ne parle qu'à `apps/api`, jamais directement à la base (ADR 0002).
 
 ## Structure du dépôt (cible du lot 0)
 
@@ -24,14 +26,15 @@ apps/
 packages/
   core/          Règles métier pures (prix, frais, minimum, créneaux, options) — aucune dépendance réseau
   api-menu/      Seul client de l'API menu Splash360 ; traduit vers les types internes
-  db/            Types générés depuis la base, client Supabase serveur
+  db/            Accès Postgres côté serveur (postgres.js), types des lignes
+  contracts/     Schémas zod des échanges client ↔ API, partagés
   theme/         Thème de l'enseigne, contraste automatique
   i18n/          Textes externalisés (fr)
   config/        tsconfig, ESLint, Prettier partagés
 supabase/
   migrations/    Migrations SQL versionnées
   tests/         Tests des règles d'accès (RLS)
-docs/            Cahier des charges, plans de lot, doc de l'API Splash360 (docs/api-splash360/)
+docs/            Cahier des charges, plans de lot, ADR (docs/adr/), doc de l'API Splash360 (docs/api-splash360/)
 ```
 
 ## Commandes

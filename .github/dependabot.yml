@@ -1,0 +1,23 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Versions pilotées par le SDK Expo : on les monte avec `npx expo install --fix`.
+      - dependency-name: 'expo*'
+      - dependency-name: 'react-native*'
+      - dependency-name: '@expo/*'
+      - dependency-name: 'react'
+      - dependency-name: 'react-dom'
+      - dependency-name: '@stripe/stripe-react-native'
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
