@@ -2,9 +2,13 @@ import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import {
   createMemoryRestaurantStore,
   createMemoryTenantStore,
+  type OrderingConfig,
   type Restaurant,
 } from '@splash360/db';
+import { cents } from '@splash360/core';
 import { createApp, type AppDeps } from './app';
+import { createDemoGeoProvider } from './geo';
+import { createMemoryOrderingStore } from './memory-ordering';
 
 export const BELLA_ID = '00000000-0000-4000-8000-000000000001';
 export const GREEN_ID = '00000000-0000-4000-8000-000000000002';
@@ -24,8 +28,39 @@ const restaurant = (
   ...r,
 });
 
+/** Bella : livraison et retrait, 11:30–14:30 et 18:30–22:30 du mardi au dimanche, 2 commandes max par créneau. */
+export const bellaConfig: OrderingConfig = {
+  pickupEnabled: true,
+  deliveryEnabled: true,
+  deliveryMinutes: 15,
+  schedule: {
+    timezone: 'Europe/Paris',
+    openingHours: [2, 3, 4, 5, 6, 7].flatMap((d) => [
+      { isoWeekday: d, opens: '11:30', closes: '14:30' },
+      { isoWeekday: d, opens: '18:30', closes: '22:30' },
+    ]),
+    closures: [],
+    slotStepMinutes: 15,
+    prepMinutes: 20,
+    maxOrdersPerSlot: 2,
+    daysAhead: 7,
+  },
+  fees: {
+    deliveryMinimumCents: cents(1500),
+    freeDeliveryThresholdCents: cents(3500),
+    serviceFeeCents: cents(0),
+  },
+  zones: [{ id: 'zone-2km', kind: 'radius', radiusMeters: 2000, feeCents: cents(190) }],
+};
+
+/** Mardi 24 novembre 2026, 10:00 à Paris (restaurant pas encore ouvert). */
+export const NOW = new Date('2026-11-24T09:00:00.000Z');
+
 export function testDeps(overrides: Partial<AppDeps> = {}): AppDeps {
   return {
+    ordering: createMemoryOrderingStore({ [BELLA_RESTO]: bellaConfig }),
+    geo: createDemoGeoProvider(),
+    now: () => NOW,
     tenants: createMemoryTenantStore([
       {
         id: BELLA_ID,
@@ -49,6 +84,8 @@ export function testDeps(overrides: Partial<AppDeps> = {}): AppDeps {
         tenantId: BELLA_ID,
         name: 'Bella Bastille',
         splash360Id: 'S360-R-BELLA-1',
+        latitude: 48.8553,
+        longitude: 2.3747,
       }),
       restaurant({
         id: GREEN_RESTO,

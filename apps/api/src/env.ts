@@ -7,6 +7,8 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('*'),
   MENU_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(180),
   /** Âge maximal de la carte servie si l'API menu tombe ; au-delà, commande bloquée. Valeur à fixer avec Splash360. */
+  /** Géocodeur (API Adresse, format GeoJSON) ; `demo` = adresses de démonstration hors ligne. */
+  GEOCODER_URL: z.string().default('https://data.geopf.fr/geocodage/search'),
   MENU_MAX_STALE_MINUTES: z.coerce.number().int().nonnegative().default(60),
 });
 

@@ -1,6 +1,8 @@
 import postgres from 'postgres';
 
 export type Sql = postgres.Sql;
+/** Connexion ou transaction en cours. */
+export type Queryable = postgres.Sql | postgres.TransactionSql;
 
 /**
  * Connexion Postgres côté serveur (ADR 0003). Le rôle utilisé contourne la RLS :

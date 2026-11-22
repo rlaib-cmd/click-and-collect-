@@ -5,8 +5,9 @@ import { DEFAULT_THEME } from '@splash360/theme';
 import { Hono } from 'hono';
 import { apiError } from '../errors';
 import { toMenuDto } from '../menu-dto';
+import { registerOrderingRoutes, type OrderingRoutesDeps } from './ordering';
 
-export interface TenantRoutesDeps {
+export interface TenantRoutesDeps extends OrderingRoutesDeps {
   readonly tenants: TenantStore;
   readonly restaurants: RestaurantStore;
   readonly menus: MenuCache;
@@ -87,6 +88,8 @@ export function tenantRoutes(deps: TenantRoutesDeps) {
       throw error;
     }
   });
+
+  registerOrderingRoutes(app, deps);
 
   return app;
 }

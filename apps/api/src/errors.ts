@@ -1,4 +1,4 @@
-import type { ApiError, ApiErrorCode } from '@splash360/contracts';
+import type { ApiError, ApiErrorCode, OrderIssue } from '@splash360/contracts';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -7,10 +7,17 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   tenant_suspended: 403,
   invalid_request: 400,
   menu_unavailable: 503,
+  order_invalid: 422,
+  slot_full: 409,
   internal_error: 500,
 };
 
-export function apiError(c: Context, code: ApiErrorCode, message: string) {
-  const body: ApiError = { error: { code, message } };
+export function apiError(
+  c: Context,
+  code: ApiErrorCode,
+  message: string,
+  issues?: readonly OrderIssue[],
+) {
+  const body: ApiError = { error: { code, message, ...(issues ? { issues: [...issues] } : {}) } };
   return c.json(body, STATUS[code]);
 }

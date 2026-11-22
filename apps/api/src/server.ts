@@ -1,8 +1,14 @@
 import { serve } from '@hono/node-server';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
-import { createPostgresRestaurantStore, createPostgresTenantStore, createSql } from '@splash360/db';
+import {
+  createPostgresOrderingStore,
+  createPostgresRestaurantStore,
+  createPostgresTenantStore,
+  createSql,
+} from '@splash360/db';
 import { createApp } from './app';
 import { loadEnv } from './env';
+import { createBanGeoProvider, createDemoGeoProvider } from './geo';
 
 const env = loadEnv();
 const sql = createSql(env.DATABASE_URL);
@@ -18,6 +24,9 @@ const app = createApp({
   tenants: createPostgresTenantStore(sql),
   restaurants: createPostgresRestaurantStore(sql),
   menus,
+  ordering: createPostgresOrderingStore(sql),
+  geo:
+    env.GEOCODER_URL === 'demo' ? createDemoGeoProvider() : createBanGeoProvider(env.GEOCODER_URL),
   corsOrigins: origins,
   log: true,
 });

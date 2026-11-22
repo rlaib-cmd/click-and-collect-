@@ -1,0 +1,170 @@
+import {
+  addressSchema,
+  orderModeSchema,
+  placeOrderRequestSchema,
+  quoteRequestSchema,
+  type Availability,
+  type DeliveryCheck,
+  type PlacedOrder,
+  type Quote,
+  type SlotsDto,
+} from '@splash360/contracts';
+import type { Restaurant, RestaurantStore, TenantWithTheme } from '@splash360/db';
+import type { Context, Hono } from 'hono';
+import { z } from 'zod';
+import { apiError } from '../errors';
+import type { GeoProvider } from '../geo';
+import {
+  availability,
+  deliveryZoneFor,
+  quote,
+  slotsFor,
+  type OrderingDeps,
+} from '../ordering/service';
+
+export interface OrderingRoutesDeps extends OrderingDeps {
+  readonly restaurants: RestaurantStore;
+  readonly geo: GeoProvider;
+}
+
+type Env = { Variables: { tenant: TenantWithTheme } };
+
+async function readJson<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T> | null> {
+  const body: unknown = await c.req.json().catch(() => null);
+  const parsed = schema.safeParse(body);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Routes de prise de commande (lot 3), montées sous /v1/tenants/:subdomain. */
+export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps) {
+  async function load(c: Context<Env>, restaurantId: string) {
+    const tenant = c.get('tenant');
+    const restaurant = await deps.restaurants.findById(tenant.id, restaurantId);
+    if (!restaurant || restaurant.status === 'closed') return null;
+    const config = await deps.ordering.getConfig(tenant.id, restaurant.id);
+    if (!config) return null;
+    return { restaurant, config };
+  }
+
+  app.get('/:subdomain/restaurants/:restaurantId/availability', async (c) => {
+    const ctx = await load(c, c.req.param('restaurantId'));
+    if (!ctx) return apiError(c, 'not_found', 'Restaurant inconnu');
+    const body: Availability = availability(ctx.restaurant, ctx.config, deps.now());
+    c.header('Cache-Control', 'no-store');
+    return c.json(body);
+  });
+
+  app.get('/:subdomain/restaurants/:restaurantId/slots', async (c) => {
+    const query = z
+      .object({ mode: orderModeSchema, date: z.iso.date() })
+      .safeParse({ mode: c.req.query('mode'), date: c.req.query('date') });
+    if (!query.success) return apiError(c, 'invalid_request', 'Paramètres mode et date requis');
+    const ctx = await load(c, c.req.param('restaurantId'));
+    if (!ctx) return apiError(c, 'not_found', 'Restaurant inconnu');
+    const slots = await slotsFor(
+      deps,
+      ctx.restaurant,
+      ctx.config,
+      query.data.mode,
+      query.data.date,
+    );
+    const body: SlotsDto = { date: query.data.date, slots };
+    c.header('Cache-Control', 'no-store');
+    return c.json(body);
+  });
+
+  app.post('/:subdomain/restaurants/:restaurantId/delivery-check', async (c) => {
+    const address = await readJson(c, addressSchema);
+    if (!address) return apiError(c, 'invalid_request', 'Adresse invalide');
+    const ctx = await load(c, c.req.param('restaurantId'));
+    if (!ctx) return apiError(c, 'not_found', 'Restaurant inconnu');
+    const zone = ctx.config.deliveryEnabled
+      ? deliveryZoneFor(ctx.restaurant, ctx.config, address)
+      : null;
+    const body: DeliveryCheck = zone
+      ? { deliverable: true, feeCents: zone.feeCents, zoneName: zone.id }
+      : { deliverable: false };
+    return c.json(body);
+  });
+
+  app.post('/:subdomain/restaurants/:restaurantId/quote', async (c) => {
+    const request = await readJson(c, quoteRequestSchema);
+    if (!request) return apiError(c, 'invalid_request', 'Panier invalide');
+    const ctx = await load(c, c.req.param('restaurantId'));
+    if (!ctx) return apiError(c, 'not_found', 'Restaurant inconnu');
+    const result = await quote(deps, ctx.restaurant, ctx.config, request);
+    if (!result.ok) return orderInvalid(c, result.issues);
+    const body: Quote = {
+      lines: result.lines.map((l) => ({
+        productId: l.productId,
+        name: l.name,
+        quantity: l.quantity,
+        options: l.options.map((o) => ({
+          optionId: o.optionId,
+          name: o.name,
+          priceCents: o.priceCents,
+        })),
+        unitPriceCents: l.unitPriceCents,
+        totalCents: l.totalCents,
+        note: l.note,
+      })),
+      totals: result.totals,
+      at: result.at,
+    };
+    return c.json(body);
+  });
+
+  app.post('/:subdomain/orders', async (c) => {
+    const request = await readJson(c, placeOrderRequestSchema);
+    if (!request) return apiError(c, 'invalid_request', 'Commande invalide');
+    const tenant = c.get('tenant');
+    const ctx = await load(c, request.restaurantId);
+    if (!ctx) return apiError(c, 'not_found', 'Restaurant inconnu');
+    const result = await quote(deps, ctx.restaurant, ctx.config, request);
+    if (!result.ok) return orderInvalid(c, result.issues);
+
+    const created = await deps.ordering.createOrder({
+      tenantId: tenant.id,
+      restaurantId: ctx.restaurant.id,
+      customer: request.customer,
+      mode: request.mode,
+      requestedSlot: result.slot,
+      estimatedAt: result.at,
+      deliveryAddress:
+        request.mode === 'delivery' && request.address
+          ? { ...request.address, instructions: request.address.instructions ?? null }
+          : null,
+      deliveryZoneId: result.zoneId,
+      lines: result.lines,
+      totals: result.totals,
+      idempotencyKey: request.idempotencyKey,
+      maxOrdersPerSlot: ctx.config.schedule.maxOrdersPerSlot,
+    });
+    if (!created.ok) return apiError(c, 'slot_full', 'Ce créneau vient d’être complété');
+
+    const body: PlacedOrder = {
+      orderId: created.order.id,
+      number: created.order.number,
+      status: created.order.status,
+      totals: result.totals,
+      at: result.at,
+    };
+    return c.json(body, created.replayed ? 200 : 201);
+  });
+
+  app.get('/:subdomain/geo/search', async (c) => {
+    const q = (c.req.query('q') ?? '').trim();
+    if (q.length < 3 || q.length > 200) return c.json({ results: [] });
+    try {
+      return c.json({ results: await deps.geo.search(q) });
+    } catch {
+      return c.json({ results: [] });
+    }
+  });
+}
+
+function orderInvalid(c: Context, issues: Parameters<typeof apiError>[3]) {
+  return apiError(c, 'order_invalid', 'La commande doit être corrigée', issues);
+}
+
+export type { Restaurant };

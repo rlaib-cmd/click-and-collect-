@@ -1,5 +1,6 @@
 import type { MenuCache } from '@splash360/api-menu';
-import type { RestaurantStore, TenantStore } from '@splash360/db';
+import type { OrderingStore, RestaurantStore, TenantStore } from '@splash360/db';
+import type { GeoProvider } from './geo';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -11,6 +12,9 @@ export interface AppDeps {
   readonly tenants: TenantStore;
   readonly restaurants: RestaurantStore;
   readonly menus: MenuCache;
+  readonly ordering: OrderingStore;
+  readonly geo: GeoProvider;
+  readonly now?: () => Date;
   readonly corsOrigins?: readonly string[] | '*';
   readonly log?: boolean;
 }
@@ -27,11 +31,15 @@ export function createApp(deps: AppDeps) {
   const origins = deps.corsOrigins ?? '*';
   app.use(
     '/v1/*',
-    cors({ origin: origins === '*' ? '*' : [...origins], allowMethods: ['GET', 'POST'] }),
+    cors({
+      origin: origins === '*' ? '*' : [...origins],
+      allowMethods: ['GET', 'POST'],
+      allowHeaders: ['Content-Type'],
+    }),
   );
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
-  app.route('/v1/tenants', tenantRoutes(deps));
+  app.route('/v1/tenants', tenantRoutes({ ...deps, now: deps.now ?? (() => new Date()) }));
 
   app.notFound((c) => apiError(c, 'not_found', 'Route inconnue'));
   app.onError((err, c) => {
