@@ -30,6 +30,9 @@ Le lot 8 tourne sur des données de test (ADR 0009). À obtenir de Splash360 :
 4. Crédit des points d'une commande en ligne, avec **idempotence** par commande.
 5. Consommation d'une récompense : réservation à la commande, puis confirmation ou libération (paiement échoué, expiré).
 6. Remboursement d'une commande : retrait des points gagnés et restitution de la récompense ?
+7. Administration depuis le back-office (lot 9, ADR 0011) : **liste et recherche des membres** d'une enseigne
+   (nom, e-mail, code carte, solde, date d'adhésion), **correction manuelle des points** avec motif
+   (solde jamais négatif), **suppression d'un compte** (droit à l'effacement).
 
 ## Paiement sur place (ADR 0010)
 

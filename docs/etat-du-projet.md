@@ -14,6 +14,8 @@ Synthèse pour reprendre le projet. Détail par lot dans `docs/plan-lot-*.md`, d
 | 5. Caisse et suivi | 🟡 Terminé avec caisse de démonstration | Validation du contrat caisse par Splash360, prestataire e-mail |
 | 6. Back-office | ✅ Terminé, critère démontré | Projet Supabase Auth pour la connexion réelle |
 | 7. Publication | 🟡 Préparation technique terminée | Comptes : domaine, hébergeurs, Supabase, Stripe, Expo, Apple, Google |
+| 8. Fidélité, paiement sur place | 🟡 Terminé sur données de test | API fidélité Splash360 |
+| 9. Administration de la plateforme | ✅ Terminé (bloquer, supprimer, club fidélité) | Endpoints d'administration de la fidélité chez Splash360 |
 
 ## Aperçu en ligne (recette)
 
