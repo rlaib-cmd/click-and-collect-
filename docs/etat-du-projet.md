@@ -15,6 +15,13 @@ Synthèse pour reprendre le projet. Détail par lot dans `docs/plan-lot-*.md`, d
 | 6. Back-office | ✅ Terminé, critère démontré | Projet Supabase Auth pour la connexion réelle |
 | 7. Publication | 🟡 Préparation technique terminée | Comptes : domaine, hébergeurs, Supabase, Stripe, Expo, Apple, Google |
 
+## Aperçu en ligne (recette)
+
+- Application web : https://claude-splash360.expo.app (enseigne Chicken Street ; `?enseigne=bella` ou `?enseigne=greenbowl` pour les autres).
+- API : https://yfrvtrebukdbxnuqhlfy.supabase.co/functions/v1/api (fonction Supabase, ADR 0007 ; `pnpm --filter api build:edge`).
+- Android : build EAS `chickenstreet-preview` (distribution interne).
+- Paiement désactivé tant que les clés Stripe de test ne sont pas posées en secrets de la fonction.
+
 ## Qualité
 
 - **Tests** : 42 règles métier (couverture ≥ 95 % imposée), 64 API (routes, paiement, webhooks, caisse, back-office, durcissement), 26 application, 21 intégration Postgres (dont concurrence sur les créneaux et la file caisse), 12 pgTAP (RLS, cloisonnement), 1 parcours de bout en bout dans un navigateur.
