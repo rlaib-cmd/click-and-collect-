@@ -2,7 +2,7 @@
 
 **Critère d'acceptation (section 9)** : les trois applications démarrent ; les tests et le contrôle de types passent.
 
-Statut : **proposé, en attente de validation.**
+Statut : **réalisé le 2026-11-22.** Voir « Bilan » en fin de document.
 
 ## Versions relevées le 2026-11-22 (registre npm)
 
@@ -10,16 +10,17 @@ Statut : **proposé, en attente de validation.**
 |---|---|
 | Expo SDK | 58 (`expo` 58.0.26, `expo-router` 58.0.x) |
 | React Native | celle imposée par le SDK 58 (`npx expo install`) |
-| `@stripe/stripe-react-native` | 0.85.x (version exacte fixée par `npx expo install`) |
+| `@stripe/stripe-react-native` | 0.81.0 pour le SDK 58 (table de compatibilité Expo ; 0.85 est la dernière publiée) |
 | Next.js | 16.4.x |
 | `stripe` (Node) | 23.x |
 | `@supabase/supabase-js` / CLI `supabase` | 2.119.x / 3.2.x |
 | Turborepo | 2.11.x |
-| pnpm | 10.x (version de l'environnement ; 12.x disponible) |
+| pnpm | 10.28 |
+| TypeScript | 6.0 (version du gabarit Expo 58) |
 | Vitest | 5.x |
 | Node | 22 LTS |
 
-Point d'attention : TypeScript 7 (réécriture native) est sorti. On fixe la version de TypeScript sur celle que supportent officiellement Expo 58 et Next 16, et non sur la dernière.
+Point d'attention : TypeScript 7 est sorti, mais typescript-eslint ne le supporte pas encore (< 6.1). On reste sur TypeScript 6.0, celui du gabarit Expo 58.
 
 Remarque : docs.expo.dev et docs.stripe.com ne sont pas joignables depuis cette session. Les faits Stripe ci-dessous viennent du README de `@stripe/stripe-react-native` ; la doc Stripe Connect sera relue avant le lot 4.
 
@@ -42,9 +43,21 @@ Remarque : docs.expo.dev et docs.stripe.com ne sont pas joignables depuis cette 
 - `pnpm --filter mobile web` affiche l'écran d'accueil ; `pnpm --filter admin dev` affiche la page ; `curl localhost:<port>/health` répond `ok`.
 - iOS et Android : `npx expo start` démarre le bundler (le build de développement EAS demande un compte Expo, fourni plus tard).
 
-## Questions avant de coder
+## Décisions prises
 
-1. **Serveur de la commande en ligne** : je propose `apps/api` (Node + Hono, hébergé dans l'UE), parce qu'il réutilise directement `packages/core`. L'alternative est Supabase Edge Functions (Deno), mais partager le code du monorepo y est moins simple. On part sur `apps/api` ?
-2. **Base locale** : `supabase start` demande Docker. Tu l'as sur ta machine ? Sinon on se contente pour l'instant des migrations et des tests RLS lancés en CI.
-3. **Hébergement** (non bloquant pour le lot 0) : Vercel pour le back-office et le web, et un hébergeur UE pour `apps/api` (Scaleway, Fly.io région Paris…) ? On peut trancher avant le lot 7.
-4. **Compte Expo / EAS** : à créer au nom de Splash360 avant le lot 4 (Apple Pay et Google Pay exigent un build de développement).
+1. **Serveur** : `apps/api` en Node + Hono, qui réutilise `packages/core`. Hébergement UE à choisir avant le lot 7.
+2. **Base** : pas de Docker requis sur le poste. Les migrations et les tests pgTAP tournent en CI (`supabase db start` puis `supabase test db`).
+3. **Accès aux tables** : RLS activée et aucun accès pour `anon` et `authenticated` tant que les comptes du back-office n'existent pas (lot 1 et 6). Un test générique vérifie que toute table publique a la RLS et une colonne `tenant_id`.
+4. **Web Expo** : export statique (`web.output: "static"`).
+
+## Bilan
+
+- Les trois applications démarrent : export web et bundle iOS Expo OK, build Next.js OK, `GET /health` de l'API répond `ok`.
+- `pnpm lint`, `pnpm typecheck`, `pnpm test` passent (22 tâches Turborepo).
+- Migration et tests pgTAP validés sur Postgres local (5/5 ; ils échouent bien si la RLS est désactivée).
+
+## Reste à faire hors code
+
+- Compte Expo / EAS au nom de Splash360 (nécessaire au lot 4 pour Apple Pay et Google Pay), puis `eas init` pour lier le projet.
+- Documentation de l'API menu Splash360 dans `docs/api-splash360/` (bloque le lot 2).
+- Projets Supabase de recette et de production (région UE).

@@ -36,19 +36,27 @@ docs/            Cahier des charges, plans de lot, doc de l'API Splash360 (docs/
 
 ## Commandes
 
-À compléter au lot 0, une fois le socle en place. Forme attendue (depuis la racine) :
+Depuis la racine (Node 22, pnpm 10) :
 
 - `pnpm install` — installe tout le monorepo
-- `pnpm dev` — lance les applications (Turborepo)
-- `pnpm --filter mobile start` / `pnpm --filter admin dev` / `pnpm --filter api dev`
+- `pnpm dev` — lance les trois applications (Turborepo)
+- `pnpm --filter mobile start` — application client (Expo) ; `pnpm --filter mobile web` pour la version web
+- `pnpm --filter admin dev` — back-office sur http://localhost:3000
+- `pnpm --filter api dev` — serveur sur http://localhost:8787 (`GET /health`)
 - `pnpm test` — tests unitaires et d'intégration (Vitest)
 - `pnpm typecheck` — contrôle de types de tous les paquets
-- `pnpm lint` — ESLint et Prettier
-- `pnpm db:start` / `pnpm db:reset` — base Supabase locale et migrations
+- `pnpm lint` — ESLint ; `pnpm format` / `pnpm format:check` — Prettier
+- `pnpm db:start` / `pnpm db:reset` — base Supabase locale (Docker requis) et migrations
+- `pnpm db:test` — tests pgTAP des règles d'accès (`supabase/tests/`)
+
+Avant de déclarer une étape terminée : `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test`.
+La CI (`.github/workflows/ci.yml`) lance en plus le build du back-office, l'export web Expo et les tests de la base.
 
 ## Conventions
 
-- Monorepo pnpm + Turborepo. Les paquets internes sont nommés `@splash360/<nom>`.
+- Monorepo pnpm + Turborepo. Les paquets internes sont nommés `@splash360/<nom>` et publiés en TypeScript source (pas d'étape de build) ; le back-office les déclare dans `transpilePackages`.
+- TypeScript 6.0, aligné sur le SDK Expo 58 (TypeScript 7 n'est pas encore supporté par typescript-eslint).
+- Toute nouvelle table : colonne `tenant_id`, RLS activée, test dans `supabase/tests/` (le test générique échoue sinon).
 - Installer les dépendances natives de l'application mobile avec `npx expo install <paquet>` (jamais `pnpm add` direct), en particulier `@stripe/stripe-react-native`, dont la version dépend du SDK Expo.
 - Stripe sur mobile exige la nouvelle architecture React Native et, sur iOS, des frameworks dynamiques (`expo-build-properties` → `useFrameworks: "dynamic"`). Apple Pay et Google Pay ne fonctionnent pas dans Expo Go : utiliser un build de développement EAS.
 - Montants en centimes (entiers), devise EUR ; jamais de nombres à virgule pour l'argent.
