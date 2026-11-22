@@ -63,12 +63,24 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.11
         version: 2.1.11(hono@4.13.20)
+      '@splash360/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@splash360/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@splash360/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@splash360/theme':
+        specifier: workspace:*
+        version: link:../../packages/theme
       hono:
         specifier: ^4.13.20
         version: 4.13.20
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@splash360/config':
         specifier: workspace:*
