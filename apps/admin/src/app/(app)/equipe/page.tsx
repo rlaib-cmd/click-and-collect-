@@ -51,6 +51,17 @@ export default function TeamPage() {
     await staff.reload();
   };
 
+  const remove = async (s: { id: string; email: string }) => {
+    if (!window.confirm(t.confirmDelete(s.email))) return;
+    try {
+      await api(auth, `/staff/${s.id}`, z.undefined(), { method: 'DELETE' });
+      setError(null);
+      await staff.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : messages.admin.common.error);
+    }
+  };
+
   return (
     <div className="stack">
       <h1>{messages.admin.nav.team}</h1>
@@ -73,9 +84,12 @@ export default function TeamPage() {
               <td>
                 {restaurants.data?.restaurants.find((r) => r.id === s.restaurantId)?.name ?? '—'}
               </td>
-              <td>
-                <button type="button" className="link danger" onClick={() => void disable(s.id)}>
+              <td className="row">
+                <button type="button" className="link" onClick={() => void disable(s.id)}>
                   {t.disable}
+                </button>
+                <button type="button" className="link danger" onClick={() => void remove(s)}>
+                  {t.delete}
                 </button>
               </td>
             </tr>

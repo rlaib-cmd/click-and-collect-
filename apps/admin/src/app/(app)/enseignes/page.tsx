@@ -36,9 +36,34 @@ export default function TenantsPage() {
     await tenants.reload();
   };
 
+  const toggleBlock = async (x: { id: string; name: string; status: string }) => {
+    const blocking = x.status === 'active';
+    if (!window.confirm(blocking ? t.confirmBlock(x.name) : t.confirmUnblock(x.name))) return;
+    await update(x.id, { status: blocking ? 'suspended' : 'active' });
+  };
+
+  const remove = async (x: { id: string; name: string }) => {
+    const typed = window.prompt(t.confirmDelete(x.name));
+    if (typed === null) return;
+    if (typed.trim() !== x.name) return setError(t.deleteMismatch);
+    try {
+      await api(auth, `/tenants/${x.id}`, z.undefined(), { method: 'DELETE' });
+      setError(null);
+      if (auth.tenantId === x.id) setTenant(null);
+      await tenants.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : messages.admin.common.error);
+    }
+  };
+
   return (
     <div className="stack">
       <h1>{messages.admin.nav.tenants}</h1>
+      {error ? (
+        <p className="banner danger" role="alert">
+          {error}
+        </p>
+      ) : null}
       <table>
         <thead>
           <tr>
@@ -52,7 +77,12 @@ export default function TenantsPage() {
         <tbody>
           {tenants.data?.tenants.map((x) => (
             <tr key={x.id} className={x.status === 'suspended' ? 'muted' : ''}>
-              <td>{x.name}</td>
+              <td>
+                {x.name}
+                {x.status === 'suspended' ? (
+                  <span className="badge blocked">{t.blocked}</span>
+                ) : null}
+              </td>
               <td>{x.subdomain}</td>
               <td>{x.splash360Id}</td>
               <td className="num">
@@ -73,12 +103,13 @@ export default function TenantsPage() {
                 </button>
                 <button
                   type="button"
-                  className="link"
-                  onClick={() =>
-                    void update(x.id, { status: x.status === 'active' ? 'suspended' : 'active' })
-                  }
+                  className={x.status === 'active' ? 'link danger' : 'link'}
+                  onClick={() => void toggleBlock(x)}
                 >
-                  {x.status === 'active' ? t.suspend : t.activate}
+                  {x.status === 'active' ? t.block : t.unblock}
+                </button>
+                <button type="button" className="link danger" onClick={() => void remove(x)}>
+                  {t.delete}
                 </button>
               </td>
             </tr>
@@ -107,11 +138,6 @@ export default function TenantsPage() {
             {t.create}
           </button>
         </div>
-        {error ? (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        ) : null}
       </form>
     </div>
   );

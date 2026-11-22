@@ -182,6 +182,10 @@ code {
   font-size: 12px;
   font-weight: 600;
 }
+.badge.blocked {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
 .banner {
   margin: 0;
   padding: 10px 14px;
