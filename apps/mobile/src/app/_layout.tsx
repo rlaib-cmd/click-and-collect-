@@ -3,22 +3,26 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { CartProvider } from '@/cart/CartProvider';
+import { LoyaltyProvider } from '@/loyalty/LoyaltyProvider';
 import { TenantProvider, useTenant } from '@/tenant/TenantProvider';
 
 function ThemedStack() {
   const { palette } = useTenant();
   return (
-    <CartProvider>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: palette.background },
-        }}
-      >
-        <Stack.Screen name="r/[restaurantId]/p/[productId]" options={{ presentation: 'modal' }} />
-      </Stack>
-      <StatusBar style={palette.mode === 'dark' ? 'light' : 'dark'} />
-    </CartProvider>
+    <LoyaltyProvider>
+      <CartProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: palette.background },
+          }}
+        >
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="r/[restaurantId]/p/[productId]" options={{ presentation: 'modal' }} />
+        </Stack>
+        <StatusBar style={palette.mode === 'dark' ? 'light' : 'dark'} />
+      </CartProvider>
+    </LoyaltyProvider>
   );
 }
 

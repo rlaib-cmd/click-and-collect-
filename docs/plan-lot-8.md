@@ -12,7 +12,8 @@ En attendant : **données de test**, comme la carte (ADR 0006 → ADR 0009).
 - Récompense « produit offert » : le prix de base du produit (sans options) est déduit, une seule
   récompense par commande ; elle exige ce produit dans le panier et assez de points.
 - Le minimum de livraison et la livraison offerte se jugent sur le sous-total **avant** récompense.
-- Total = sous-total + livraison + service − récompense, jamais négatif.
+- Total = sous-total + livraison + service − récompense ; il doit rester au moins 0,50 € à payer
+  (minimum encaissable par carte), sinon la récompense est refusée.
 
 ## Ce qui est construit
 
@@ -23,6 +24,12 @@ En attendant : **données de test**, comme la carte (ADR 0006 → ADR 0009).
 | 3 | Base : colonnes de récompense sur `orders`, tables de démonstration de la fidélité |
 | 4 | API : programme, adhésion, membre (points, QR), récompense dans devis et commande, points au paiement |
 | 5 | Application : barre à 5 onglets, Accueil fidélité, Avantages, Ma carte (QR), Compte, récompense au panier |
+
+## Statut
+
+Étapes 1 à 5 livrées et testées (core 47 tests, API 67, pgTAP fidélité 4, intégration Postgres dont
+un règlement concurrent). Parcours vérifié dans un navigateur : inscription, QR code, Avantages,
+récompense au récapitulatif (refusée si rien ne reste à payer : minimum Stripe 0,50 €).
 
 ## Limites assumées des données de test
 

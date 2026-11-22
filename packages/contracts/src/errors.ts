@@ -48,6 +48,7 @@ export const orderIssueSchema = z.object({
     'unknown_reward',
     'reward_product_missing',
     'insufficient_points',
+    'reward_needs_paid_items',
   ]),
   line: z.number().int().nonnegative().optional(),
   productId: z.string().optional(),

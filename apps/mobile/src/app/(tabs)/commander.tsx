@@ -1,6 +1,6 @@
 import { messages } from '@splash360/i18n';
-import { router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAvailability, useDeliveryCheck, useRestaurants } from '@/api/hooks';
@@ -12,7 +12,7 @@ import { TenantLogo } from '@/components/TenantLogo';
 import { ErrorState, Loading, PrimaryButton } from '@/components/ui';
 import { useTenant } from '@/tenant/TenantProvider';
 
-/** Accueil : restaurant, mode, adresse, jour et heure, puis la carte. */
+/** Commander : restaurant, mode, adresse, jour et heure, puis la carte. */
 export default function HomeScreen() {
   const { config, palette, style, radii } = useTenant();
   const brandHeader = style.header === 'brand';
@@ -27,6 +27,14 @@ export default function HomeScreen() {
   const setup = cart.setup;
   const check = useDeliveryCheck(setup.mode === 'delivery' ? restaurantId : null, setup.address);
   const [planning, setPlanning] = useState(setup.time.kind === 'scheduled');
+  // Mode choisi depuis l'accueil (« À emporter » ou « Livraison »).
+  const params = useLocalSearchParams<{ mode?: string }>();
+  useEffect(() => {
+    if (restaurantId && (params.mode === 'pickup' || params.mode === 'delivery')) {
+      dispatch({ type: 'setup', restaurantId, setup: { mode: params.mode } });
+      router.setParams({ mode: undefined });
+    }
+  }, [params.mode, restaurantId, dispatch]);
 
   const update = useCallback(
     (patch: Partial<OrderSetup>) => {

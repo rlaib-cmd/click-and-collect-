@@ -84,10 +84,28 @@ describe('récompense « produit offert »', () => {
     ).toEqual({ ok: false, error: 'insufficient_points' });
   });
 
-  it('ne rend jamais le total négatif et garde les frais de livraison', () => {
+  it('garde les frais de livraison et exige un reste à payer encaissable', () => {
     const lines = [line('frites', 2000)];
-    const totals = totalsFor(lines, 'delivery');
-    const r = applyReward({ totals, lines, reward: fries, balance: 1000 });
+    const r = applyReward({
+      totals: totalsFor(lines, 'delivery'),
+      lines,
+      reward: fries,
+      balance: 1000,
+    });
     expect(r.ok && r.totals.totalCents).toBe(299);
+    // Seulement le produit offert, à emporter : rien à payer, donc refusé.
+    const alone = [line('frites', 350)];
+    expect(
+      applyReward({ totals: totalsFor(alone), lines: alone, reward: fries, balance: 1000 }),
+    ).toEqual({
+      ok: false,
+      error: 'reward_needs_paid_items',
+    });
+    // 0,50 € restant : accepté.
+    const withExtra = [line('frites', 350), line('sauce', 50)];
+    expect(
+      applyReward({ totals: totalsFor(withExtra), lines: withExtra, reward: fries, balance: 1000 })
+        .ok,
+    ).toBe(true);
   });
 });

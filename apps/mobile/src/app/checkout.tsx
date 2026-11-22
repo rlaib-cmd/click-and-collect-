@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiRequestError } from '@/api/client';
 import { usePlaceOrder, useQuote } from '@/api/hooks';
 import { useCart } from '@/cart/CartProvider';
+import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { SetupSummary } from '@/components/SetupSummary';
 import { ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
@@ -30,6 +31,8 @@ export default function CheckoutScreen() {
   // Une clé par tentative : un renvoi après coupure réseau ne crée pas de doublon.
   const [idempotencyKey] = useState(() => Crypto.randomUUID());
   const place = usePlaceOrder();
+  const loyalty = useLoyalty();
+  const [rewardId, setRewardId] = useState<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(CONTACT_KEY)
@@ -38,6 +41,11 @@ export default function CheckoutScreen() {
       })
       .catch(() => undefined);
   }, []);
+  // Membre du club : nom et e-mail préremplis.
+  useEffect(() => {
+    const m = loyalty.member;
+    if (m) setContact((c) => ({ ...c, name: c.name || m.name, email: c.email || m.email }));
+  }, [loyalty.member]);
 
   const request: QuoteRequest | null = useMemo(
     () =>
@@ -53,10 +61,31 @@ export default function CheckoutScreen() {
               optionIds: [...l.optionIds],
               note: l.note,
             })),
+            loyalty: loyalty.memberToken ? { memberToken: loyalty.memberToken, rewardId } : null,
           },
-    [cart],
+    [cart, loyalty.memberToken, rewardId],
   );
   const quote = useQuote(cart.restaurantId, request);
+  // Récompense refusée par le serveur (points, produit retiré) : on la retire et on recalcule.
+  const refusal =
+    rewardId !== null && quote.error instanceof ApiRequestError
+      ? quote.error.issues.find((i) =>
+          [
+            'insufficient_points',
+            'reward_product_missing',
+            'unknown_reward',
+            'reward_needs_paid_items',
+          ].includes(i.code),
+        )?.code
+      : undefined;
+  const [rewardNotice, setRewardNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!refusal) return;
+    setRewardId(null);
+    setRewardNotice(
+      (messages.checkout.issue as Record<string, string>)[refusal] ?? messages.checkout.issue.other,
+    );
+  }, [refusal]);
 
   if (!request || !cart.restaurantId)
     return <ErrorState message={messages.cart.empty} onRetry={() => router.replace('/')} />;
@@ -149,8 +178,25 @@ export default function CheckoutScreen() {
               value={formatPrice(q.totals.serviceFeeCents)}
             />
           ) : null}
+          {q.totals.discountCents > 0 ? (
+            <Row
+              label={messages.loyalty.discount}
+              value={`− ${formatPrice(q.totals.discountCents)}`}
+            />
+          ) : null}
           <Row label={messages.checkout.total} value={formatPrice(q.totals.totalCents)} strong />
         </View>
+
+        <Rewards
+          selected={rewardId}
+          onSelect={(id) => {
+            setRewardNotice(null);
+            setRewardId(id);
+          }}
+          notice={rewardNotice}
+          pointsEarned={q.loyalty?.pointsEarned ?? null}
+          totalCents={q.totals.totalCents}
+        />
 
         <View style={styles.section}>
           <Text style={[styles.h2, { color: palette.text }]}>{messages.checkout.contact}</Text>
@@ -204,6 +250,109 @@ export default function CheckoutScreen() {
         />
       </View>
     </Screen>
+  );
+}
+
+/** Récompenses utilisables : produit présent dans le panier et solde suffisant (recontrôlé par le serveur). */
+function Rewards({
+  selected,
+  onSelect,
+  notice,
+  pointsEarned,
+  totalCents,
+}: {
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  notice: string | null;
+  pointsEarned: number | null;
+  totalCents: number;
+}) {
+  const { palette, radii, style: brand } = useTenant();
+  const { program, member } = useLoyalty();
+  const { cart } = useCart();
+  if (!program?.enabled) return null;
+  if (!member) {
+    const estimate = Math.floor((totalCents * program.pointsPerEuro) / 100);
+    return (
+      <Pressable
+        accessibilityRole="link"
+        onPress={() => router.navigate('/carte')}
+        style={[
+          styles.section,
+          styles.rewardsBox,
+          { backgroundColor: palette.surface, borderRadius: radii.card },
+        ]}
+      >
+        <Text style={{ color: palette.text, fontWeight: '700' }}>
+          {messages.loyalty.joinToEarn(estimate)}
+        </Text>
+        <Text style={{ color: palette.accent, fontWeight: '700' }}>{messages.loyalty.join} →</Text>
+      </Pressable>
+    );
+  }
+  const inCart = new Set(cart.lines.map((l) => l.productId));
+  return (
+    <View
+      style={[
+        styles.section,
+        styles.rewardsBox,
+        { backgroundColor: palette.surface, borderRadius: radii.card },
+      ]}
+    >
+      <View style={styles.rewardsHead}>
+        <Text style={[styles.h2, titleStyle(brand), { color: palette.text }]}>
+          {messages.loyalty.useReward}
+        </Text>
+        <Text style={{ color: palette.text, fontWeight: '700' }}>
+          {messages.loyalty.points(member.points)}
+        </Text>
+      </View>
+      {program.rewards.map((r) => {
+        const missing = Math.max(0, r.costPoints - member.points);
+        const usable = missing === 0 && inCart.has(r.productId);
+        const on = selected === r.id;
+        return (
+          <Pressable
+            key={r.id}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: on, disabled: !usable }}
+            disabled={!usable}
+            onPress={() => onSelect(on ? null : r.id)}
+            style={[
+              styles.reward,
+              {
+                borderRadius: radii.button,
+                borderColor: on ? palette.primary : palette.border,
+                backgroundColor: on ? palette.primary : 'transparent',
+                opacity: usable ? 1 : 0.5,
+              },
+            ]}
+          >
+            <Text style={{ color: on ? palette.onPrimary : palette.text, fontWeight: '700' }}>
+              {r.name} · {messages.loyalty.points(r.costPoints)}
+              {on ? ` ✓ ${messages.loyalty.rewardApplied}` : ''}
+            </Text>
+            {!usable ? (
+              <Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                {missing > 0
+                  ? messages.loyalty.rewardTooExpensive(missing)
+                  : messages.loyalty.rewardNeedsProduct(r.name)}
+              </Text>
+            ) : null}
+          </Pressable>
+        );
+      })}
+      {notice ? (
+        <Text style={{ color: palette.accent, fontWeight: '600' }} accessibilityRole="alert">
+          {notice}
+        </Text>
+      ) : null}
+      {pointsEarned !== null ? (
+        <Text style={{ color: palette.text, fontWeight: '600' }}>
+          {messages.loyalty.willEarn(pointsEarned)}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -301,6 +450,9 @@ function Toggle({
 }
 
 const styles = StyleSheet.create({
+  rewardsBox: { padding: 14, gap: 10 },
+  rewardsHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  reward: { borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, gap: 2 },
   content: { padding: 16, gap: 12, paddingBottom: 32 },
   title: { fontSize: 26, fontWeight: '700' },
   section: { gap: 8 },
