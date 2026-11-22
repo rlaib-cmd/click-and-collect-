@@ -11,11 +11,15 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@splash360/contracts": "workspace:*",
     "@splash360/i18n": "workspace:*",
     "@splash360/theme": "workspace:*",
+    "@supabase/supabase-js": "^2.119.2",
+    "jose": "^6.2.18",
     "next": "16.4.6",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@splash360/config": "workspace:*",

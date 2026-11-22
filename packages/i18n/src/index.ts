@@ -1,3 +1,5 @@
+import { adminFr } from './admin';
+
 /** Textes de l'interface, en français. Aucune chaîne visible n'est écrite en dur dans les écrans. */
 export const fr = {
   app: {
@@ -158,9 +160,7 @@ export const fr = {
     pending: (name: string) =>
       `Les conditions générales de vente et les mentions légales de ${name} seront affichées ici.`,
   },
-  admin: {
-    title: 'Back-office Splash360',
-  },
+  admin: adminFr,
 } as const;
 
 export type Messages = typeof fr;

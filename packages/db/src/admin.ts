@@ -153,9 +153,7 @@ export interface AdminStore {
     status: 'active' | 'paused',
   ): Promise<boolean>;
 
-  getTheme(
-    tenantId: string,
-  ): Promise<{
+  getTheme(tenantId: string): Promise<{
     primaryColor: string;
     mode: 'light' | 'dark';
     logoUrl: string | null;

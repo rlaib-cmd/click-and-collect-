@@ -44,7 +44,7 @@ export const geoSearchSchema = z.object({
 });
 
 export const deliveryCheckSchema = z.discriminatedUnion('deliverable', [
-  z.object({ deliverable: z.literal(true), feeCents: cents, zoneName: z.string() }),
+  z.object({ deliverable: z.literal(true), feeCents: cents, zoneId: z.string() }),
   z.object({ deliverable: z.literal(false) }),
 ]);
 

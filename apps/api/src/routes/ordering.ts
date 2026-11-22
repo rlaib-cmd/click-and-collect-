@@ -87,7 +87,7 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
       ? deliveryZoneFor(ctx.restaurant, ctx.config, address)
       : null;
     const body: DeliveryCheck = zone
-      ? { deliverable: true, feeCents: zone.feeCents, zoneName: zone.id }
+      ? { deliverable: true, feeCents: zone.feeCents, zoneId: zone.id }
       : { deliverable: false };
     return c.json(body);
   });

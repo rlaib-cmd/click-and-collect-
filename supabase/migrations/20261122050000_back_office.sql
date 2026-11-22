@@ -6,7 +6,7 @@ create table public.staff_users (
   tenant_id uuid references public.tenants (id) on delete cascade,
   restaurant_id uuid references public.restaurants (id) on delete cascade,
   -- Rattaché à la première connexion (identifiant Supabase Auth).
-  auth_user_id uuid unique,
+  auth_user_id text unique check (auth_user_id is null or length(auth_user_id) between 1 and 200),
   email text not null check (email = lower(email) and email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
   name text,
   role text not null check (role in ('super_admin', 'tenant_admin', 'staff')),
