@@ -1,9 +1,10 @@
 /**
- * Seul client de l'API menu Splash360 (lot 2).
+ * Seul point d'accès à la carte (règle non négociable n° 5).
  *
- * La documentation de l'API n'est pas encore fournie (docs/api-splash360/) :
- * aucun appel ni format n'est implémenté tant qu'elle n'est pas disponible.
+ * L'adaptateur vers l'API menu Splash360 sera ajouté ici dès que sa documentation
+ * sera fournie (docs/api-splash360/). Il implémentera `MenuProvider` et traduira
+ * la réponse vers les types de `@splash360/core`.
  */
-export interface ApiMenuConfig {
-  readonly baseUrl: string;
-}
+export * from './cache';
+export * from './demo';
+export * from './provider';
