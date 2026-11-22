@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { messages } from '@splash360/i18n';
+import { router } from 'expo-router';
 import { useTenant } from '@/tenant/TenantProvider';
 
 /** Bouton principal aux couleurs de l'enseigne ; zone tactile ≥ 44 points. */
@@ -71,6 +72,8 @@ export function Screen({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  back: { minHeight: 44, minWidth: 44, justifyContent: 'center' },
+  backText: { fontSize: 17, fontWeight: '700' },
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
   message: { fontSize: 16, textAlign: 'center' },
@@ -83,3 +86,24 @@ const styles = StyleSheet.create({
   primaryText: { fontSize: 17, fontWeight: '700' },
   upper: { textTransform: 'uppercase', fontWeight: '800', letterSpacing: 0.5 },
 });
+
+/**
+ * Retour à l'écran précédent ; à défaut (lien ouvert directement), retour aux onglets.
+ * Les écrans de commande sont hors de la barre d'onglets : ce bouton permet d'y revenir.
+ */
+export function BackButton({ color }: { color?: string }) {
+  const { palette } = useTenant();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={messages.app.back}
+      hitSlop={8}
+      onPress={() => (router.canGoBack() ? router.back() : router.replace('/commander'))}
+      style={styles.back}
+    >
+      <Text style={[styles.backText, { color: color ?? palette.accent }]}>
+        ‹ {messages.app.back}
+      </Text>
+    </Pressable>
+  );
+}

@@ -11,7 +11,7 @@ import { usePlaceOrder, useQuote } from '@/api/hooks';
 import { useCart } from '@/cart/CartProvider';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { SetupSummary } from '@/components/SetupSummary';
-import { ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
+import { BackButton, ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
 import { saveOrder } from '@/orders/storage';
 import { titleStyle } from '@/components/brand';
@@ -136,6 +136,7 @@ export default function CheckoutScreen() {
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}
         keyboardShouldPersistTaps="handled"
       >
+        <BackButton />
         <Text
           style={[styles.title, titleStyle(brand), { color: palette.text }]}
           accessibilityRole="header"

@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import type { OperationalStatus } from '@splash360/core';
 import type { OrderDetail, Restaurant } from '@splash360/db';
 import { createHmac, timingSafeEqual } from 'node:crypto';

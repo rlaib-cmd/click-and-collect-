@@ -10,7 +10,7 @@ import { CartBar } from '@/components/CartBar';
 import { SetupSummary } from '@/components/SetupSummary';
 import { BrandBar, titleStyle } from '@/components/brand';
 import { TenantLogo } from '@/components/TenantLogo';
-import { ErrorState, Loading, Screen } from '@/components/ui';
+import { BackButton, ErrorState, Loading, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
 import { useTenant } from '@/tenant/TenantProvider';
 
@@ -46,6 +46,7 @@ export default function MenuScreen() {
   return (
     <Screen>
       <BrandBar paddingTop={insets.top + 8}>
+        <BackButton color={brandHeader ? palette.onPrimary : palette.accent} />
         {brandHeader && config.theme.logoUrl ? (
           <TenantLogo size={36} wide />
         ) : (

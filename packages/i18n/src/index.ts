@@ -7,6 +7,7 @@ export const fr = {
     welcome: 'Bienvenue',
     loading: 'Chargement…',
     retry: 'Réessayer',
+    back: 'Retour',
     order: 'Commander',
     logoAlt: (name: string) => `Logo de ${name}`,
   },

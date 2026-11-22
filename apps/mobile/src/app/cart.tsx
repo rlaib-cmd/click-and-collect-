@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAvailability, useMenu } from '@/api/hooks';
 import { useCart } from '@/cart/CartProvider';
-import { ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
+import { BackButton, ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
 import { displayCart } from '@/menu/display';
 import { titleStyle } from '@/components/brand';
@@ -34,6 +34,7 @@ export default function CartScreen() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
+        <BackButton />
         <Text
           style={[styles.title, titleStyle(brand), { color: palette.text }]}
           accessibilityRole="header"
