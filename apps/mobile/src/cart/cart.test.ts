@@ -1,0 +1,53 @@
+import { describe, expect, it } from 'vitest';
+import { cartReducer, EMPTY_CART, itemCount, parseStoredCart, type CartState } from './cart';
+
+const add = (
+  state: CartState,
+  productId: string,
+  optionIds: string[] = [],
+  quantity = 1,
+  note: string | null = null,
+  restaurantId = 'r1',
+) => cartReducer(state, { type: 'add', restaurantId, productId, optionIds, quantity, note });
+
+describe('panier', () => {
+  it('fusionne un même produit avec les mêmes options, quel que soit leur ordre', () => {
+    let s = add(EMPTY_CART, 'p', ['a', 'b']);
+    s = add(s, 'p', ['b', 'a'], 2);
+    expect(s.lines).toHaveLength(1);
+    expect(itemCount(s)).toBe(3);
+  });
+
+  it('sépare des options ou des notes différentes', () => {
+    let s = add(EMPTY_CART, 'p', ['a']);
+    s = add(s, 'p', ['b']);
+    s = add(s, 'p', ['a'], 1, 'sans oignon');
+    expect(s.lines).toHaveLength(3);
+  });
+
+  it('vide le panier si on change de restaurant', () => {
+    let s = add(EMPTY_CART, 'p');
+    s = add(s, 'q', [], 1, null, 'r2');
+    expect(s).toMatchObject({ restaurantId: 'r2', lines: [{ productId: 'q' }] });
+  });
+
+  it('borne les quantités et retire une ligne à 0', () => {
+    let s = add(EMPTY_CART, 'p', [], 150);
+    expect(s.lines[0]?.quantity).toBe(99);
+    const key = s.lines[0]?.key ?? '';
+    s = cartReducer(s, { type: 'setQuantity', key, quantity: 0 });
+    expect(s.lines).toEqual([]);
+  });
+
+  it('relit un panier sauvegardé et ignore les données corrompues', () => {
+    const s = add(EMPTY_CART, 'p', ['a'], 2);
+    expect(parseStoredCart(JSON.stringify(s))).toEqual(s);
+    expect(parseStoredCart('{pas du json')).toEqual(EMPTY_CART);
+    expect(parseStoredCart(null)).toEqual(EMPTY_CART);
+    const tampered = JSON.stringify({
+      restaurantId: 'r1',
+      lines: [{ key: 'k', productId: 'p', quantity: -3, optionIds: [], note: null }],
+    });
+    expect(parseStoredCart(tampered).lines).toEqual([]);
+  });
+});

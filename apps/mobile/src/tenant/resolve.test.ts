@@ -41,6 +41,21 @@ describe("résolution de l'enseigne", () => {
     expect(resolveSubdomain({ ...base, allowOverride: false })).toBe('bella');
   });
 
+  it('web : garde le ?enseigne= mémorisé après navigation, hors production seulement', () => {
+    const base = {
+      platform: 'web' as const,
+      buildTenant: undefined,
+      hostname: 'localhost',
+      search: '',
+    };
+    expect(
+      resolveSubdomain({ ...base, allowOverride: true, rememberedOverride: 'greenbowl' }),
+    ).toBe('greenbowl');
+    expect(
+      resolveSubdomain({ ...base, allowOverride: false, rememberedOverride: 'greenbowl' }),
+    ).toBeNull();
+  });
+
   it('rejette une valeur mal formée', () => {
     expect(
       resolveSubdomain({ platform: 'native', buildTenant: 'Bella Pizza!', allowOverride: false }),

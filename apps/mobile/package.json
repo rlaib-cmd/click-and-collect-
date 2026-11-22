@@ -4,8 +4,12 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/ui": "~58.0.29",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@splash360/contracts": "workspace:*",
+    "@splash360/core": "workspace:*",
     "@splash360/i18n": "workspace:*",
     "@splash360/theme": "workspace:*",
+    "@tanstack/react-query": "^5.108.2",
     "expo": "~58.0.26",
     "expo-build-properties": "~58.0.12",
     "expo-constants": "~58.0.16",
@@ -30,7 +34,7 @@
     "react-native-screens": "~4.30.1",
     "react-native-web": "~0.21.4",
     "react-native-worklets": "0.13.0",
-    "@splash360/contracts": "workspace:*"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@splash360/config": "workspace:*",

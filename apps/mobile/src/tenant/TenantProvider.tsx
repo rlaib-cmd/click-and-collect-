@@ -4,7 +4,7 @@ import { buildPalette, type Palette } from '@splash360/theme';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { fetchTenantConfig, type TenantLoadError } from './api';
-import { resolveSubdomain } from './resolve';
+import { overrideFromSearch, resolveSubdomain } from './resolve';
 
 interface TenantContextValue {
   readonly config: TenantConfig;
@@ -21,14 +21,29 @@ export function useTenant(): TenantContextValue {
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8787';
 
+const OVERRIDE_KEY = 'splash360:enseigne';
+
+/** Mémorise ?enseigne= pour l'onglet : la navigation le retire de l'URL. */
+function rememberOverride(search: string): string | null {
+  try {
+    const fromUrl = overrideFromSearch(search);
+    if (fromUrl) window.sessionStorage.setItem(OVERRIDE_KEY, fromUrl);
+    return fromUrl ?? window.sessionStorage.getItem(OVERRIDE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function currentSubdomain(): string | null {
   const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
+  const allowOverride = __DEV__ || process.env.EXPO_PUBLIC_ALLOW_TENANT_OVERRIDE === '1';
   return resolveSubdomain({
     platform: isWeb ? 'web' : 'native',
     buildTenant: process.env.EXPO_PUBLIC_TENANT,
     hostname: isWeb ? window.location.hostname : undefined,
     search: isWeb ? window.location.search : undefined,
-    allowOverride: __DEV__ || process.env.EXPO_PUBLIC_ALLOW_TENANT_OVERRIDE === '1',
+    allowOverride,
+    rememberedOverride: isWeb && allowOverride ? rememberOverride(window.location.search) : null,
   });
 }
 

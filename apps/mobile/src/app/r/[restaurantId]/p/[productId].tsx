@@ -1,0 +1,286 @@
+import type { OptionGroupDto } from '@splash360/contracts';
+import { messages } from '@splash360/i18n';
+import { Image } from 'expo-image';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useMenu } from '@/api/hooks';
+import { useCart } from '@/cart/CartProvider';
+import { ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
+import { formatPrice, formatSupplement } from '@/lib/format';
+import { findProduct } from '@/menu/display';
+import {
+  displayUnitPrice,
+  emptySelection,
+  missingGroups,
+  selectedOptionIds,
+  toggleOption,
+  type Selection,
+} from '@/menu/selection';
+import { useTenant } from '@/tenant/TenantProvider';
+
+function groupHint(g: OptionGroupDto): string {
+  if (g.min === 1 && g.max === 1) return messages.product.chooseOne;
+  if (g.min > 0) return messages.product.chooseBetween(g.min, g.max);
+  return messages.product.upTo(g.max);
+}
+
+export default function ProductScreen() {
+  const { restaurantId, productId } = useLocalSearchParams<{
+    restaurantId: string;
+    productId: string;
+  }>();
+  const { palette } = useTenant();
+  const { dispatch } = useCart();
+  const insets = useSafeAreaInsets();
+  const menu = useMenu(restaurantId);
+  const product = useMemo(
+    () => (menu.data ? findProduct(menu.data, productId) : null),
+    [menu.data, productId],
+  );
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [note, setNote] = useState('');
+
+  if (menu.isPending) return <Loading />;
+  if (menu.isError)
+    return <ErrorState message={messages.menu.menuError} onRetry={() => void menu.refetch()} />;
+  if (!product || !product.available)
+    return <ErrorState message={messages.product.notFound} onRetry={() => router.back()} />;
+
+  const current = selection ?? emptySelection(product);
+  const missing = missingGroups(product, current);
+  const total = displayUnitPrice(product, current) * quantity;
+
+  const add = () => {
+    dispatch({
+      type: 'add',
+      restaurantId,
+      productId: product.id,
+      quantity,
+      optionIds: selectedOptionIds(product, current),
+      note: note.trim() || null,
+    });
+    router.back();
+  };
+
+  return (
+    <Screen>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          style={styles.close}
+          hitSlop={8}
+        >
+          <Text style={[styles.closeText, { color: palette.accent }]}>
+            {messages.product.close}
+          </Text>
+        </Pressable>
+        {product.imageUrl ? (
+          <Image source={{ uri: product.imageUrl }} style={styles.photo} contentFit="cover" />
+        ) : null}
+        <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
+          {product.name}
+        </Text>
+        {product.description ? (
+          <Text style={{ color: palette.textMuted, fontSize: 16 }}>{product.description}</Text>
+        ) : null}
+        <Text style={[styles.base, { color: palette.text }]}>
+          {formatPrice(product.priceCents)}
+        </Text>
+
+        {product.optionGroups.map((group) => {
+          const chosen = current[group.id] ?? [];
+          return (
+            <View key={group.id} style={styles.group} accessibilityRole="radiogroup">
+              <View style={styles.groupHead}>
+                <Text style={[styles.groupTitle, { color: palette.text }]}>{group.name}</Text>
+                <Text
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor: group.required ? palette.primary : palette.surface,
+                      color: group.required ? palette.onPrimary : palette.textMuted,
+                    },
+                  ]}
+                >
+                  {group.required ? messages.product.required : messages.product.optional}
+                </Text>
+              </View>
+              <Text style={{ color: palette.textMuted }}>{groupHint(group)}</Text>
+              {group.options.map((option) => {
+                const checked = chosen.includes(option.id);
+                const single = group.max === 1;
+                return (
+                  <Pressable
+                    key={option.id}
+                    accessibilityRole={single ? 'radio' : 'checkbox'}
+                    accessibilityState={{ checked, disabled: !option.available }}
+                    disabled={!option.available}
+                    onPress={() => setSelection(toggleOption(current, group, option.id))}
+                    style={[
+                      styles.option,
+                      { borderColor: palette.border, opacity: option.available ? 1 : 0.45 },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        single ? styles.radio : styles.checkbox,
+                        {
+                          borderColor: checked ? palette.accent : palette.textMuted,
+                          backgroundColor: checked ? palette.accent : 'transparent',
+                        },
+                      ]}
+                    />
+                    <Text style={[styles.optionName, { color: palette.text }]}>{option.name}</Text>
+                    <Text style={{ color: palette.textMuted }}>
+                      {option.available
+                        ? (formatSupplement(option.priceCents) ?? '')
+                        : messages.menu.unavailable}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          );
+        })}
+
+        <View style={styles.group}>
+          <Text style={[styles.groupTitle, { color: palette.text }]}>
+            {messages.product.instructions}
+          </Text>
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            maxLength={200}
+            placeholder={messages.product.instructionsPlaceholder}
+            placeholderTextColor={palette.textMuted}
+            style={[styles.input, { borderColor: palette.border, color: palette.text }]}
+            multiline
+          />
+        </View>
+
+        <View style={styles.group}>
+          <Text style={[styles.groupTitle, { color: palette.text }]}>
+            {messages.product.allergens}
+          </Text>
+          <Text style={{ color: palette.textMuted }}>
+            {product.allergens.length > 0
+              ? product.allergens.join(', ')
+              : messages.product.noAllergens}
+          </Text>
+        </View>
+      </ScrollView>
+
+      <View
+        style={[styles.footer, { borderColor: palette.border, paddingBottom: 12 + insets.bottom }]}
+      >
+        <View style={styles.stepper} accessibilityLabel={messages.product.quantity(quantity)}>
+          <StepButton
+            label="−"
+            a11y={messages.product.decrease}
+            onPress={() => setQuantity((q) => Math.max(1, q - 1))}
+          />
+          <Text style={[styles.qty, { color: palette.text }]}>{quantity}</Text>
+          <StepButton
+            label="+"
+            a11y={messages.product.increase}
+            onPress={() => setQuantity((q) => Math.min(99, q + 1))}
+          />
+        </View>
+        <PrimaryButton
+          style={styles.addButton}
+          disabled={missing.length > 0}
+          label={
+            missing[0]
+              ? messages.product.missing(missing[0].name)
+              : messages.product.add(formatPrice(total))
+          }
+          onPress={add}
+        />
+      </View>
+    </Screen>
+  );
+}
+
+function StepButton({
+  label,
+  a11y,
+  onPress,
+}: {
+  label: string;
+  a11y: string;
+  onPress: () => void;
+}) {
+  const { palette } = useTenant();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      onPress={onPress}
+      style={[styles.step, { borderColor: palette.border }]}
+    >
+      <Text style={[styles.stepText, { color: palette.text }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: { padding: 16, gap: 8, paddingBottom: 32 },
+  close: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' },
+  closeText: { fontSize: 16, fontWeight: '600' },
+  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: 16 },
+  title: { fontSize: 26, fontWeight: '700', marginTop: 8 },
+  base: { fontSize: 18, fontWeight: '600' },
+  group: { marginTop: 20, gap: 6 },
+  groupHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  groupTitle: { fontSize: 18, fontWeight: '700' },
+  badge: {
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 48,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2 },
+  checkbox: { width: 22, height: 22, borderRadius: 5, borderWidth: 2 },
+  optionName: { flex: 1, fontSize: 16 },
+  input: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    minHeight: 64,
+    fontSize: 16,
+    textAlignVertical: 'top',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  step: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepText: { fontSize: 22, fontWeight: '600' },
+  qty: { minWidth: 24, textAlign: 'center', fontSize: 18, fontWeight: '700' },
+  addButton: { flex: 1 },
+});

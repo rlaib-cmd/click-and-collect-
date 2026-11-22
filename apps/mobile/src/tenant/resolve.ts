@@ -11,6 +11,8 @@ export interface ResolveInput {
   readonly search?: string | undefined;
   /** Le paramètre ?enseigne= n'est accepté qu'hors production. */
   readonly allowOverride: boolean;
+  /** Dernier ?enseigne= vu dans cet onglet (la navigation retire le paramètre de l'URL). */
+  readonly rememberedOverride?: string | null | undefined;
 }
 
 const SUBDOMAIN = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -21,11 +23,18 @@ function clean(value: string | null | undefined): string | null {
   return v && SUBDOMAIN.test(v) ? v : null;
 }
 
+/** Valeur de ?enseigne= présente dans l'URL, à mémoriser pour l'onglet. */
+export function overrideFromSearch(search: string | undefined): string | null {
+  return clean(search ? new URLSearchParams(search).get('enseigne') : null);
+}
+
 export function resolveSubdomain(input: ResolveInput): string | null {
   if (input.platform === 'native') return clean(input.buildTenant);
 
-  if (input.allowOverride && input.search) {
-    const override = clean(new URLSearchParams(input.search).get('enseigne'));
+  if (input.allowOverride) {
+    const override =
+      clean(input.search ? new URLSearchParams(input.search).get('enseigne') : null) ??
+      clean(input.rememberedOverride);
     if (override) return override;
   }
 
