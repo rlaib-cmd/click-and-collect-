@@ -150,4 +150,23 @@ describe.skipIf(!url)('AdminStore Postgres', () => {
       applicationFeeBps: 150,
     });
   });
+
+  it('supprime un équipier et une enseigne sans commande ; garde une enseigne qui a des commandes', async () => {
+    const { tenantId } = await admin.createTenant({
+      name: 'À supprimer',
+      subdomain: `del-${run}`,
+      splash360Id: `S360-DEL-${run}`,
+      adminEmail: `del-${run}@example.fr`,
+    });
+    const [first] = await admin.listStaff(tenantId);
+    expect(await admin.deleteStaff(BELLA, first?.id ?? '')).toBe(false);
+    expect(await admin.deleteStaff(tenantId, first?.id ?? '')).toBe(true);
+    expect(await admin.listStaff(tenantId)).toEqual([]);
+    expect(await admin.deleteTenant(tenantId)).toBe('deleted');
+    expect(await admin.deleteTenant(tenantId)).toBe('not_found');
+    const [withOrders] = await sql<
+      { tenant_id: string }[]
+    >`select tenant_id from public.orders limit 1`;
+    if (withOrders) expect(await admin.deleteTenant(withOrders.tenant_id)).toBe('has_orders');
+  });
 });

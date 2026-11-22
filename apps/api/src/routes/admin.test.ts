@@ -1,11 +1,14 @@
 import {
   adminOrderDetailSchema,
+  clubMemberSchema,
   meSchema,
   menuSchema,
   placedOrderSchema,
   tenantConfigSchema,
 } from '@splash360/contracts';
+import { createDemoLoyaltyProvider, createMemoryDemoLoyaltyStore } from '@splash360/api-loyalty';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   BELLA_ID,
   BELLA_RESTO,
@@ -391,5 +394,114 @@ describe('clients, équipe et enseignes', () => {
         })
       ).status,
     ).toBe(409);
+  });
+});
+
+describe('administration de la plateforme (lot 9)', () => {
+  it('supprime une enseigne sans commande, refuse si elle a des commandes, réservé au super-administrateur', async () => {
+    const setup = testSetup();
+    await paidOrder(setup);
+    const del = async (id: string, email = 'admin@splash360.test') =>
+      setup.app.request(`/v1/admin/tenants/${id}`, { method: 'DELETE', headers: await as(email) });
+    expect((await del(GREEN_ID, 'gerant@bella.test')).status).toBe(403);
+    const refused = await del(BELLA_ID);
+    expect(refused.status).toBe(409);
+    expect(await refused.text()).toContain('bloquez-la');
+    expect((await del(GREEN_ID)).status).toBe(204);
+    expect(setup.admin.audit.at(-1)).toMatchObject({ action: 'tenant.delete', tenantId: null });
+    expect((await del(GREEN_ID)).status).toBe(404);
+    expect((await setup.app.request('/v1/tenants/greenbowl/config')).status).toBe(404);
+  });
+
+  it('bloque puis débloque l’application d’une enseigne', async () => {
+    const setup = testSetup();
+    const patch = async (status: string) =>
+      setup.app.request(`/v1/admin/tenants/${BELLA_ID}`, {
+        method: 'PATCH',
+        headers: await as('admin@splash360.test'),
+        body: JSON.stringify({ status }),
+      });
+    expect((await patch('suspended')).status).toBe(204);
+    expect((await setup.app.request('/v1/tenants/bella/config')).status).toBe(403);
+    expect((await patch('active')).status).toBe(204);
+    expect((await setup.app.request('/v1/tenants/bella/config')).status).toBe(200);
+  });
+
+  it('supprime un compte de l’équipe, jamais le sien ni celui d’une autre enseigne', async () => {
+    const setup = testSetup();
+    const headers = await as('gerant@bella.test');
+    const del = (id: string) =>
+      setup.app.request(`/v1/admin/staff/${id}`, { method: 'DELETE', headers });
+    expect((await del(STAFF_IDS.bellaAdmin)).status).toBe(409);
+    expect((await del(STAFF_IDS.greenAdmin)).status).toBe(404);
+    expect((await del(STAFF_IDS.superAdmin)).status).toBe(404);
+    expect((await del(STAFF_IDS.bellaStaff)).status).toBe(204);
+    expect(setup.admin.audit.at(-1)?.action).toBe('staff.delete');
+    expect((await del(STAFF_IDS.bellaStaff)).status).toBe(404);
+  });
+
+  it('administre le club : liste, corrige les points sans solde négatif, supprime un membre', async () => {
+    let n = 0;
+    const loyalty = createDemoLoyaltyProvider(
+      createMemoryDemoLoyaltyStore(),
+      () => `carte-${++n}-0000-0000-0000`,
+      new Map([
+        [
+          'S360-DEMO-BELLA',
+          { name: 'Club Bella', pointsPerEuro: 10, welcomePoints: 100, rewards: [] },
+        ],
+      ]),
+    );
+    const setup = testSetup({ loyalty });
+    await setup.app.request('/v1/tenants/bella/loyalty/join', {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify({
+        name: 'Léa',
+        email: 'lea@example.fr',
+        phone: null,
+        acceptedTerms: true,
+      }),
+    });
+    const headers = await as('gerant@bella.test');
+    const list = async (q = '') =>
+      z
+        .object({ members: z.array(clubMemberSchema) })
+        .parse(await (await setup.app.request(`/v1/admin/loyalty/members${q}`, { headers })).json())
+        .members;
+    const [lea] = await list('?q=lea');
+    expect(lea).toMatchObject({ name: 'Léa', points: 100 });
+    const id = lea?.id ?? '';
+    const adjust = (delta: number, reason = 'Geste commercial') =>
+      setup.app.request(`/v1/admin/loyalty/members/${id}/adjust`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ delta, reason }),
+      });
+    expect((await adjust(0)).status).toBe(400);
+    expect(await (await adjust(50)).json()).toEqual({ points: 150 });
+    expect((await adjust(-151)).status).toBe(409);
+    expect(setup.admin.audit.at(-1)).toMatchObject({ action: 'loyalty.adjust', target: id });
+    expect(
+      (
+        await setup.app.request(`/v1/admin/loyalty/members/${id}`, {
+          headers: await as('equipe@bella.test'),
+          method: 'DELETE',
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (await setup.app.request(`/v1/admin/loyalty/members/${id}`, { headers, method: 'DELETE' }))
+        .status,
+    ).toBe(204);
+    expect(await list()).toEqual([]);
+    // Enseigne sans club : rien à administrer.
+    expect(
+      (
+        await setup.app.request('/v1/admin/loyalty/members', {
+          headers: await as('gerant@greenbowl.test'),
+        })
+      ).status,
+    ).toBe(404);
   });
 });

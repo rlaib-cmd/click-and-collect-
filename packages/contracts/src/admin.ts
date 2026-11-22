@@ -211,6 +211,27 @@ export const updateTenantSchema = z.object({
   applicationFeeFixedCents: cents.optional(),
 });
 
+/** Membre du club fidélité vu depuis le back-office (lot 9). */
+export const clubMemberSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  points: z.number().int(),
+  cardCode: z.string(),
+  createdAt: z.string(),
+});
+
+/** Correction manuelle des points, avec son motif (visible dans l'historique du client). */
+export const pointsAdjustSchema = z.object({
+  delta: z
+    .number()
+    .int()
+    .min(-100_000)
+    .max(100_000)
+    .refine((n) => n !== 0),
+  reason: z.string().trim().min(2).max(120),
+});
+
 export const alertSchema = z.object({
   orderId: z.uuid(),
   number: z.number().int(),
@@ -230,3 +251,5 @@ export type CustomerRowDto = z.infer<typeof customerRowSchema>;
 export type StaffMember = z.infer<typeof staffMemberSchema>;
 export type TenantSummaryDto = z.infer<typeof tenantSummarySchema>;
 export type AlertDto = z.infer<typeof alertSchema>;
+export type ClubMemberDto = z.infer<typeof clubMemberSchema>;
+export type PointsAdjustRequest = z.infer<typeof pointsAdjustSchema>;

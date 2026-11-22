@@ -150,6 +150,8 @@ export interface AdminStore {
     restaurantId: string | null;
   }): Promise<StaffUser>;
   setStaffDisabled(tenantId: string, staffId: string, disabled: boolean): Promise<boolean>;
+  /** Supprime un compte de l'équipe de l'enseigne (jamais un super-administrateur). */
+  deleteStaff(tenantId: string, staffId: string): Promise<boolean>;
 
   audit(entry: AuditEntry): Promise<void>;
   listAudit(
@@ -219,6 +221,11 @@ export interface AdminStore {
       applicationFeeFixedCents?: number | undefined;
     },
   ): Promise<boolean>;
+  /**
+   * Supprime une enseigne et tout ce qui lui appartient. Refusé si elle a des commandes :
+   * elles sont conservées pour la comptabilité (on bloque alors l'enseigne).
+   */
+  deleteTenant(tenantId: string): Promise<'deleted' | 'not_found' | 'has_orders'>;
 }
 
 export function createPostgresAdminStore(sql: Sql): AdminStore {
@@ -253,6 +260,12 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
     async setStaffDisabled(tenantId, staffId, disabled) {
       const r =
         await sql`update public.staff_users set disabled = ${disabled} where tenant_id = ${tenantId} and id = ${staffId}`;
+      return r.count === 1;
+    },
+
+    async deleteStaff(tenantId, staffId) {
+      const r = await sql`delete from public.staff_users
+                          where tenant_id = ${tenantId} and id = ${staffId} and role <> 'super_admin'`;
       return r.count === 1;
     },
 
@@ -634,6 +647,18 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
           application_fee_fixed_cents = coalesce(${input.applicationFeeFixedCents ?? null}, application_fee_fixed_cents)
         where id = ${tenantId}`;
       return r.count === 1;
+    },
+
+    async deleteTenant(tenantId) {
+      return sql.begin(async (tx) => {
+        const [t] = await tx<{ id: string; has_orders: boolean }[]>`
+          select id, exists (select 1 from public.orders o where o.tenant_id = t.id) as has_orders
+          from public.tenants t where id = ${tenantId} for update`;
+        if (!t) return 'not_found' as const;
+        if (t.has_orders) return 'has_orders' as const;
+        await tx`delete from public.tenants where id = ${tenantId}`;
+        return 'deleted' as const;
+      });
     },
   };
 }

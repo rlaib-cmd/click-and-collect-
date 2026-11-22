@@ -76,6 +76,13 @@ export function createMemoryAdminStore(input: {
       if (s) s.disabled = disabled;
       return Promise.resolve(Boolean(s));
     },
+    deleteStaff(tenantId, id) {
+      const i = staff.findIndex(
+        (x) => x.tenantId === tenantId && x.id === id && x.role !== 'super_admin',
+      );
+      if (i >= 0) staff.splice(i, 1);
+      return Promise.resolve(i >= 0);
+    },
     audit(e) {
       audit.push({
         tenantId: e.tenantId,
@@ -246,6 +253,14 @@ export function createMemoryAdminStore(input: {
       if (!t) return Promise.resolve(false);
       if (i.status) Object.assign(t, { status: i.status });
       return Promise.resolve(true);
+    },
+    deleteTenant(tenantId) {
+      const i = input.tenants.findIndex((x) => x.id === tenantId);
+      if (i < 0) return Promise.resolve('not_found' as const);
+      if (input.orders().some((o) => o.tenantId === tenantId))
+        return Promise.resolve('has_orders' as const);
+      input.tenants.splice(i, 1);
+      return Promise.resolve('deleted' as const);
     },
   };
   return { store, audit, paused, overrides };

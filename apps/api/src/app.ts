@@ -174,6 +174,7 @@ export function createApp(deps: AppDeps) {
       payments: deps.payments,
       gateway: deps.gateway,
       menus: deps.menus,
+      loyalty: deps.loyalty,
       adminUrl: deps.adminUrl ?? 'http://localhost:3000',
     }),
   );

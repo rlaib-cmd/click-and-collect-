@@ -1,8 +1,10 @@
+import type { LoyaltyProvider } from '@splash360/api-loyalty';
 import { MenuUnavailableError, type MenuCache } from '@splash360/api-menu';
 import {
   createTenantSchema,
   inviteSchema,
   legalSchema,
+  pointsAdjustSchema,
   menuOverrideSchema,
   refundRequestSchema,
   settingsSchema,
@@ -11,6 +13,7 @@ import {
   updateTenantSchema,
   type AdminMenu,
   type AdminOrderDetail,
+  type ClubMemberDto,
   type Dashboard,
   type Me,
 } from '@splash360/contracts';
@@ -47,6 +50,8 @@ export interface AdminRoutesDeps extends NotifyDeps {
   readonly payments: PaymentStore;
   readonly gateway: PaymentGateway | null;
   readonly menus: MenuCache;
+  /** Club fidélité (Splash360 ou données de test) ; absent = pas de fidélité. */
+  readonly loyalty?: LoyaltyProvider | undefined;
   /** URL publique du back-office (retours de l'inscription Stripe). */
   readonly adminUrl: string;
 }
@@ -135,6 +140,24 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       action: 'tenant.update',
       target: c.req.param('id'),
       detail: input,
+    });
+    return c.body(null, 204);
+  });
+
+  app.delete('/tenants/:id', async (c) => {
+    const denied = allow(c, ['super_admin'], false);
+    if (denied) return denied;
+    const id = c.req.param('id');
+    const result = await deps.admin.deleteTenant(id);
+    if (result === 'not_found') return apiError(c, 'not_found', 'Enseigne inconnue');
+    if (result === 'has_orders')
+      return apiError(c, 'conflict', 'Cette enseigne a des commandes : bloquez-la plutôt');
+    // L'enseigne et son journal ont disparu : la trace reste au niveau de la plateforme.
+    await deps.admin.audit({
+      tenantId: null,
+      actor: ctx(c).staff,
+      action: 'tenant.delete',
+      target: id,
     });
     return c.body(null, 204);
   });
@@ -530,6 +553,79 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     if (!(await deps.admin.setStaffDisabled(tenantId(c), c.req.param('id'), input.disabled)))
       return apiError(c, 'not_found', 'Compte inconnu');
     await audit(c, input.disabled ? 'staff.disable' : 'staff.enable', c.req.param('id'));
+    return c.body(null, 204);
+  });
+
+  app.delete('/staff/:id', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    if (c.req.param('id') === ctx(c).staff.id)
+      return apiError(c, 'conflict', 'Vous ne pouvez pas supprimer votre propre compte');
+    if (!(await deps.admin.deleteStaff(tenantId(c), c.req.param('id'))))
+      return apiError(c, 'not_found', 'Compte inconnu');
+    await audit(c, 'staff.delete', c.req.param('id'));
+    return c.body(null, 204);
+  });
+
+  // ——— Club fidélité (lot 9) : la fidélité reste chez Splash360, via LoyaltyProvider ———
+  async function club(c: C) {
+    const tenant = ctx(c).tenant;
+    if (!deps.loyalty || !tenant) return null;
+    const ref = { id: tenant.id, splash360Id: tenant.splash360Id };
+    return (await deps.loyalty.getProgram(ref)) ? { provider: deps.loyalty, ref } : null;
+  }
+
+  app.get('/loyalty/members', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    const cl = await club(c);
+    if (!cl) return apiError(c, 'not_found', 'Pas de club fidélité');
+    const search = c.req.query('q')?.trim().slice(0, 100) || null;
+    const members: ClubMemberDto[] = (await cl.provider.listMembers(cl.ref, search, 200)).map(
+      (m) => ({
+        id: m.id,
+        name: m.name,
+        email: m.email,
+        points: m.points,
+        cardCode: m.cardCode,
+        createdAt: m.createdAt,
+      }),
+    );
+    return c.json({ members });
+  });
+
+  app.post('/loyalty/members/:id/adjust', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    const input = await body(c, pointsAdjustSchema);
+    if (!input) return apiError(c, 'invalid_request', 'Correction invalide');
+    const cl = await club(c);
+    if (!cl) return apiError(c, 'not_found', 'Pas de club fidélité');
+    const result = await cl.provider.adjustPoints(
+      cl.ref,
+      c.req.param('id'),
+      input.delta,
+      input.reason,
+    );
+    if (!result.ok)
+      return result.error === 'unknown_member'
+        ? apiError(c, 'not_found', 'Membre inconnu')
+        : apiError(c, 'conflict', 'Le solde ne peut pas devenir négatif');
+    await audit(c, 'loyalty.adjust', c.req.param('id'), {
+      delta: input.delta,
+      reason: input.reason,
+    });
+    return c.json({ points: result.member.points });
+  });
+
+  app.delete('/loyalty/members/:id', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    const cl = await club(c);
+    if (!cl) return apiError(c, 'not_found', 'Pas de club fidélité');
+    if (!(await cl.provider.deleteMember(cl.ref, c.req.param('id'))))
+      return apiError(c, 'not_found', 'Membre inconnu');
+    await audit(c, 'loyalty.member.delete', c.req.param('id'));
     return c.body(null, 204);
   });
 
