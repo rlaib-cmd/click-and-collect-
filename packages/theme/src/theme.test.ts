@@ -27,7 +27,15 @@ describe('couleurs', () => {
 
 describe('palette', () => {
   it('le texte des boutons contraste toujours au moins à 4,5:1 (WCAG AA)', () => {
-    for (const color of ['#C8102E', '#A3E635', '#FFEB3B', '#1F6FEB', '#777777', '#000000', '#FFFFFF']) {
+    for (const color of [
+      '#C8102E',
+      '#A3E635',
+      '#FFEB3B',
+      '#1F6FEB',
+      '#777777',
+      '#000000',
+      '#FFFFFF',
+    ]) {
       const palette = buildPalette({ primaryColor: color, mode: 'light' });
       expect(contrastRatio(palette.primary, palette.onPrimary)).toBeGreaterThanOrEqual(4.5);
     }
@@ -40,6 +48,8 @@ describe('palette', () => {
     expect(redOnWhite.accent).toBe('#C8102E');
     const navyOnDark = buildPalette({ primaryColor: '#0B1F3A', mode: 'dark' });
     expect(navyOnDark.accent).toBe('#FFFFFF');
-    expect(contrastRatio(redOnWhite.accent, redOnWhite.background)).toBeGreaterThanOrEqual(MIN_UI_CONTRAST);
+    expect(contrastRatio(redOnWhite.accent, redOnWhite.background)).toBeGreaterThanOrEqual(
+      MIN_UI_CONTRAST,
+    );
   });
 });

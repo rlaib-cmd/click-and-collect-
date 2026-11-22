@@ -13,7 +13,7 @@ describe.skipIf(!url)('TenantStore Postgres', () => {
   const store = createPostgresTenantStore(sql);
   afterAll(() => sql.end());
 
-  it("lit une enseigne et son thème par sous-domaine", async () => {
+  it('lit une enseigne et son thème par sous-domaine', async () => {
     const bella = await store.findBySubdomain('bella');
     expect(bella).toMatchObject({
       name: 'Pizzeria Bella',
@@ -23,10 +23,13 @@ describe.skipIf(!url)('TenantStore Postgres', () => {
   });
 
   it('renvoie le statut suspendu et un thème absent', async () => {
-    expect(await store.findBySubdomain('suspendue')).toMatchObject({ status: 'suspended', theme: null });
+    expect(await store.findBySubdomain('suspendue')).toMatchObject({
+      status: 'suspended',
+      theme: null,
+    });
   });
 
-  it("renvoie null pour une enseigne inconnue", async () => {
+  it('renvoie null pour une enseigne inconnue', async () => {
     expect(await store.findBySubdomain('inconnue')).toBeNull();
   });
 });

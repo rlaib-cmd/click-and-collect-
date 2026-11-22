@@ -38,7 +38,7 @@ describe('GET /health', () => {
 });
 
 describe('GET /v1/tenants/:subdomain/config', () => {
-  it("renvoie la configuration conforme au contrat, avec cache", async () => {
+  it('renvoie la configuration conforme au contrat, avec cache', async () => {
     const res = await app.request('/v1/tenants/bella/config');
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toContain('max-age=60');
@@ -48,7 +48,9 @@ describe('GET /v1/tenants/:subdomain/config', () => {
   });
 
   it("applique le thème par défaut si l'enseigne n'en a pas", async () => {
-    const body = tenantConfigSchema.parse(await (await app.request('/v1/tenants/sans-theme/config')).json());
+    const body = tenantConfigSchema.parse(
+      await (await app.request('/v1/tenants/sans-theme/config')).json(),
+    );
     expect(body.theme.primaryColor).toBe('#1F6FEB');
   });
 
@@ -64,7 +66,9 @@ describe('GET /v1/tenants/:subdomain/config', () => {
   });
 
   it("autorise l'appel depuis le navigateur (CORS)", async () => {
-    const res = await app.request('/v1/tenants/bella/config', { headers: { Origin: 'https://bella.example.fr' } });
+    const res = await app.request('/v1/tenants/bella/config', {
+      headers: { Origin: 'https://bella.example.fr' },
+    });
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
   });
 });

@@ -22,7 +22,10 @@ export function createApp(deps: AppDeps) {
   if (deps.log) app.use(logger());
   app.use(secureHeaders());
   const origins = deps.corsOrigins ?? '*';
-  app.use('/v1/*', cors({ origin: origins === '*' ? '*' : [...origins], allowMethods: ['GET', 'POST'] }));
+  app.use(
+    '/v1/*',
+    cors({ origin: origins === '*' ? '*' : [...origins], allowMethods: ['GET', 'POST'] }),
+  );
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
   app.route('/v1/tenants', tenantRoutes(deps.tenants));

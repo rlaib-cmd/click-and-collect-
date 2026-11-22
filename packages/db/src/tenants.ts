@@ -51,7 +51,12 @@ export function createPostgresTenantStore(sql: Sql): TenantStore {
         status: row.status,
         theme:
           row.primary_color && row.mode
-            ? { primaryColor: row.primary_color, mode: row.mode, logoUrl: row.logo_url, tagline: row.tagline }
+            ? {
+                primaryColor: row.primary_color,
+                mode: row.mode,
+                logoUrl: row.logo_url,
+                tagline: row.tagline,
+              }
             : null,
       };
     },
