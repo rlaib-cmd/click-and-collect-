@@ -19,6 +19,11 @@ import type { OrderingConfig, OrderingStore, Restaurant } from '@splash360/db';
 
 export interface OrderingDeps {
   readonly ordering: OrderingStore;
+  /** Produits et catégories masqués au back-office : absents de la commande en ligne. */
+  readonly hiddenItems?: (
+    tenantId: string,
+    restaurantId: string,
+  ) => Promise<{ products: Set<string>; categories: Set<string> }>;
   readonly menus: MenuCache;
   readonly now: () => Date;
 }
@@ -108,10 +113,20 @@ export async function quote(
   const modeEnabled = request.mode === 'pickup' ? config.pickupEnabled : config.deliveryEnabled;
   if (!modeEnabled) issues.push({ code: 'mode_unavailable' });
 
-  const { menu } = await deps.menus.get({
+  const { menu: full } = await deps.menus.get({
     restaurantId: restaurant.id,
     splash360RestaurantId: restaurant.splash360Id,
   });
+  // Produits et catégories masqués au back-office : non commandables.
+  const hidden = await deps.hiddenItems?.(restaurant.tenantId, restaurant.id);
+  const menu = hidden
+    ? {
+        ...full,
+        products: full.products.filter(
+          (p) => !hidden.products.has(p.id) && !hidden.categories.has(p.categoryId),
+        ),
+      }
+    : full;
   const priced = priceCart(
     menu,
     request.lines.map((l) => ({

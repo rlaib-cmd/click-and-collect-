@@ -51,6 +51,18 @@ export interface PaymentGateway {
   }): Promise<void>;
   /** Vérifie la signature et décode l'événement ; lève `InvalidWebhookSignature` sinon. */
   parseWebhook(rawBody: string, signature: string | undefined): PaymentEvent;
+  /** Crée le compte connecté d'un restaurant (paiements directs, le restaurant est le marchand). */
+  createConnectedAccount(input: {
+    restaurantId: string;
+    tenantId: string;
+    email: string | null;
+    businessName: string;
+  }): Promise<string>;
+  /** Lien d'inscription hébergé par Stripe. */
+  createOnboardingLink(
+    accountId: string,
+    urls: { refreshUrl: string; returnUrl: string },
+  ): Promise<string>;
 }
 
 export function toPaymentEvent(event: Stripe.Event): PaymentEvent {
@@ -133,6 +145,37 @@ export function createStripeGateway(options: {
         },
         { stripeAccount: input.connectedAccountId, idempotencyKey: input.idempotencyKey },
       );
+    },
+
+    async createConnectedAccount(input) {
+      // Configuration recommandée par Stripe pour une plateforme logicielle à paiements directs :
+      // le restaurant paie les frais Stripe et porte les litiges, avec son propre tableau de bord.
+      // À revalider avec la documentation Connect au moment de l'ouverture du compte plateforme.
+      const account = await stripe.accounts.create(
+        {
+          country: 'FR',
+          ...(input.email ? { email: input.email } : {}),
+          business_profile: { name: input.businessName },
+          controller: {
+            fees: { payer: 'account' },
+            losses: { payments: 'stripe' },
+            stripe_dashboard: { type: 'full' },
+          },
+          metadata: { restaurant_id: input.restaurantId, tenant_id: input.tenantId },
+        },
+        { idempotencyKey: `account-${input.restaurantId}` },
+      );
+      return account.id;
+    },
+
+    async createOnboardingLink(accountId, urls) {
+      const link = await stripe.accountLinks.create({
+        account: accountId,
+        type: 'account_onboarding',
+        refresh_url: urls.refreshUrl,
+        return_url: urls.returnUrl,
+      });
+      return link.url;
     },
 
     parseWebhook(rawBody, signature) {

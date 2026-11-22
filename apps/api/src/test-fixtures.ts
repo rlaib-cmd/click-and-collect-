@@ -5,8 +5,13 @@ import {
   createMemoryTenantStore,
   type OrderingConfig,
   type Restaurant,
+  type RestaurantSettingsRecord,
+  type TenantWithTheme,
 } from '@splash360/db';
+import { SignJWT } from 'jose';
+import { createSupabaseVerifier } from './admin/auth';
 import { createApp, type AppDeps } from './app';
+import { createMemoryAdminStore } from './memory-admin';
 import { createDemoGeoProvider } from './geo';
 import { createMemoryOrderBackend } from './memory-ordering';
 import { createFakeNotificationSender } from './notifications/sender';
@@ -59,6 +64,24 @@ export const bellaConfig: OrderingConfig = {
   zones: [{ id: 'zone-2km', kind: 'radius', radiusMeters: 2000, feeCents: cents(190) }],
 };
 
+const bellaFlatSettings: RestaurantSettingsRecord = {
+  pickupEnabled: true,
+  deliveryEnabled: true,
+  prepMinutes: 20,
+  deliveryMinutes: 15,
+  slotStepMinutes: 15,
+  maxOrdersPerSlot: 2,
+  daysAhead: 7,
+  deliveryMinimumCents: 1500,
+  freeDeliveryThresholdCents: 3500,
+  serviceFeeCents: 0,
+  openingHours: bellaConfig.schedule.openingHours,
+  closures: [],
+  zones: [
+    { name: 'Moins de 2 km', kind: 'radius', radiusMeters: 2000, postalCodes: [], feeCents: 190 },
+  ],
+};
+
 /** Mardi 24 novembre 2026, 10:00 à Paris (restaurant pas encore ouvert). */
 export const NOW = new Date('2026-11-24T09:00:00.000Z');
 
@@ -81,38 +104,99 @@ export const restaurants: Restaurant[] = [
   }),
 ];
 
+export const JWT_SECRET = 'secret-jwt-supabase-de-test-0123456789abcdef';
+export const STAFF_IDS = {
+  superAdmin: '20000000-0000-4000-8000-000000000001',
+  bellaAdmin: '20000000-0000-4000-8000-000000000002',
+  bellaStaff: '20000000-0000-4000-8000-000000000003',
+  greenAdmin: '20000000-0000-4000-8000-000000000004',
+};
+
+/** Jeton de session Supabase signé pour les tests. */
+export async function sessionToken(email: string, secret = JWT_SECRET, expiresIn = '1h') {
+  return new SignJWT({ email, role: 'authenticated' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(`auth-${email}`)
+    .setAudience('authenticated')
+    .setIssuedAt()
+    .setExpirationTime(expiresIn)
+    .sign(new TextEncoder().encode(secret));
+}
+
 export function testSetup(overrides: Partial<AppDeps> = {}) {
   const backend = createMemoryOrderBackend({ [BELLA_RESTO]: bellaConfig }, () => restaurants);
   const stripe = createFakeGateway();
   const pos = createDemoPosGateway();
   const notifications = createFakeNotificationSender();
+  const tenants: TenantWithTheme[] = [
+    {
+      id: BELLA_ID,
+      name: 'Pizzeria Bella',
+      subdomain: 'bella',
+      status: 'active',
+      applicationFee: { bps: 250, fixedCents: 0 },
+      theme: { primaryColor: '#C8102E', mode: 'light', logoUrl: null, tagline: 'Napolitaine' },
+    },
+    {
+      id: GREEN_ID,
+      name: 'Green Bowl',
+      subdomain: 'greenbowl',
+      status: 'active',
+      applicationFee: { bps: 0, fixedCents: 0 },
+      theme: null,
+    },
+    {
+      id: '00000000-0000-4000-8000-000000000003',
+      name: 'Suspendue',
+      subdomain: 'suspendue',
+      status: 'suspended',
+      applicationFee: { bps: 0, fixedCents: 0 },
+      theme: null,
+    },
+  ];
+  const admin = createMemoryAdminStore({
+    tenants,
+    orders: () => backend.orders,
+    settings: { [BELLA_RESTO]: bellaFlatSettings },
+    staff: [
+      {
+        id: STAFF_IDS.superAdmin,
+        email: 'admin@splash360.test',
+        name: 'Super',
+        role: 'super_admin',
+        tenantId: null,
+        restaurantId: null,
+      },
+      {
+        id: STAFF_IDS.bellaAdmin,
+        email: 'gerant@bella.test',
+        name: 'Gérant',
+        role: 'tenant_admin',
+        tenantId: BELLA_ID,
+        restaurantId: null,
+      },
+      {
+        id: STAFF_IDS.bellaStaff,
+        email: 'equipe@bella.test',
+        name: 'Équipe',
+        role: 'staff',
+        tenantId: BELLA_ID,
+        restaurantId: BELLA_RESTO,
+      },
+      {
+        id: STAFF_IDS.greenAdmin,
+        email: 'gerant@greenbowl.test',
+        name: 'Gérant Green',
+        role: 'tenant_admin',
+        tenantId: GREEN_ID,
+        restaurantId: null,
+      },
+    ],
+  });
   const deps: AppDeps = {
-    tenants: createMemoryTenantStore([
-      {
-        id: BELLA_ID,
-        name: 'Pizzeria Bella',
-        subdomain: 'bella',
-        status: 'active',
-        applicationFee: { bps: 250, fixedCents: 0 },
-        theme: { primaryColor: '#C8102E', mode: 'light', logoUrl: null, tagline: 'Napolitaine' },
-      },
-      {
-        id: GREEN_ID,
-        name: 'Green Bowl',
-        subdomain: 'greenbowl',
-        status: 'active',
-        applicationFee: { bps: 0, fixedCents: 0 },
-        theme: null,
-      },
-      {
-        id: '00000000-0000-4000-8000-000000000003',
-        name: 'Suspendue',
-        subdomain: 'suspendue',
-        status: 'suspended',
-        applicationFee: { bps: 0, fixedCents: 0 },
-        theme: null,
-      },
-    ]),
+    tenants: createMemoryTenantStore(tenants),
+    admin: admin.store,
+    verifier: createSupabaseVerifier({ secret: JWT_SECRET }),
     restaurants: createMemoryRestaurantStore(restaurants),
     menus: createMenuCache(createDemoMenuProvider(), { ttlMs: 60_000, maxStaleMs: 0 }),
     ordering: backend.ordering,
@@ -128,7 +212,7 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
     now: () => NOW,
     ...overrides,
   };
-  return { app: createApp(deps), backend, stripe, pos, notifications, deps };
+  return { app: createApp(deps), backend, stripe, pos, notifications, deps, admin };
 }
 
 export const testApp = (overrides: Partial<AppDeps> = {}) => testSetup(overrides).app;

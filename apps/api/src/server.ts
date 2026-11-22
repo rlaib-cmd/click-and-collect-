@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import {
+  createPostgresAdminStore,
   createPostgresOperationsStore,
   createPostgresOrderingStore,
   createPostgresOrderReader,
@@ -9,6 +10,7 @@ import {
   createPostgresTenantStore,
   createSql,
 } from '@splash360/db';
+import { createSupabaseVerifier } from './admin/auth';
 import { createApp } from './app';
 import { loadEnv } from './env';
 import { createBanGeoProvider, createDemoGeoProvider } from './geo';
@@ -57,6 +59,13 @@ const app = createApp({
   pos,
   notifier: createNotificationSender({ expoAccessToken: env.EXPO_ACCESS_TOKEN, log }),
   posWebhookSecret: env.POS_WEBHOOK_SECRET ?? null,
+  admin: createPostgresAdminStore(sql),
+  verifier: createSupabaseVerifier({
+    jwksUrl: env.SUPABASE_JWKS_URL,
+    secret: env.SUPABASE_JWT_SECRET,
+    issuer: env.SUPABASE_JWT_ISSUER,
+  }),
+  adminUrl: env.ADMIN_URL,
   gateway,
   tokenSecret: env.ORDER_TOKEN_SECRET,
   geo:

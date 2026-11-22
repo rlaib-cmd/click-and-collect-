@@ -1,21 +1,41 @@
 import type { MenuDto } from '@splash360/contracts';
 import type { Menu } from '@splash360/core';
 
-/** Carte interne → contrat : catégories triées, catégories vides retirées. */
+export interface MenuOverride {
+  readonly kind: 'category' | 'product';
+  readonly itemId: string;
+  readonly hidden: boolean;
+  readonly position: number | null;
+}
+
+/**
+ * Carte interne → contrat : réglages locaux appliqués (masquer, ordonner),
+ * catégories vides retirées. La carte reste celle de Splash360.
+ */
 export function toMenuDto(
   menu: Menu,
   restaurantId: string,
   fetchedAt: Date,
   stale: boolean,
+  overrides: readonly MenuOverride[] = [],
 ): MenuDto {
+  const find = (kind: MenuOverride['kind'], id: string) =>
+    overrides.find((o) => o.kind === kind && o.itemId === id);
+  const hidden = (kind: MenuOverride['kind'], id: string) => find(kind, id)?.hidden === true;
+  const position = (kind: MenuOverride['kind'], id: string, fallback: number) =>
+    find(kind, id)?.position ?? fallback;
+
   const categories = [...menu.categories]
-    .sort((a, b) => a.position - b.position)
+    .filter((cat) => !hidden('category', cat.id))
+    .sort((a, b) => position('category', a.id, a.position) - position('category', b.id, b.position))
     .map((cat) => ({
       id: cat.id,
       name: cat.name,
       products: menu.products
-        .filter((p) => p.categoryId === cat.id)
-        .map((p) => ({
+        .map((p, index) => ({ p, index }))
+        .filter(({ p }) => p.categoryId === cat.id && !hidden('product', p.id))
+        .sort((a, b) => position('product', a.p.id, a.index) - position('product', b.p.id, b.index))
+        .map(({ p }) => ({
           id: p.id,
           name: p.name,
           description: p.description,

@@ -37,3 +37,13 @@ insert into public.delivery_zones (tenant_id, restaurant_id, name, kind, radius_
 select tenant_id, id, 'Moins de 2 km', 'radius', 2000, 190 from public.restaurants where splash360_id = 'S360-R-BELLA-1'
 union all
 select tenant_id, id, 'Moins de 4 km', 'radius', 4000, 390 from public.restaurants where splash360_id = 'S360-R-BELLA-1';
+
+-- Comptes du back-office de démonstration (rattachés au premier login par e-mail).
+insert into public.staff_users (tenant_id, restaurant_id, email, name, role) values
+  (null, null, 'admin@splash360.test', 'Super-admin Splash360', 'super_admin'),
+  ('00000000-0000-4000-8000-000000000001', null, 'gerant@bella.test', 'Gérant Bella', 'tenant_admin');
+insert into public.staff_users (tenant_id, restaurant_id, email, name, role)
+select tenant_id, id, 'equipe@bella.test', 'Équipe Bella Bastille', 'staff' from public.restaurants where splash360_id = 'S360-R-BELLA-1';
+
+update public.tenants set legal_text = 'Conditions générales de vente de démonstration. Vendeur : Pizzeria Bella SAS, 12 rue de la Roquette, 75011 Paris.'
+where subdomain = 'bella';

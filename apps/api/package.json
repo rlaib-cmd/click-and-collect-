@@ -18,6 +18,7 @@
     "@splash360/db": "workspace:*",
     "@splash360/theme": "workspace:*",
     "hono": "^4.13.20",
+    "jose": "^6.2.18",
     "stripe": "^23.2.0",
     "zod": "^4.6.7"
   },

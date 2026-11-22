@@ -1,5 +1,6 @@
 import type { MenuCache } from '@splash360/api-menu';
 import type {
+  AdminStore,
   OperationsStore,
   OrderingStore,
   OrderReader,
@@ -13,6 +14,8 @@ import type { PaymentGateway } from './payments/gateway';
 import { processDispatches } from './pos/dispatcher';
 import type { PosGateway } from './pos/gateway';
 import { posRoutes } from './routes/pos';
+import type { TokenVerifier } from './admin/auth';
+import { adminRoutes } from './routes/admin';
 import type { GeoProvider } from './geo';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -36,6 +39,11 @@ export interface AppDeps {
   readonly operations: OperationsStore;
   readonly pos: PosGateway;
   readonly notifier: NotificationSender;
+  readonly admin: AdminStore;
+  /** Vérification des jetons de session du back-office (Supabase Auth). */
+  readonly verifier: TokenVerifier;
+  /** URL publique du back-office. */
+  readonly adminUrl?: string;
   /** Secret partagé avec la caisse Splash360 pour les retours de statut ; null = désactivé. */
   readonly posWebhookSecret?: string | null;
   /** Appelé en plus après un paiement confirmé (tests). */
@@ -59,8 +67,8 @@ export function createApp(deps: AppDeps) {
     '/v1/*',
     cors({
       origin: origins === '*' ? '*' : [...origins],
-      allowMethods: ['GET', 'POST'],
-      allowHeaders: ['Content-Type', 'Authorization'],
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+      allowHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id'],
     }),
   );
 
@@ -100,7 +108,33 @@ export function createApp(deps: AppDeps) {
     }),
   );
   app.route('/v1/pos', posRoutes({ ...notify, posWebhookSecret: deps.posWebhookSecret ?? null }));
-  app.route('/v1/tenants', tenantRoutes({ ...deps, now: deps.now ?? (() => new Date()) }));
+  app.route(
+    '/v1/admin',
+    adminRoutes({
+      ...notify,
+      verifier: deps.verifier,
+      admin: deps.admin,
+      tenants: deps.tenants,
+      restaurants: deps.restaurants,
+      payments: deps.payments,
+      gateway: deps.gateway,
+      menus: deps.menus,
+      adminUrl: deps.adminUrl ?? 'http://localhost:3000',
+    }),
+  );
+  const hiddenItems = async (tenantId: string, restaurantId: string) => {
+    const overrides = (await deps.admin.listMenuOverrides(tenantId, restaurantId)).filter(
+      (o) => o.hidden,
+    );
+    return {
+      products: new Set(overrides.filter((o) => o.kind === 'product').map((o) => o.itemId)),
+      categories: new Set(overrides.filter((o) => o.kind === 'category').map((o) => o.itemId)),
+    };
+  };
+  app.route(
+    '/v1/tenants',
+    tenantRoutes({ ...deps, hiddenItems, now: deps.now ?? (() => new Date()) }),
+  );
 
   app.notFound((c) => apiError(c, 'not_found', 'Route inconnue'));
   app.onError((err, c) => {

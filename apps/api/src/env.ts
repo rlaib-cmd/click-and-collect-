@@ -13,6 +13,12 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
   /** Secret partagé avec la caisse Splash360 pour signer les retours de statut. */
   POS_WEBHOOK_SECRET: z.string().min(32).optional(),
+  /** Back-office : vérification des sessions Supabase Auth (JWKS recommandé, secret HS256 en local). */
+  SUPABASE_JWKS_URL: z.url().optional(),
+  SUPABASE_JWT_SECRET: z.string().min(32).optional(),
+  SUPABASE_JWT_ISSUER: z.string().optional(),
+  /** URL publique du back-office (retours Stripe). */
+  ADMIN_URL: z.url().default('http://localhost:3000'),
   /** Jeton d'accès Expo (notifications push), facultatif. */
   EXPO_ACCESS_TOKEN: z.string().optional(),
   MENU_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(180),

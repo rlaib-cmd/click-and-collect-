@@ -1,3 +1,4 @@
+export * from './admin';
 export * from './client';
 export * from './operations';
 export * from './ordering';

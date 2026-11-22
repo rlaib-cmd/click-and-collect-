@@ -11,6 +11,7 @@ export function createFakeGateway(secret = 'whsec_test') {
   }[] = [];
   const cancelled: string[] = [];
   const refunds: { paymentIntentId: string; amountCents: number; idempotencyKey: string }[] = [];
+  const accounts: string[] = [];
   const gateway: PaymentGateway = {
     publishableKey: 'pk_test_fake',
     createPaymentIntent(input) {
@@ -36,10 +37,19 @@ export function createFakeGateway(secret = 'whsec_test') {
       refunds.push(input);
       return Promise.resolve();
     },
+    createConnectedAccount(input) {
+      accounts.push(input.restaurantId);
+      return Promise.resolve(`acct_fake_${accounts.length}`);
+    },
+    createOnboardingLink(accountId, urls) {
+      return Promise.resolve(
+        `https://connect.stripe.test/setup/${accountId}?return=${encodeURIComponent(urls.returnUrl)}`,
+      );
+    },
     parseWebhook(rawBody, signature) {
       if (signature !== secret) throw new InvalidWebhookSignature();
       return JSON.parse(rawBody) as PaymentEvent;
     },
   };
-  return { gateway, created, cancelled, refunds };
+  return { gateway, created, cancelled, refunds, accounts };
 }

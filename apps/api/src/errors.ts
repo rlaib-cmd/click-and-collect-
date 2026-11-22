@@ -10,6 +10,8 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   order_invalid: 422,
   slot_full: 409,
   unauthorized: 401,
+  forbidden: 403,
+  conflict: 409,
   payments_unavailable: 503,
   order_not_payable: 409,
   internal_error: 500,

@@ -22,6 +22,7 @@ export interface Restaurant {
 export interface RestaurantStore {
   listByTenant(tenantId: string): Promise<Restaurant[]>;
   findById(tenantId: string, restaurantId: string): Promise<Restaurant | null>;
+  setStripeAccount(tenantId: string, restaurantId: string, accountId: string): Promise<void>;
 }
 
 interface Row {
@@ -75,10 +76,16 @@ export function createPostgresRestaurantStore(sql: Sql): RestaurantStore {
         limit 1`;
       return rows[0] ? toRestaurant(rows[0]) : null;
     },
+    async setStripeAccount(tenantId, restaurantId, accountId) {
+      await sql`update public.restaurants set stripe_account_id = ${accountId}
+                where tenant_id = ${tenantId} and id = ${restaurantId} and stripe_account_id is null`;
+    },
   };
 }
 
-export function createMemoryRestaurantStore(restaurants: readonly Restaurant[]): RestaurantStore {
+export function createMemoryRestaurantStore(source: readonly Restaurant[]): RestaurantStore {
+  // Copie : les tests ne partagent pas d'état entre eux.
+  const restaurants = source.map((r) => ({ ...r }));
   return {
     listByTenant: (tenantId) =>
       Promise.resolve(
@@ -90,5 +97,10 @@ export function createMemoryRestaurantStore(restaurants: readonly Restaurant[]):
       Promise.resolve(
         restaurants.find((r) => r.tenantId === tenantId && r.id === restaurantId) ?? null,
       ),
+    setStripeAccount(tenantId, restaurantId, accountId) {
+      const r = restaurants.find((x) => x.tenantId === tenantId && x.id === restaurantId);
+      if (r && !r.stripeAccountId) Object.assign(r, { stripeAccountId: accountId });
+      return Promise.resolve();
+    },
   };
 }

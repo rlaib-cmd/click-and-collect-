@@ -144,7 +144,7 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
           }[]
         >`
           select id, kind, radius_meters, postal_codes, fee_cents from public.delivery_zones
-          where tenant_id = ${tenantId} and restaurant_id = ${restaurantId}`,
+          where tenant_id = ${tenantId} and restaurant_id = ${restaurantId} and not archived`,
       ]);
       return {
         pickupEnabled: s.pickup_enabled,

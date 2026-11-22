@@ -1,6 +1,12 @@
 import { MenuUnavailableError, type MenuCache } from '@splash360/api-menu';
 import { subdomainSchema, type RestaurantDto, type TenantConfig } from '@splash360/contracts';
-import type { Restaurant, RestaurantStore, TenantStore, TenantWithTheme } from '@splash360/db';
+import type {
+  AdminStore,
+  Restaurant,
+  RestaurantStore,
+  TenantStore,
+  TenantWithTheme,
+} from '@splash360/db';
 import { DEFAULT_THEME } from '@splash360/theme';
 import { Hono } from 'hono';
 import { apiError } from '../errors';
@@ -9,6 +15,7 @@ import { registerOrderingRoutes, type OrderingRoutesDeps } from './ordering';
 import { registerPaymentRoutes, type PaymentRoutesDeps } from './payments';
 
 export interface TenantRoutesDeps extends OrderingRoutesDeps, PaymentRoutesDeps {
+  readonly admin: AdminStore;
   readonly tenants: TenantStore;
   readonly restaurants: RestaurantStore;
   readonly menus: MenuCache;
@@ -80,14 +87,22 @@ export function tenantRoutes(deps: TenantRoutesDeps) {
         restaurantId: restaurant.id,
         splash360RestaurantId: restaurant.splash360Id,
       });
+      const overrides = await deps.admin.listMenuOverrides(c.get('tenant').id, restaurant.id);
       c.header('Cache-Control', 'public, max-age=30');
-      return c.json(toMenuDto(cached.menu, restaurant.id, cached.fetchedAt, cached.stale));
+      return c.json(
+        toMenuDto(cached.menu, restaurant.id, cached.fetchedAt, cached.stale, overrides),
+      );
     } catch (error) {
       if (error instanceof MenuUnavailableError) {
         return apiError(c, 'menu_unavailable', 'Carte momentanément indisponible');
       }
       throw error;
     }
+  });
+
+  app.get('/:subdomain/legal', async (c) => {
+    c.header('Cache-Control', 'public, max-age=300');
+    return c.json({ text: await deps.admin.getLegalText(c.get('tenant').id) });
   });
 
   registerOrderingRoutes(app, deps);

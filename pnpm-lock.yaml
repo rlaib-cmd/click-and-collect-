@@ -81,6 +81,9 @@ importers:
       hono:
         specifier: ^4.13.20
         version: 4.13.20
+      jose:
+        specifier: ^6.2.18
+        version: 6.2.18
       stripe:
         specifier: ^23.2.0
         version: 23.2.0(@types/node@22.20.5)
@@ -6152,7 +6155,7 @@ snapshots:
       obug: 3.0.0
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 5.1.1(@types/node@26.6.6)(@vitest/coverage-v8@5.1.1)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(terser@5.51.4)(tsx@4.23.15))
+      vitest: 5.1.1(@types/node@22.20.5)(@vitest/coverage-v8@5.1.1)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(terser@5.51.4)(tsx@4.23.15))
 
   '@vitest/istanbul-lib-coverage@2.1.1': {}
 
