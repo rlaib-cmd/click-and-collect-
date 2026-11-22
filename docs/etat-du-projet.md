@@ -19,7 +19,8 @@ Synthèse pour reprendre le projet. Détail par lot dans `docs/plan-lot-*.md`, d
 
 - Application web : https://claude-splash360.expo.app (enseigne Chicken Street ; `?enseigne=bella` ou `?enseigne=greenbowl` pour les autres).
 - API : https://yfrvtrebukdbxnuqhlfy.supabase.co/functions/v1/api (fonction Supabase, ADR 0007 ; `pnpm --filter api build:edge`).
-- Android : build EAS `chickenstreet-preview` (distribution interne).
+- Back-office : https://claude-splash360--admin.expo.app (export statique, `pnpm --filter admin build:static` puis `eas deploy --export-dir ../admin/out --alias admin` depuis `apps/mobile`). Compte de démo : `gerant@chickenstreet.test`.
+- Android : build EAS `chickenstreet-preview` (distribution interne), APK sur la page du build.
 - Paiement désactivé tant que les clés Stripe de test ne sont pas posées en secrets de la fonction.
 
 ## Qualité
