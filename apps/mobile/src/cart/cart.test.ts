@@ -39,6 +39,22 @@ describe('panier', () => {
     expect(s.lines).toEqual([]);
   });
 
+  it("garde les choix de l'accueil quand on vide le panier, et retombe sur « dès que possible » si le créneau est passé", () => {
+    let s = cartReducer(EMPTY_CART, {
+      type: 'setup',
+      restaurantId: 'r1',
+      setup: { mode: 'delivery' },
+    });
+    s = add(s, 'p');
+    s = cartReducer(s, { type: 'clear' });
+    expect(s.setup.mode).toBe('delivery');
+    const stored = JSON.stringify({
+      ...s,
+      setup: { ...s.setup, time: { kind: 'scheduled', at: '2020-01-01T10:00:00.000Z' } },
+    });
+    expect(parseStoredCart(stored).setup.time).toEqual({ kind: 'asap' });
+  });
+
   it('relit un panier sauvegardé et ignore les données corrompues', () => {
     const s = add(EMPTY_CART, 'p', ['a'], 2);
     expect(parseStoredCart(JSON.stringify(s))).toEqual(s);

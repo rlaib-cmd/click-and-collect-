@@ -2,7 +2,7 @@ import { messages } from '@splash360/i18n';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMenu } from '@/api/hooks';
+import { useAvailability, useMenu } from '@/api/hooks';
 import { useCart } from '@/cart/CartProvider';
 import { ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
@@ -16,6 +16,7 @@ export default function CartScreen() {
   const insets = useSafeAreaInsets();
   const restaurantId = cart.restaurantId ?? '';
   const menu = useMenu(restaurantId);
+  const availability = useAvailability(cart.restaurantId);
 
   if (!cart.restaurantId || cart.lines.length === 0) {
     return <ErrorState message={messages.cart.empty} onRetry={() => router.replace('/')} />;
@@ -25,6 +26,9 @@ export default function CartScreen() {
     return <ErrorState message={messages.menu.menuError} onRetry={() => void menu.refetch()} />;
 
   const { lines, subtotalCents } = displayCart(menu.data, cart.lines);
+  const minimum =
+    cart.setup.mode === 'delivery' ? (availability.data?.delivery?.minimumCents ?? 0) : 0;
+  const missing = Math.max(0, minimum - subtotalCents);
 
   return (
     <Screen>
@@ -89,11 +93,20 @@ export default function CartScreen() {
             {formatPrice(subtotalCents)}
           </Text>
         </View>
+        {missing > 0 ? (
+          <Text style={[styles.minimum, { color: palette.accent }]} accessibilityRole="alert">
+            {messages.checkout.belowMinimum(formatPrice(missing))}
+          </Text>
+        ) : null}
       </ScrollView>
       <View
         style={[styles.footer, { borderColor: palette.border, paddingBottom: 12 + insets.bottom }]}
       >
-        <PrimaryButton label={messages.cart.checkout} disabled onPress={() => undefined} />
+        <PrimaryButton
+          label={messages.cart.checkout}
+          disabled={missing > 0 || lines.some((l) => l.product === null)}
+          onPress={() => router.push('/checkout')}
+        />
       </View>
     </Screen>
   );
@@ -143,5 +156,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   subtotalLabel: { fontSize: 18, fontWeight: '700' },
+  minimum: { marginTop: 12, fontSize: 15, fontWeight: '600' },
   footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
 });

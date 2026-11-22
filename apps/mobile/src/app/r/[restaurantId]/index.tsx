@@ -7,6 +7,7 @@ import { Pressable, ScrollView, SectionList, StyleSheet, Text, View } from 'reac
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMenu } from '@/api/hooks';
 import { CartBar } from '@/components/CartBar';
+import { SetupSummary } from '@/components/SetupSummary';
 import { TenantLogo } from '@/components/TenantLogo';
 import { ErrorState, Loading, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
@@ -47,6 +48,10 @@ export default function MenuScreen() {
         <Text style={[styles.headerTitle, { color: palette.text }]} accessibilityRole="header">
           {config.tenant.name}
         </Text>
+      </View>
+
+      <View style={styles.summary}>
+        <SetupSummary />
       </View>
 
       {menu.data.stale ? (
@@ -165,6 +170,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: { fontSize: 20, fontWeight: '700' },
+  summary: { paddingHorizontal: 16, paddingTop: 12 },
   notice: { padding: 12, marginHorizontal: 16, marginTop: 12, borderRadius: 8 },
   tabsBar: { flexGrow: 0 },
   tabs: { gap: 8, paddingHorizontal: 16, paddingVertical: 12 },

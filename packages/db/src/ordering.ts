@@ -225,7 +225,7 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
           returning id`;
 
         const [counter] = await tx<{ n: number }[]>`
-          insert into public.tenant_counters (tenant_id) values (${o.tenantId})
+          insert into public.tenant_counters (tenant_id, last_order_number) values (${o.tenantId}, 1001)
           on conflict (tenant_id) do update set last_order_number = public.tenant_counters.last_order_number + 1
           returning last_order_number as n`;
 
