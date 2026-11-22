@@ -42,6 +42,13 @@
             "useFrameworks": "dynamic"
           }
         }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.fr.splash360.commande",
+          "enableGooglePay": true
+        }
       ]
     ],
     "experiments": {

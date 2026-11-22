@@ -3,6 +3,8 @@ import {
   deliveryCheckSchema,
   geoSearchSchema,
   menuSchema,
+  orderTrackingSchema,
+  paymentSessionSchema,
   placedOrderSchema,
   quoteSchema,
   restaurantListSchema,
@@ -116,5 +118,41 @@ export function usePlaceOrder() {
   return useMutation({
     mutationFn: (body: PlaceOrderRequest) =>
       apiPost(`/v1/tenants/${sub}/orders`, body, placedOrderSchema),
+  });
+}
+
+const TERMINAL = new Set(['completed', 'cancelled', 'refunded']);
+
+/** Suivi de commande : rafraîchi toutes les 4 s tant que la commande n'est pas terminée. */
+export function useOrderTracking(orderId: string, accessToken: string | null) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useQuery({
+    queryKey: ['order', sub, orderId],
+    queryFn: () =>
+      apiGet(`/v1/tenants/${sub}/orders/${orderId}`, orderTrackingSchema, (input, init) =>
+        fetch(input, { ...init, headers: { Authorization: `Bearer ${accessToken ?? ''}` } }),
+      ),
+    enabled: accessToken !== null,
+    refetchInterval: (query) =>
+      query.state.data && TERMINAL.has(query.state.data.status) ? false : 4000,
+  });
+}
+
+export function usePaymentSession(orderId: string, accessToken: string | null) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useMutation({
+    mutationFn: () =>
+      apiPost(
+        `/v1/tenants/${sub}/orders/${orderId}/payment`,
+        {},
+        paymentSessionSchema,
+        (input, init) =>
+          fetch(input, {
+            ...init,
+            headers: { ...(init?.headers ?? {}), Authorization: `Bearer ${accessToken ?? ''}` },
+          }),
+      ),
   });
 }

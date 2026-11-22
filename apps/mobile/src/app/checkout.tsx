@@ -12,6 +12,7 @@ import { useCart } from '@/cart/CartProvider';
 import { SetupSummary } from '@/components/SetupSummary';
 import { ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
+import { saveOrder } from '@/orders/storage';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const CONTACT_KEY = 'contact';
@@ -20,7 +21,7 @@ type Contact = { name: string; phone: string; email: string };
 /** Récapitulatif : montants recalculés par le serveur, coordonnées, conditions de vente. */
 export default function CheckoutScreen() {
   const { cart } = useCart();
-  const { palette } = useTenant();
+  const { palette, config } = useTenant();
   const insets = useSafeAreaInsets();
   const [contact, setContact] = useState<Contact>({ name: '', phone: '', email: '' });
   const [marketing, setMarketing] = useState(false);
@@ -86,11 +87,15 @@ export default function CheckoutScreen() {
         acceptedTerms: true,
       },
       {
-        onSuccess: (order) =>
-          router.replace({
-            pathname: '/order/[orderId]',
-            params: { orderId: order.orderId, number: String(order.number) },
-          }),
+        onSuccess: async (order) => {
+          await saveOrder(config.tenant.subdomain, {
+            orderId: order.orderId,
+            number: order.number,
+            accessToken: order.accessToken,
+            createdAt: new Date().toISOString(),
+          }).catch(() => undefined);
+          router.replace({ pathname: '/order/[orderId]', params: { orderId: order.orderId } });
+        },
       },
     );
   };
