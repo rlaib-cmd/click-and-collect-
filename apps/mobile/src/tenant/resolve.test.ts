@@ -23,7 +23,14 @@ describe("résolution de l'enseigne", () => {
   });
 
   it('web : ignore www, les IP et localhost, puis se rabat sur la variable de build', () => {
-    for (const hostname of ['www.commande.fr', '127.0.0.1', 'localhost', 'commande.fr']) {
+    for (const hostname of [
+      'www.commande.fr',
+      '127.0.0.1',
+      'localhost',
+      'commande.fr',
+      'claude-splash360.expo.app',
+      'claude-splash360--7jxsbreted.expo.app',
+    ]) {
       expect(
         resolveSubdomain({ platform: 'web', buildTenant: 'bella', hostname, allowOverride: false }),
       ).toBe('bella');

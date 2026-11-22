@@ -17,6 +17,8 @@ export interface ResolveInput {
 
 const SUBDOMAIN = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const RESERVED = new Set(['www', 'app', 'api', 'admin']);
+/** Hébergements d'aperçu : le premier libellé est le nom du projet, pas une enseigne. */
+const PREVIEW_HOSTS = ['.expo.app'];
 
 function clean(value: string | null | undefined): string | null {
   const v = value?.trim().toLowerCase();
@@ -41,7 +43,8 @@ export function resolveSubdomain(input: ResolveInput): string | null {
   const host = input.hostname?.toLowerCase() ?? '';
   const labels = host.split('.');
   const isIp = /^[0-9.]+$/.test(host);
-  if (!isIp && labels.length >= 3) {
+  const isPreview = PREVIEW_HOSTS.some((suffix) => host.endsWith(suffix));
+  if (!isIp && !isPreview && labels.length >= 3) {
     const first = clean(labels[0]);
     if (first && !RESERVED.has(first)) return first;
   }
