@@ -4,3 +4,4 @@ supabase/migrations/
 supabase/config.toml
 .next/
 .expo/
+coverage/
