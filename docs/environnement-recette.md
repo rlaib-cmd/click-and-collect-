@@ -47,4 +47,4 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_S6sTwCD5rcnrtR5gk-SInQ_2KwqX64e
 - Comptes connectés de test (rattachés dans `restaurants.stripe_account_id`) :
   - Bella Bastille : `acct_1UedVlAKHbYphR6t`
   - Green Bowl Opéra : `acct_1UedW6A5tvdaheca`
-- **À faire** : terminer leur inscription (lien d'inscription Stripe, bouton « données de test ») pour activer les paiements.
+- **En attente (décision du 2026-11-22)** : terminer leur inscription (lien d'inscription Stripe, bouton « données de test ») pour activer les paiements. Les liens se régénèrent à la demande.
