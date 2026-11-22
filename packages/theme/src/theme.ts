@@ -26,6 +26,8 @@ export interface TenantTheme {
   readonly logoUrl: string | null;
   readonly tagline: string | null;
   readonly style: ThemeStyle;
+  /** Couleur du club fidélité ; null : couleur de l'enseigne. */
+  readonly loyaltyColor?: string | null;
 }
 
 /** Rayons des angles (boutons, cartes, puces) selon le style. */
@@ -58,6 +60,9 @@ export interface Palette {
   readonly border: string;
   /** Couleur d'accent lisible sur le fond (liens, icônes) : la couleur de l'enseigne si elle contraste assez. */
   readonly accent: string;
+  /** Couleur du club fidélité (carte de membre, récompenses) et texte lisible dessus. */
+  readonly loyalty: string;
+  readonly onLoyalty: string;
 }
 
 const BASE = {
@@ -80,7 +85,9 @@ const BASE = {
 /** Contraste minimal WCAG AA pour les éléments graphiques et le texte large. */
 export const MIN_UI_CONTRAST = 3;
 
-export function buildPalette(theme: Pick<TenantTheme, 'primaryColor' | 'mode'>): Palette {
+export function buildPalette(
+  theme: Pick<TenantTheme, 'primaryColor' | 'mode' | 'loyaltyColor'>,
+): Palette {
   const base = BASE[theme.mode];
   const primary = theme.primaryColor.toUpperCase();
   const accent =
@@ -89,7 +96,16 @@ export function buildPalette(theme: Pick<TenantTheme, 'primaryColor' | 'mode'>):
       : theme.mode === 'dark'
         ? WHITE
         : BLACK;
-  return { mode: theme.mode, primary, onPrimary: readableTextOn(primary), accent, ...base };
+  const loyalty = (theme.loyaltyColor ?? primary).toUpperCase();
+  return {
+    mode: theme.mode,
+    primary,
+    onPrimary: readableTextOn(primary),
+    accent,
+    loyalty,
+    onLoyalty: readableTextOn(loyalty),
+    ...base,
+  };
 }
 
 export const DEFAULT_THEME: TenantTheme = {
@@ -98,4 +114,5 @@ export const DEFAULT_THEME: TenantTheme = {
   logoUrl: null,
   tagline: null,
   style: DEFAULT_STYLE,
+  loyaltyColor: null,
 };

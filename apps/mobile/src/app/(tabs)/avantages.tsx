@@ -56,10 +56,10 @@ export default function RewardsScreen() {
         <View style={styles.list}>
           {program.rewards.map((r) => {
             const missing = member ? Math.max(0, r.costPoints - member.points) : null;
-            // Récompense à portée (ou visiteur) : couleur de l'enseigne ; sinon tuile sombre et jauge.
+            // Récompense à portée (ou visiteur) : couleur du club ; sinon tuile sombre et jauge.
             const locked = missing !== null && missing > 0;
-            const bg = locked ? palette.text : palette.primary;
-            const fg = locked ? palette.background : palette.onPrimary;
+            const bg = locked ? palette.text : palette.loyalty;
+            const fg = locked ? palette.background : palette.onLoyalty;
             const progress = member ? Math.min(1, member.points / r.costPoints) : 0;
             return (
               <View
@@ -73,8 +73,8 @@ export default function RewardsScreen() {
                   </Text>
                 </View>
                 {missing === 0 ? (
-                  <View style={[styles.badge, { backgroundColor: palette.onPrimary }]}>
-                    <Text style={[styles.badgeText, { color: palette.primary }]}>
+                  <View style={[styles.badge, { backgroundColor: palette.onLoyalty }]}>
+                    <Text style={[styles.badgeText, { color: palette.loyalty }]}>
                       {t.availableBadge}
                     </Text>
                   </View>
@@ -86,7 +86,7 @@ export default function RewardsScreen() {
                           styles.fill,
                           {
                             width: `${Math.round(progress * 100)}%`,
-                            backgroundColor: palette.primary,
+                            backgroundColor: palette.loyalty,
                           },
                         ]}
                       />

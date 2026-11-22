@@ -26,6 +26,12 @@ export const tenantThemeSchema = z.object({
   tagline: z.string().max(120).nullable(),
   /** Absent des anciennes réponses : style par défaut. */
   style: themeStyleSchema.default(DEFAULT_STYLE),
+  /** Couleur du club fidélité ; null ou absente : couleur de l'enseigne. */
+  loyaltyColor: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .nullable()
+    .default(null),
 });
 
 /** Réponse de GET /v1/tenants/{subdomain}/config. */

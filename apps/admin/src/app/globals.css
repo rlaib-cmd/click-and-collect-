@@ -410,6 +410,23 @@ code {
   font-weight: 700;
 }
 
+.phone-loyalty {
+  margin: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  align-self: stretch;
+}
+
+.phone-loyalty-badge {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 1fr;

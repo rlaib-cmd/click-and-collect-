@@ -63,6 +63,7 @@ export function tenantRoutes(deps: TenantRoutesDeps) {
         logoUrl: theme.logoUrl,
         tagline: theme.tagline,
         style: theme.style,
+        loyaltyColor: theme.loyaltyColor ?? null,
       },
     };
     // Données publiques : cache court côté client et CDN, rafraîchi en arrière-plan.

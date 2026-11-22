@@ -136,6 +136,8 @@ export interface ThemeRecord {
   logoUrl: string | null;
   tagline: string | null;
   style: ThemeStyle;
+  /** Couleur du club fidélité ; null : couleur de l'enseigne. */
+  loyaltyColor: string | null;
 }
 
 export interface AdminStore {
@@ -350,9 +352,10 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
           mode: 'light' | 'dark';
           logo_url: string | null;
           tagline: string | null;
+          loyalty_color: string | null;
         } & ThemeStyleRow)[]
       >`
-        select primary_color, mode, logo_url, tagline, header_style, corner_style, uppercase_titles, pattern
+        select primary_color, mode, logo_url, tagline, loyalty_color, header_style, corner_style, uppercase_titles, pattern
         from public.tenant_theme where tenant_id = ${tenantId}`;
       return r
         ? {
@@ -361,19 +364,22 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
             logoUrl: r.logo_url,
             tagline: r.tagline,
             style: toThemeStyle(r),
+            loyaltyColor: r.loyalty_color,
           }
         : null;
     },
 
     async updateTheme(tenantId, t) {
       await sql`insert into public.tenant_theme (tenant_id, primary_color, mode, logo_url, tagline,
-                  header_style, corner_style, uppercase_titles, pattern)
+                  header_style, corner_style, uppercase_titles, pattern, loyalty_color)
                 values (${tenantId}, ${t.primaryColor}, ${t.mode}, ${t.logoUrl}, ${t.tagline},
-                  ${t.style.header}, ${t.style.corners}, ${t.style.uppercaseTitles}, ${t.style.pattern})
+                  ${t.style.header}, ${t.style.corners}, ${t.style.uppercaseTitles}, ${t.style.pattern},
+                  ${t.loyaltyColor})
                 on conflict (tenant_id) do update set primary_color = excluded.primary_color, mode = excluded.mode,
                   logo_url = excluded.logo_url, tagline = excluded.tagline,
                   header_style = excluded.header_style, corner_style = excluded.corner_style,
-                  uppercase_titles = excluded.uppercase_titles, pattern = excluded.pattern`;
+                  uppercase_titles = excluded.uppercase_titles, pattern = excluded.pattern,
+                  loyalty_color = excluded.loyalty_color`;
     },
 
     async getLegalText(tenantId) {

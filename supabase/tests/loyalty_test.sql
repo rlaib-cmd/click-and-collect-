@@ -1,6 +1,6 @@
 -- Lot 8 : fidélité (données de test) et récompense sur la commande.
 begin;
-select plan(7);
+select plan(9);
 
 insert into public.tenants (id, name, subdomain, splash360_id) values
   ('10000000-0000-4000-8000-000000000001', 'Fidèle A', 'fidele-a', 'S360-FA'),
@@ -58,6 +58,18 @@ delete from public.loyalty_demo_members where id = '20000000-0000-4000-8000-0000
 select is_empty(
   $$ select 1 from public.loyalty_demo_movements where member_id = '20000000-0000-4000-8000-000000000001' $$,
   'historique effacé avec le membre'
+);
+
+-- 8 et 9. Couleur du club : un code hexadécimal ou null (couleur de l'enseigne).
+insert into public.tenant_theme (tenant_id) values ('10000000-0000-4000-8000-000000000001')
+on conflict (tenant_id) do nothing;
+select lives_ok(
+  $$ update public.tenant_theme set loyalty_color = '#F2B705' where tenant_id = '10000000-0000-4000-8000-000000000001' $$,
+  'couleur du club acceptée'
+);
+select throws_ok(
+  $$ update public.tenant_theme set loyalty_color = 'gold' where tenant_id = '10000000-0000-4000-8000-000000000001' $$,
+  '23514'
 );
 
 select * from finish();

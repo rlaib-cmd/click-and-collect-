@@ -143,6 +143,7 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
         logoUrl: null,
         tagline: 'Napolitaine',
         style: DEFAULT_STYLE,
+        loyaltyColor: null,
       },
     },
     {

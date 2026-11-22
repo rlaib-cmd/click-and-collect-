@@ -44,6 +44,7 @@ export interface TenantWithTheme {
     readonly logoUrl: string | null;
     readonly tagline: string | null;
     readonly style: ThemeStyle;
+    readonly loyaltyColor: string | null;
   } | null;
 }
 
@@ -64,6 +65,7 @@ interface Row extends ThemeStyleRow {
   mode: ThemeMode | null;
   logo_url: string | null;
   tagline: string | null;
+  loyalty_color: string | null;
 }
 
 function toTenant(row: Row): TenantWithTheme {
@@ -82,6 +84,7 @@ function toTenant(row: Row): TenantWithTheme {
             logoUrl: row.logo_url,
             tagline: row.tagline,
             style: toThemeStyle(row),
+            loyaltyColor: row.loyalty_color,
           }
         : null,
   };
@@ -92,7 +95,7 @@ const TENANT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 export function createPostgresTenantStore(sql: Sql): TenantStore {
   const select = (where: ReturnType<Sql>) => sql<Row[]>`
     select t.id, t.name, t.subdomain, t.splash360_id, t.status, t.application_fee_bps, t.application_fee_fixed_cents,
-           th.primary_color, th.mode, th.logo_url, th.tagline,
+           th.primary_color, th.mode, th.logo_url, th.tagline, th.loyalty_color,
            th.header_style, th.corner_style, th.uppercase_titles, th.pattern
     from public.tenants t
     left join public.tenant_theme th on th.tenant_id = t.id

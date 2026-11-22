@@ -77,3 +77,21 @@ describe('style', () => {
     expect(contrastRatio(p.primary, p.onPrimary)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe('couleur du club fidélité', () => {
+  it("reprend la couleur de l'enseigne quand aucune n'est choisie", () => {
+    const p = buildPalette({ primaryColor: '#CF2028', mode: 'light', loyaltyColor: null });
+    expect(p.loyalty).toBe('#CF2028');
+    expect(p.onLoyalty).toBe(p.onPrimary);
+  });
+
+  it('calcule un texte lisible sur la couleur du club', () => {
+    const gold = buildPalette({ primaryColor: '#CF2028', mode: 'light', loyaltyColor: '#f2b705' });
+    expect(gold.loyalty).toBe('#F2B705');
+    expect(gold.onLoyalty).toBe('#000000');
+    for (const color of ['#111111', '#F2B705', '#1F6FEB', '#A3E635']) {
+      const p = buildPalette({ primaryColor: '#CF2028', mode: 'light', loyaltyColor: color });
+      expect(contrastRatio(p.loyalty, p.onLoyalty)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});

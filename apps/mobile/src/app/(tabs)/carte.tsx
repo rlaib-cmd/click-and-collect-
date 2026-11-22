@@ -41,21 +41,21 @@ export default function CardScreen() {
           <View
             style={[
               styles.card,
-              { backgroundColor: palette.primary, borderRadius: radii.card + 8 },
+              { backgroundColor: palette.loyalty, borderRadius: radii.card + 8 },
             ]}
           >
             <View style={styles.cardHead}>
-              <Text style={[styles.club, titleStyle(style), { color: palette.onPrimary }]}>
+              <Text style={[styles.club, titleStyle(style), { color: palette.onLoyalty }]}>
                 {config.tenant.name}
               </Text>
-              <View style={[styles.vip, { backgroundColor: palette.onPrimary, borderRadius: 999 }]}>
-                <Icon name="crown" color={palette.primary} size={16} />
-                <Text style={[styles.vipText, titleStyle(style), { color: palette.primary }]}>
+              <View style={[styles.vip, { backgroundColor: palette.onLoyalty, borderRadius: 999 }]}>
+                <Icon name="crown" color={palette.loyalty} size={16} />
+                <Text style={[styles.vipText, titleStyle(style), { color: palette.loyalty }]}>
                   {t.vip}
                 </Text>
               </View>
             </View>
-            <Text style={{ color: palette.onPrimary, fontWeight: '700' }}>{member.name}</Text>
+            <Text style={{ color: palette.onLoyalty, fontWeight: '700' }}>{member.name}</Text>
             <View style={styles.qrBox} accessibilityLabel={t.cardCode(member.cardCode)} accessible>
               <QRCode
                 value={member.cardCode}
@@ -64,10 +64,10 @@ export default function CardScreen() {
                 color="#000000"
               />
             </View>
-            <Text style={{ color: palette.onPrimary, fontWeight: '700' }} selectable>
+            <Text style={{ color: palette.onLoyalty, fontWeight: '700' }} selectable>
               {member.cardCode}
             </Text>
-            <Text style={[styles.points, titleStyle(style), { color: palette.onPrimary }]}>
+            <Text style={[styles.points, titleStyle(style), { color: palette.onLoyalty }]}>
               {t.points(member.points)}
             </Text>
           </View>
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingBottom: 32,
   },
-  h1: { fontSize: 28, fontWeight: '900' },
+  h1: { fontSize: 28, fontWeight: '900', textAlign: 'center' },
   card: { alignItems: 'center', gap: 12, padding: 22 },
   cardHead: { alignItems: 'center', gap: 8 },
   club: { fontSize: 20, fontWeight: '900' },

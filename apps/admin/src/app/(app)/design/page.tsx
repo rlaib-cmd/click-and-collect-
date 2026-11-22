@@ -33,6 +33,7 @@ export default function DesignPage() {
   const palette = buildPalette({
     primaryColor: isHexColor(form.primaryColor) ? form.primaryColor : '#1F6FEB',
     mode: form.mode,
+    loyaltyColor: form.loyaltyColor && isHexColor(form.loyaltyColor) ? form.loyaltyColor : null,
   });
   const ratio = contrastRatio(palette.primary, palette.onPrimary).toFixed(1);
   const brand = form.style.header === 'brand';
@@ -89,6 +90,33 @@ export default function DesignPage() {
                 maxLength={7}
               />
             </span>
+          </label>
+          <label>
+            {t.loyaltyColor}
+            <span className="row">
+              <input
+                type="color"
+                value={palette.loyalty}
+                onChange={(e) => setForm({ ...form, loyaltyColor: e.target.value.toUpperCase() })}
+                aria-label={t.loyaltyColor}
+              />
+              <input
+                value={form.loyaltyColor ?? ''}
+                placeholder={palette.primary}
+                onChange={(e) => setForm({ ...form, loyaltyColor: e.target.value || null })}
+                maxLength={7}
+              />
+              {form.loyaltyColor ? (
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => setForm({ ...form, loyaltyColor: null })}
+                >
+                  {t.loyaltyColorReset}
+                </button>
+              ) : null}
+            </span>
+            <span className="muted">{t.loyaltyColorHint}</span>
           </label>
           <fieldset>
             <legend>{t.mode}</legend>
@@ -244,6 +272,22 @@ export default function DesignPage() {
           >
             {messages.app.order}
           </span>
+          <div
+            className="phone-loyalty"
+            style={{
+              background: palette.loyalty,
+              color: palette.onLoyalty,
+              borderRadius: radii.card,
+            }}
+          >
+            <strong style={titleCss}>{t.loyaltyPreview}</strong>
+            <span
+              className="phone-loyalty-badge"
+              style={{ background: palette.onLoyalty, color: palette.loyalty }}
+            >
+              {messages.loyalty.vip}
+            </span>
+          </div>
         </section>
       </div>
     </div>

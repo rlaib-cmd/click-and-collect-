@@ -152,7 +152,7 @@ export function JoinForm() {
 
 const styles = StyleSheet.create({
   form: { gap: 12, alignSelf: 'stretch' },
-  title: { fontSize: 26, fontWeight: '800' },
+  title: { fontSize: 26, fontWeight: '800', textAlign: 'center' },
   input: { borderWidth: 1, paddingHorizontal: 14, minHeight: 48, fontSize: 16 },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
   switch: { minHeight: 44, justifyContent: 'center' },

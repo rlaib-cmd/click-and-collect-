@@ -199,6 +199,7 @@ describe('design, carte et réglages', () => {
       logoUrl: 'https://cdn.example.fr/logo.png',
       tagline: 'Nouveau slogan',
       style: { header: 'brand', corners: 'square', uppercaseTitles: true, pattern: 'checker' },
+      loyaltyColor: '#F2B705',
     };
     expect(
       (

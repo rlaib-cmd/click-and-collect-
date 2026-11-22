@@ -41,6 +41,7 @@ export function createMemoryAdminStore(input: {
         logoUrl: null,
         tagline: null,
         style: DEFAULT_STYLE,
+        loyaltyColor: null,
       },
     ]),
   );

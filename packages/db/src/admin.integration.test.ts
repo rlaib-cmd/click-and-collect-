@@ -121,6 +121,7 @@ describe.skipIf(!url)('AdminStore Postgres', () => {
     });
     expect(await admin.getTheme(tenantId)).toMatchObject({
       primaryColor: '#1F6FEB',
+      loyaltyColor: null,
       style: { header: 'plain', corners: 'rounded', uppercaseTitles: false, pattern: 'none' },
     });
     const style = {
@@ -135,9 +136,16 @@ describe.skipIf(!url)('AdminStore Postgres', () => {
       logoUrl: null,
       tagline: null,
       style,
+      loyaltyColor: '#111111',
     });
-    expect(await admin.getTheme(tenantId)).toMatchObject({ primaryColor: '#CF2028', style });
-    expect((await createPostgresTenantStore(sql).findById(tenantId))?.theme?.style).toEqual(style);
+    expect(await admin.getTheme(tenantId)).toMatchObject({
+      primaryColor: '#CF2028',
+      style,
+      loyaltyColor: '#111111',
+    });
+    const stored = await createPostgresTenantStore(sql).findById(tenantId);
+    expect(stored?.theme?.style).toEqual(style);
+    expect(stored?.theme?.loyaltyColor).toBe('#111111');
     expect((await admin.listStaff(tenantId))[0]).toMatchObject({
       role: 'tenant_admin',
       email: `admin-${run}@example.fr`,

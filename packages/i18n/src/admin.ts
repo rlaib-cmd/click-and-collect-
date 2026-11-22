@@ -103,6 +103,10 @@ export const adminFr = {
     pattern: 'Motif sous l’en-tête',
     patternNone: 'Aucun',
     patternChecker: 'Damier',
+    loyaltyColor: 'Couleur du club fidélité',
+    loyaltyColorHint: 'Carte de membre et récompenses. Vide : couleur principale.',
+    loyaltyColorReset: 'Utiliser la couleur principale',
+    loyaltyPreview: 'Carte VIP',
   },
   settings: {
     modes: 'Modes de commande',

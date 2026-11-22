@@ -22,8 +22,17 @@ describe('contrat de configuration d’enseigne', () => {
       theme: {
         ...valid.theme,
         style: { header: 'plain', corners: 'rounded', uppercaseTitles: false, pattern: 'none' },
+        loyaltyColor: null,
       },
     });
+  });
+
+  it('accepte une couleur de club hexadécimale et refuse le reste', () => {
+    const withColor = (loyaltyColor: unknown) =>
+      tenantConfigSchema.safeParse({ ...valid, theme: { ...valid.theme, loyaltyColor } });
+    expect(withColor('#F2B705').success).toBe(true);
+    expect(withColor(null).success).toBe(true);
+    expect(withColor('gold').success).toBe(false);
   });
 
   it('garde un style personnalisé et refuse une valeur inconnue', () => {

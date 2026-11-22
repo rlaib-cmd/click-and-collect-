@@ -9,6 +9,7 @@ const config = {
     logoUrl: null,
     tagline: null,
     style: { header: 'brand', corners: 'pill', uppercaseTitles: true, pattern: 'checker' },
+    loyaltyColor: '#F2B705',
   },
 };
 

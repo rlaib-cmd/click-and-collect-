@@ -26,7 +26,7 @@ export function PointsCard({ member }: { member: LoyaltyMemberDto }) {
           <View
             style={[
               styles.fill,
-              { width: `${Math.round(progress * 100)}%`, backgroundColor: palette.primary },
+              { width: `${Math.round(progress * 100)}%`, backgroundColor: palette.loyalty },
             ]}
           />
         </View>
@@ -35,9 +35,9 @@ export function PointsCard({ member }: { member: LoyaltyMemberDto }) {
         accessibilityRole="button"
         accessibilityLabel={t.showCard}
         onPress={() => router.navigate('/carte')}
-        style={[styles.qr, { backgroundColor: palette.primary, borderRadius: radii.card }]}
+        style={[styles.qr, { backgroundColor: palette.loyalty, borderRadius: radii.card }]}
       >
-        <Icon name="qr" color={palette.onPrimary} size={30} />
+        <Icon name="qr" color={palette.onLoyalty} size={30} />
       </Pressable>
     </View>
   );
@@ -60,10 +60,10 @@ export function JoinCard({ welcomePoints }: { welcomePoints: number }) {
         onPress={() => router.navigate('/carte')}
         style={[
           styles.joinButton,
-          { backgroundColor: palette.primary, borderRadius: radii.button },
+          { backgroundColor: palette.loyalty, borderRadius: radii.button },
         ]}
       >
-        <Text style={{ color: palette.onPrimary, fontWeight: '800' }}>{t.join} →</Text>
+        <Text style={{ color: palette.onLoyalty, fontWeight: '800' }}>{t.join} →</Text>
       </Pressable>
     </View>
   );
