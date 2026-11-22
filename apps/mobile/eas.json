@@ -7,7 +7,23 @@
       "environment": "development"
     },
     "preview": { "distribution": "internal", "environment": "preview" },
-    "production": { "autoIncrement": true, "environment": "production" }
+    "production": { "autoIncrement": true, "environment": "production" },
+    "bella-preview": {
+      "extends": "preview",
+      "env": { "BRAND": "bella", "EXPO_PUBLIC_TENANT": "bella" }
+    },
+    "bella-production": {
+      "extends": "production",
+      "env": { "BRAND": "bella", "EXPO_PUBLIC_TENANT": "bella" }
+    },
+    "greenbowl-preview": {
+      "extends": "preview",
+      "env": { "BRAND": "greenbowl", "EXPO_PUBLIC_TENANT": "greenbowl" }
+    },
+    "greenbowl-production": {
+      "extends": "production",
+      "env": { "BRAND": "greenbowl", "EXPO_PUBLIC_TENANT": "greenbowl" }
+    }
   },
   "submit": { "production": {} }
 }

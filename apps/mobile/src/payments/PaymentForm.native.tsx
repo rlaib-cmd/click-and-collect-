@@ -1,5 +1,6 @@
 import { messages } from '@splash360/i18n';
 import { PaymentSheetError, StripeProvider, useStripe } from '@stripe/stripe-react-native';
+import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -8,7 +9,10 @@ import { formatPrice } from '@/lib/format';
 import { useTenant } from '@/tenant/TenantProvider';
 import type { PaymentFormProps } from './types';
 
-const MERCHANT_ID = 'merchant.fr.splash360.commande';
+/** Identifiant marchand Apple Pay de la marque (app.config.ts). */
+const MERCHANT_ID =
+  (Constants.expoConfig?.extra as { appleMerchantId?: string } | undefined)?.appleMerchantId ??
+  'merchant.fr.splash360.commande';
 
 /**
  * Version iOS/Android : feuille de paiement Stripe (Apple Pay ou Google Pay en premier, puis carte).

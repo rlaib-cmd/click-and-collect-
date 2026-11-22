@@ -19,9 +19,11 @@ import { adminRoutes } from './routes/admin';
 import type { GeoProvider } from './geo';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
+import { bodyLimit } from 'hono/body-limit';
 import { secureHeaders } from 'hono/secure-headers';
 import { apiError } from './errors';
+import { jsonLog, requestLogger, type Log } from './http/logging';
+import { rateLimit } from './http/rate-limit';
 import { tenantRoutes } from './routes/tenants';
 import { webhookRoutes } from './routes/webhooks';
 
@@ -50,7 +52,15 @@ export interface AppDeps {
   readonly onPaid?: (order: { orderId: string; tenantId: string }) => Promise<void>;
   readonly now?: () => Date;
   readonly corsOrigins?: readonly string[] | '*';
+  /** Journal des requêtes (désactivé en test). */
   readonly log?: boolean;
+  readonly logger?: Log;
+  readonly reportError?: (error: Error) => void;
+  /** Sonde de disponibilité (base de données). */
+  readonly ready?: () => Promise<boolean>;
+  /** Requêtes par minute et par IP : création/paiement/devis, et lectures publiques. */
+  readonly rateLimits?: { orders: number; reads: number };
+  readonly trustProxy?: boolean;
 }
 
 /**
@@ -60,8 +70,17 @@ export interface AppDeps {
 export function createApp(deps: AppDeps) {
   const app = new Hono();
 
-  if (deps.log) app.use(logger());
+  const log = deps.logger ?? jsonLog;
+  if (deps.log) app.use(requestLogger(log));
   app.use(secureHeaders());
+  // Corps de requête limité (le webhook Stripe et l'export restent largement en dessous).
+  app.use(
+    '/v1/*',
+    bodyLimit({
+      maxSize: 256 * 1024,
+      onError: (c) => apiError(c, 'payload_too_large', 'Requête trop volumineuse'),
+    }),
+  );
   const origins = deps.corsOrigins ?? '*';
   app.use(
     '/v1/*',
@@ -72,7 +91,20 @@ export function createApp(deps: AppDeps) {
     }),
   );
 
-  const warn = (m: string, d?: Record<string, unknown>) => console.warn(m, d);
+  const warn = (m: string, d?: Record<string, unknown>) => log('warn', m, d);
+
+  // Limitation de débit des routes publiques sensibles (par adresse IP).
+  const limits = deps.rateLimits ?? { orders: 20, reads: 300 };
+  const trustProxy = deps.trustProxy ?? false;
+  const strict = rateLimit({ limit: limits.orders, windowMs: 60_000, trustProxy });
+  for (const path of [
+    '/v1/tenants/:s/orders',
+    '/v1/tenants/:s/orders/:id/payment',
+    '/v1/tenants/:s/restaurants/:r/quote',
+  ]) {
+    app.on('POST', path, strict);
+  }
+  app.use('/v1/tenants/*', rateLimit({ limit: limits.reads, windowMs: 60_000, trustProxy }));
   const notify = {
     operations: deps.operations,
     orders: deps.orders,
@@ -98,6 +130,12 @@ export function createApp(deps: AppDeps) {
   };
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
+  /** Prêt à recevoir du trafic : la base répond. */
+  app.get('/ready', async (c) =>
+    (await (deps.ready?.() ?? Promise.resolve(true)))
+      ? c.json({ status: 'ready' })
+      : c.json({ status: 'unavailable' }, 503),
+  );
   app.route(
     '/v1/webhooks',
     webhookRoutes({
@@ -138,7 +176,8 @@ export function createApp(deps: AppDeps) {
 
   app.notFound((c) => apiError(c, 'not_found', 'Route inconnue'));
   app.onError((err, c) => {
-    console.error(err);
+    log('error', 'Erreur non gérée', { error: err.message, path: c.req.path });
+    deps.reportError?.(err);
     return apiError(c, 'internal_error', 'Erreur interne');
   });
 

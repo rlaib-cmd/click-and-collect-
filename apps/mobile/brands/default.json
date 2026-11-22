@@ -1,0 +1,9 @@
+{
+  "name": "Splash360 Commande",
+  "subdomain": null,
+  "iosBundleIdentifier": "fr.splash360.commande",
+  "androidPackage": "fr.splash360.commande",
+  "scheme": "splash360",
+  "primaryColor": "#1F6FEB",
+  "appleMerchantId": "merchant.fr.splash360.commande"
+}

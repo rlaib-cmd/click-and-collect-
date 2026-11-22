@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server';
+import * as Sentry from '@sentry/node';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import {
   createPostgresAdminStore,
@@ -13,6 +14,7 @@ import {
 import { createSupabaseVerifier } from './admin/auth';
 import { createApp } from './app';
 import { loadEnv } from './env';
+import { jsonLog } from './http/logging';
 import { createBanGeoProvider, createDemoGeoProvider } from './geo';
 import { createNotificationSender } from './notifications/sender';
 import { createStripeGateway } from './payments/gateway';
@@ -21,6 +23,7 @@ import { createDemoPosGateway } from './pos/gateway';
 import { expireUnpaidOrders } from './payments/service';
 
 const env = loadEnv();
+if (env.SENTRY_DSN) Sentry.init({ dsn: env.SENTRY_DSN, environment: env.SENTRY_ENVIRONMENT });
 const sql = createSql(env.DATABASE_URL);
 const origins = env.CORS_ORIGINS === '*' ? '*' : env.CORS_ORIGINS.split(',').map((o) => o.trim());
 
@@ -38,15 +41,15 @@ const gateway =
         webhookSecret: env.STRIPE_WEBHOOK_SECRET,
       })
     : null;
-if (!gateway) console.warn('Clés Stripe absentes : paiement en ligne désactivé.');
+if (!gateway) jsonLog('warn', 'Clés Stripe absentes : paiement en ligne désactivé');
 
 const payments = createPostgresPaymentStore(sql);
 const operations = createPostgresOperationsStore(sql);
 const orders = createPostgresOrderReader(sql);
 const restaurants = createPostgresRestaurantStore(sql);
-const log = (m: string, d?: Record<string, unknown>) => console.warn(m, d);
+const log = (m: string, d?: Record<string, unknown>) => jsonLog('warn', m, d);
 // En attendant la documentation de la caisse Splash360 : caisse de démonstration.
-const pos = createDemoPosGateway((m) => console.log(m));
+const pos = createDemoPosGateway((m) => jsonLog('info', m));
 
 const app = createApp({
   tenants: createPostgresTenantStore(sql),
@@ -72,26 +75,35 @@ const app = createApp({
     env.GEOCODER_URL === 'demo' ? createDemoGeoProvider() : createBanGeoProvider(env.GEOCODER_URL),
   corsOrigins: origins,
   log: true,
+  trustProxy: env.TRUST_PROXY === '1',
+  ready: () =>
+    sql`select 1`.then(
+      () => true,
+      () => false,
+    ),
+  ...(env.SENTRY_DSN ? { reportError: (error: Error) => Sentry.captureException(error) } : {}),
 });
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-  console.log(`API Splash360 Commande à l'écoute sur http://localhost:${info.port}`);
+  jsonLog('info', 'API Splash360 Commande démarrée', { port: info.port });
 });
 
 // Commandes non payées après 15 min : annulées, créneau libéré. Sûr avec plusieurs instances
 // (une seule mise à jour atomique par commande).
 const expiry = setInterval(() => {
-  expireUnpaidOrders({ payments, gateway, log: (m, d) => console.warn(m, d) }, new Date())
+  expireUnpaidOrders({ payments, gateway, log }, new Date())
     .then((n) => {
-      if (n > 0) console.log(`${n} commande(s) non payée(s) annulée(s)`);
+      if (n > 0) jsonLog('info', 'Commandes non payées annulées', { count: n });
     })
-    .catch((error: unknown) => console.error('Expiration des commandes en échec', error));
+    .catch((error: unknown) =>
+      jsonLog('error', 'Expiration des commandes en échec', { error: String(error) }),
+    );
 }, 60_000);
 
 // Envois à la caisse en attente (nouveaux essais après échec).
 const dispatcher = setInterval(() => {
   processDispatches({ operations, orders, restaurants, pos, log }).catch((error: unknown) =>
-    console.error('Envoi à la caisse en échec', error),
+    jsonLog('error', 'Envoi à la caisse en échec', { error: String(error) }),
   );
 }, 15_000);
 

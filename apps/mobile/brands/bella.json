@@ -1,0 +1,9 @@
+{
+  "name": "Pizzeria Bella",
+  "subdomain": "bella",
+  "iosBundleIdentifier": "fr.splash360.commande.bella",
+  "androidPackage": "fr.splash360.commande.bella",
+  "scheme": "bella",
+  "primaryColor": "#C8102E",
+  "appleMerchantId": "merchant.fr.splash360.commande.bella"
+}

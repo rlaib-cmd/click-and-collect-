@@ -10,6 +10,8 @@ export const apiErrorCodeSchema = z.enum([
   'unauthorized',
   'forbidden',
   'conflict',
+  'rate_limited',
+  'payload_too_large',
   'payments_unavailable',
   'order_not_payable',
   'internal_error',

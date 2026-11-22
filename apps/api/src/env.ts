@@ -19,6 +19,11 @@ const envSchema = z.object({
   SUPABASE_JWT_ISSUER: z.string().optional(),
   /** URL publique du back-office (retours Stripe). */
   ADMIN_URL: z.url().default('http://localhost:3000'),
+  /** Derrière un proxy de confiance (hébergeur) : adresse client lue dans X-Forwarded-For. */
+  TRUST_PROXY: z.enum(['0', '1']).default('0'),
+  /** Remontée des erreurs (facultatif). */
+  SENTRY_DSN: z.url().optional(),
+  SENTRY_ENVIRONMENT: z.string().default('development'),
   /** Jeton d'accès Expo (notifications push), facultatif. */
   EXPO_ACCESS_TOKEN: z.string().optional(),
   MENU_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(180),

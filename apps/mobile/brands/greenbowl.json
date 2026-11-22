@@ -1,0 +1,9 @@
+{
+  "name": "Green Bowl",
+  "subdomain": "greenbowl",
+  "iosBundleIdentifier": "fr.splash360.commande.greenbowl",
+  "androidPackage": "fr.splash360.commande.greenbowl",
+  "scheme": "greenbowl",
+  "primaryColor": "#A3E635",
+  "appleMerchantId": "merchant.fr.splash360.commande.greenbowl"
+}

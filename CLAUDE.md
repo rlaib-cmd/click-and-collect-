@@ -51,9 +51,15 @@ Depuis la racine (Node 22, pnpm 10) :
 - `pnpm lint` — ESLint ; `pnpm format` / `pnpm format:check` — Prettier
 - `pnpm db:start` / `pnpm db:reset` — base Supabase locale (Docker requis) et migrations
 - `pnpm db:test` — tests pgTAP des règles d'accès (`supabase/tests/`)
+- `DATABASE_URL=… pnpm --filter @splash360/db test` — tests d'intégration Postgres (base migrée + `seed.sql`)
+- `pnpm --filter api build` — bundle de production (`dist/server.mjs`) ; image : `docker build -f apps/api/Dockerfile .`
+- `BRAND=bella pnpm --filter mobile exec expo config` — configuration d'une application d'enseigne (`apps/mobile/brands/`)
+- Back-office en local sans Supabase Auth : `ADMIN_DEV_LOGIN=1 NEXT_PUBLIC_ADMIN_DEV_LOGIN=1 SUPABASE_JWT_SECRET=…` (même secret côté API), puis connexion avec un e-mail de `seed.sql`
 
 Avant de déclarer une étape terminée : `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test`.
-La CI (`.github/workflows/ci.yml`) lance en plus le build du back-office, l'export web Expo et les tests de la base.
+La CI (`.github/workflows/ci.yml`) lance en plus le build du back-office, l'export web Expo, la configuration des marques, l'image Docker de l'API, les tests pgTAP et les tests d'intégration Postgres.
+
+Exploitation et mise en production : `docs/mise-en-production.md`. Avancement : `docs/plan-lot-*.md`. Questions ouvertes : `docs/questions-en-attente.md`.
 
 ## Conventions
 

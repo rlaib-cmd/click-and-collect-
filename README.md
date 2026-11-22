@@ -4,7 +4,9 @@ Application de commande en ligne en marque blanche (Click & Collect et livraison
 
 - Cahier des charges : [`docs/cahier-des-charges.md`](docs/cahier-des-charges.md)
 - Consignes de développement et commandes : [`CLAUDE.md`](CLAUDE.md)
-- Avancement par lot : `docs/plan-lot-*.md`
+- Avancement par lot : `docs/plan-lot-*.md` — décisions : `docs/adr/` — questions ouvertes : `docs/questions-en-attente.md`
+- Mise en production : [`docs/mise-en-production.md`](docs/mise-en-production.md)
+- Contrat proposé à Splash360 : [`docs/api-splash360/contrat-commande-en-ligne.md`](docs/api-splash360/contrat-commande-en-ligne.md)
 
 ## Démarrage
 
