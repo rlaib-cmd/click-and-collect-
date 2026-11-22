@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "build": "esbuild src/server.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/server.mjs --sourcemap --external:@sentry/node --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
-    "start:prod": "node --enable-source-maps dist/server.mjs"
+    "start:prod": "node --enable-source-maps dist/server.mjs",
+    "build:edge": "esbuild src/edge.ts --bundle --minify --platform=node --target=es2022 --format=esm --outfile=dist/edge/index.js --external:@sentry/node --external:zod --external:stripe --external:postgres --external:jose && node scripts/edge-deno-json.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.11",
