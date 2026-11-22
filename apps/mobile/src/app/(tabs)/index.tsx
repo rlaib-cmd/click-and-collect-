@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckerBand, titleStyle } from '@/components/brand';
+import { OrderShortcuts } from '@/components/CurrentOrder';
 import { JoinCard, PointsCard } from '@/components/loyalty';
 import { TenantLogo } from '@/components/TenantLogo';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
@@ -61,6 +62,8 @@ export default function HomeScreen() {
             {club && !member ? t.welcomeTitle : t.hungry}
           </Text>
         </View>
+
+        <OrderShortcuts />
 
         <View
           style={[styles.order, { backgroundColor: palette.primary, borderRadius: radii.card + 6 }]}

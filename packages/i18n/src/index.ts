@@ -118,6 +118,8 @@ export const fr = {
       loyalty_session_invalid:
         'Ta session fidélité a expiré : reconnecte-toi dans l’onglet Compte.',
       unknown_reward: 'Cette récompense n’existe plus.',
+      payment_method_unavailable: 'Ce moyen de paiement n’est plus proposé par le restaurant.',
+      on_site_requires_member: 'Le paiement sur place est réservé aux membres du club.',
       reward_product_missing: 'Le produit offert n’est plus dans le panier.',
       insufficient_points: 'Tu n’as plus assez de points pour cette récompense.',
       reward_needs_paid_items: 'Ajoute au moins un article payant pour utiliser ta récompense.',
@@ -167,6 +169,28 @@ export const fr = {
     title: 'Conditions générales de vente et mentions légales',
     pending: (name: string) =>
       `Les conditions générales de vente et les mentions légales de ${name} seront affichées ici.`,
+  },
+  pay: {
+    choose: 'Paiement',
+    online: 'Payer en ligne',
+    onSite: 'Payer sur place',
+    onSiteHint: 'Espèces ou carte au comptoir, en récupérant ta commande.',
+    onSiteMembersOnly: 'Le paiement sur place est réservé aux membres du club : connecte-toi.',
+    onlineUnavailable: 'Paiement en ligne indisponible pour ce restaurant.',
+    placeOnSite: (total: string) => `Commander · ${total} à payer sur place`,
+    toPayOnSite: (total: string) => `À payer sur place : ${total}`,
+    qrTitle: 'Ton QR code de retrait',
+    qrHint: 'Présente-le au comptoir en arrivant au restaurant.',
+    code: (code: string) => `Code : ${code}`,
+  },
+  current: {
+    title: (n: number) => `Commande n° ${n}`,
+    showQr: 'Afficher le QR code',
+    follow: 'Suivre ma commande',
+  },
+  reorder: {
+    title: 'Commander comme la dernière fois',
+    action: 'Recommander',
   },
   tabs: {
     home: 'Accueil',

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { cartReducer, EMPTY_CART, itemCount, parseStoredCart, type CartState } from './cart';
+import {
+  cartReducer,
+  EMPTY_CART,
+  itemCount,
+  parseStoredCart,
+  reorderCart,
+  type CartState,
+} from './cart';
 
 const add = (
   state: CartState,
@@ -65,5 +72,30 @@ describe('panier', () => {
       lines: [{ key: 'k', productId: 'p', quantity: -3, optionIds: [], note: null }],
     });
     expect(parseStoredCart(tampered).lines).toEqual([]);
+  });
+});
+
+describe('commander comme la dernière fois', () => {
+  it('reprend les articles et repasse en « dès que possible »', () => {
+    const snapshot = parseStoredCart(
+      JSON.stringify({
+        restaurantId: 'r1',
+        lines: [{ key: 'k', productId: 'bb-original', quantity: 2, optionIds: ['o1'], note: null }],
+        setup: {
+          mode: 'pickup',
+          address: null,
+          time: { kind: 'scheduled', at: '2099-01-01T12:00:00.000Z' },
+        },
+      }),
+    );
+    expect(reorderCart(snapshot)).toEqual({
+      restaurantId: 'r1',
+      lines: [{ key: 'k', productId: 'bb-original', quantity: 2, optionIds: ['o1'], note: null }],
+      setup: { mode: 'pickup', address: null, time: { kind: 'asap' } },
+    });
+  });
+
+  it('ignore un panier vide ou sans restaurant', () => {
+    expect(reorderCart(EMPTY_CART)).toBeNull();
   });
 });

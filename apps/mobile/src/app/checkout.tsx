@@ -7,9 +7,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiRequestError } from '@/api/client';
-import { usePlaceOrder, useQuote } from '@/api/hooks';
+import { useAvailability, usePlaceOrder, useQuote } from '@/api/hooks';
 import { useCart } from '@/cart/CartProvider';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
+import { Chip } from '@/components/Chip';
 import { SetupSummary } from '@/components/SetupSummary';
 import { BackButton, ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
@@ -33,6 +34,9 @@ export default function CheckoutScreen() {
   const place = usePlaceOrder();
   const loyalty = useLoyalty();
   const [rewardId, setRewardId] = useState<string | null>(null);
+  // Moyen de paiement (ADR 0010) : en ligne par défaut, sur place si le restaurant n'encaisse pas en ligne.
+  const availability = useAvailability(cart.restaurantId);
+  const [chosenMethod, setChosenMethod] = useState<'online' | 'on_site' | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(CONTACT_KEY)
@@ -101,8 +105,11 @@ export default function CheckoutScreen() {
   }
 
   const q = quote.data;
+  const payment = availability.data?.payment ?? { online: true, onSite: false };
+  const method = chosenMethod ?? (!payment.online && payment.onSite ? 'on_site' : 'online');
+  const methodOk = method === 'online' ? payment.online : payment.onSite && loyalty.member !== null;
   const customer = customerSchema.safeParse({ ...contact, marketingConsent: marketing });
-  const canPay = customer.success && terms && !place.isPending;
+  const canPay = customer.success && terms && methodOk && !place.isPending;
   const placeError = place.error instanceof ApiRequestError ? place.error : null;
 
   const submit = () => {
@@ -115,6 +122,7 @@ export default function CheckoutScreen() {
         customer: customer.data,
         idempotencyKey,
         acceptedTerms: true,
+        paymentMethod: method,
       },
       {
         onSuccess: async (order) => {
@@ -123,6 +131,8 @@ export default function CheckoutScreen() {
             number: order.number,
             accessToken: order.accessToken,
             createdAt: new Date().toISOString(),
+            cart: JSON.stringify(cart),
+            summary: q.lines.map((l) => `${l.quantity} × ${l.name}`).join(', '),
           }).catch(() => undefined);
           router.replace({ pathname: '/order/[orderId]', params: { orderId: order.orderId } });
         },
@@ -199,6 +209,39 @@ export default function CheckoutScreen() {
           totalCents={q.totals.totalCents}
         />
 
+        {payment.onSite || !payment.online ? (
+          <View style={styles.section}>
+            <Text style={[styles.h2, titleStyle(brand), { color: palette.text }]}>
+              {messages.pay.choose}
+            </Text>
+            <View style={styles.methods}>
+              {(['online', 'on_site'] as const)
+                .filter((m) => (m === 'online' ? payment.online : payment.onSite))
+                .map((m) => (
+                  <Chip
+                    key={m}
+                    label={m === 'online' ? messages.pay.online : messages.pay.onSite}
+                    selected={method === m}
+                    onPress={() => setChosenMethod(m)}
+                  />
+                ))}
+            </View>
+            {method === 'on_site' ? (
+              <Text style={{ color: palette.textMuted }}>{messages.pay.onSiteHint}</Text>
+            ) : null}
+            {method === 'on_site' && !loyalty.member ? (
+              <Pressable accessibilityRole="link" onPress={() => router.navigate('/carte')}>
+                <Text style={{ color: palette.accent, fontWeight: '700' }}>
+                  {messages.pay.onSiteMembersOnly} →
+                </Text>
+              </Pressable>
+            ) : null}
+            {!payment.online && !payment.onSite ? (
+              <Text style={{ color: palette.accent }}>{messages.pay.onlineUnavailable}</Text>
+            ) : null}
+          </View>
+        ) : null}
+
         <View style={styles.section}>
           <Text style={[styles.h2, { color: palette.text }]}>{messages.checkout.contact}</Text>
           <Field
@@ -245,7 +288,11 @@ export default function CheckoutScreen() {
         style={[styles.footer, { borderColor: palette.border, paddingBottom: 12 + insets.bottom }]}
       >
         <PrimaryButton
-          label={messages.checkout.pay(formatPrice(q.totals.totalCents))}
+          label={
+            method === 'on_site'
+              ? messages.pay.placeOnSite(formatPrice(q.totals.totalCents))
+              : messages.checkout.pay(formatPrice(q.totals.totalCents))
+          }
           disabled={!canPay}
           onPress={submit}
         />
@@ -451,6 +498,7 @@ function Toggle({
 }
 
 const styles = StyleSheet.create({
+  methods: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   rewardsBox: { padding: 14, gap: 10 },
   rewardsHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   reward: { borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, gap: 2 },

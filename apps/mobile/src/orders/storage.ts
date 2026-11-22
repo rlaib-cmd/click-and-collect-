@@ -6,6 +6,10 @@ export interface SavedOrder {
   readonly number: number;
   readonly accessToken: string;
   readonly createdAt: string;
+  /** Panier de la commande (JSON), pour « Commander comme la dernière fois ». */
+  readonly cart?: string;
+  /** Libellé court des articles (« 2 × Bills Original, Frites »). */
+  readonly summary?: string;
 }
 
 const key = (subdomain: string) => `orders:${subdomain}`;

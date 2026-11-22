@@ -148,3 +148,12 @@ export function parseStoredCart(raw: string | null): CartState {
     return EMPTY_CART;
   }
 }
+
+/**
+ * « Commander comme la dernière fois » : le panier d'une commande passée, remis en
+ * « dès que possible ». Les prix et la disponibilité sont recalculés par le serveur au devis.
+ */
+export function reorderCart(snapshot: CartState): CartState | null {
+  if (!snapshot.restaurantId || snapshot.lines.length === 0) return null;
+  return { ...snapshot, setup: { ...snapshot.setup, time: { kind: 'asap' } } };
+}

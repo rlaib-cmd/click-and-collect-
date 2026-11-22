@@ -1,5 +1,6 @@
 import type { OrderTracking, PaymentSession } from '@splash360/contracts';
 import { messages } from '@splash360/i18n';
+import QRCode from 'react-native-qrcode-svg';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -85,6 +86,12 @@ export default function OrderScreen() {
               ? messages.order.scheduledFor(formatTime(order.estimatedAt, tz))
               : messages.order.estimated(formatTime(order.estimatedAt, tz))}
           </Text>
+        ) : null}
+
+        {!payable &&
+        !['completed', 'cancelled', 'refunded'].includes(order.status) &&
+        order.pickupCode ? (
+          <PickupCard order={order} />
         ) : null}
 
         {payable ? (
@@ -193,10 +200,41 @@ function PaymentSection({
   );
 }
 
+/** QR code à présenter au comptoir ; montant à régler pour une commande à payer sur place. */
+function PickupCard({ order }: { order: OrderTracking }) {
+  const { palette, radii, style: brand } = useTenant();
+  return (
+    <View
+      style={[styles.pickup, { backgroundColor: palette.primary, borderRadius: radii.card + 6 }]}
+    >
+      <Text style={[styles.pickupTitle, titleStyle(brand), { color: palette.onPrimary }]}>
+        {messages.pay.qrTitle}
+      </Text>
+      <View
+        style={styles.qrBox}
+        accessible
+        accessibilityLabel={messages.pay.code(order.pickupCode)}
+      >
+        <QRCode value={order.pickupCode} size={200} backgroundColor="#FFFFFF" color="#000000" />
+      </View>
+      <Text style={{ color: palette.onPrimary, fontWeight: '700' }} selectable>
+        {order.pickupCode}
+      </Text>
+      {order.paymentMethod === 'on_site' ? (
+        <Text style={[styles.toPay, titleStyle(brand), { color: palette.onPrimary }]}>
+          {messages.pay.toPayOnSite(formatPrice(order.totals.totalCents))}
+        </Text>
+      ) : null}
+      <Text style={{ color: palette.onPrimary, textAlign: 'center' }}>{messages.pay.qrHint}</Text>
+    </View>
+  );
+}
+
 function Steps({ order }: { order: OrderTracking }) {
   const { palette } = useTenant();
   const steps: readonly StepKey[] = STEPS[order.mode];
-  const current = steps.indexOf(order.status as StepKey);
+  // « Confirmée » (à payer sur place) occupe la première étape, comme « payée ».
+  const current = steps.indexOf((order.status === 'confirmed' ? 'paid' : order.status) as StepKey);
   return (
     <View style={styles.steps} accessibilityRole="progressbar">
       {steps.map((s, i) => {
@@ -222,6 +260,10 @@ function Steps({ order }: { order: OrderTracking }) {
 }
 
 const styles = StyleSheet.create({
+  pickup: { alignItems: 'center', gap: 10, padding: 20 },
+  pickupTitle: { fontSize: 20, fontWeight: '900' },
+  qrBox: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 14 },
+  toPay: { fontSize: 20, fontWeight: '900' },
   content: { padding: 24, gap: 14 },
   title: { fontSize: 26, fontWeight: '700', textAlign: 'center' },
   status: { fontSize: 18, fontWeight: '700', textAlign: 'center' },
