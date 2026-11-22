@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Splash360 Commande",
-    "slug": "splash360-commande",
+    "slug": "claude-splash360",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -55,6 +55,18 @@
     "experiments": {
       "reactCompiler": true
     },
-    "newArchEnabled": true
+    "newArchEnabled": true,
+    "owner": "rlaib",
+    "extra": {
+      "eas": {
+        "projectId": "3180a459-836c-4daa-89b3-007007d152c0"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3180a459-836c-4daa-89b3-007007d152c0"
+    }
   }
 }

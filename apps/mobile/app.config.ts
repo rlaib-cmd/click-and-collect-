@@ -64,7 +64,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   return {
     ...config,
     name: brand.name,
-    slug: config.slug ?? 'splash360-commande',
+    slug: config.slug ?? 'claude-splash360',
     scheme: brand.scheme,
     ...(brand.icon ? { icon: brand.icon } : {}),
     ios: { ...config.ios, bundleIdentifier: brand.iosBundleIdentifier },
