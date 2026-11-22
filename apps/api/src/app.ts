@@ -8,9 +8,7 @@ import { cents } from '@splash360/core';
 export function createApp() {
   const app = new Hono();
 
-  app.get('/health', (c) =>
-    c.json({ status: 'ok', currency: 'EUR', zero: cents(0) }),
-  );
+  app.get('/health', (c) => c.json({ status: 'ok', currency: 'EUR', zero: cents(0) }));
 
   return app;
 }

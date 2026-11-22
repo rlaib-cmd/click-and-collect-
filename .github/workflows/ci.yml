@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, types, tests, builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Build du back-office
+        run: pnpm --filter admin build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Export web de l'application client
+        run: pnpm --filter mobile exec expo export --platform web
+        env:
+          CI: '1'
+
+  database:
+    name: Migrations et règles d'accès
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Démarrer Postgres Supabase et appliquer les migrations
+        run: pnpm exec supabase db start
+      - name: Tests pgTAP
+        run: pnpm db:test
