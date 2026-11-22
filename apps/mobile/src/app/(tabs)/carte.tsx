@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { titleStyle } from '@/components/brand';
+import { Icon } from '@/components/icons';
 import { JoinForm } from '@/components/JoinForm';
 import { Loading } from '@/components/ui';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
@@ -43,9 +44,18 @@ export default function CardScreen() {
               { backgroundColor: palette.primary, borderRadius: radii.card + 8 },
             ]}
           >
-            <Text style={[styles.club, titleStyle(style), { color: palette.onPrimary }]}>
-              {config.tenant.name}
-            </Text>
+            <View style={styles.cardHead}>
+              <Text style={[styles.club, titleStyle(style), { color: palette.onPrimary }]}>
+                {config.tenant.name}
+              </Text>
+              <View style={[styles.vip, { backgroundColor: palette.onPrimary, borderRadius: 999 }]}>
+                <Icon name="crown" color={palette.primary} size={16} />
+                <Text style={[styles.vipText, titleStyle(style), { color: palette.primary }]}>
+                  {t.vip}
+                </Text>
+              </View>
+            </View>
+            <Text style={{ color: palette.onPrimary, fontWeight: '700' }}>{member.name}</Text>
             <View style={styles.qrBox} accessibilityLabel={t.cardCode(member.cardCode)} accessible>
               <QRCode
                 value={member.cardCode}
@@ -82,7 +92,16 @@ const styles = StyleSheet.create({
   },
   h1: { fontSize: 28, fontWeight: '900' },
   card: { alignItems: 'center', gap: 12, padding: 22 },
+  cardHead: { alignItems: 'center', gap: 8 },
   club: { fontSize: 20, fontWeight: '900' },
+  vip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  vipText: { fontSize: 13, fontWeight: '900', letterSpacing: 1 },
   qrBox: { backgroundColor: '#FFFFFF', padding: 14, borderRadius: 16 },
   points: { fontSize: 32, fontWeight: '900' },
 });

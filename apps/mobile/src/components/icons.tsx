@@ -1,7 +1,7 @@
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 /** Icônes de la barre d'onglets, en trait (couleur au choix de l'appelant). */
-export type IconName = 'home' | 'gift' | 'burger' | 'qr' | 'user';
+export type IconName = 'home' | 'gift' | 'burger' | 'qr' | 'user' | 'crown';
 
 export function Icon({ name, color, size = 24 }: { name: IconName; color: string; size?: number }) {
   const common = { stroke: color, strokeWidth: 2, fill: 'none' } as const;
@@ -27,6 +27,9 @@ export function Icon({ name, color, size = 24 }: { name: IconName; color: string
           <Rect x={3} y={14} width={7} height={7} {...common} />
           <Path d="M14 14h3v3h-3zM20 14v7M14 20h3" {...common} />
         </>
+      ) : null}
+      {name === 'crown' ? (
+        <Path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" {...common} strokeLinejoin="round" />
       ) : null}
       {name === 'user' ? (
         <>
