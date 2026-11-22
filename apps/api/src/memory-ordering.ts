@@ -1,9 +1,15 @@
-import type { SlotLoad } from '@splash360/core';
+import {
+  checkTransition,
+  type OperationalStatus,
+  type OrderStatus,
+  type SlotLoad,
+} from '@splash360/core';
 import {
   SLOT_HOLDING_STATUSES,
   type CreateOrderResult,
   type NewOrder,
   type OrderDetail,
+  type OperationsStore,
   type OrderingConfig,
   type OrderingStore,
   type OrderReader,
@@ -19,6 +25,7 @@ export interface StoredOrder extends NewOrder {
   refundedCents: number;
   createdAt: string;
   events: { status: string; actor: string; at: string }[];
+  posReference?: string;
 }
 
 const PAID = ['paid', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'completed'];
@@ -212,5 +219,109 @@ export function createMemoryOrderBackend(
     },
   };
 
-  return { orders, ordering, payments, reader };
+  const dispatches = new Map<
+    string,
+    {
+      tenantId: string;
+      status: 'pending' | 'sent' | 'failed';
+      attempts: number;
+      nextAt: number;
+      error: string | null;
+    }
+  >();
+  const pushTokens = new Map<string, Set<string>>();
+
+  // Le passage à « payée » crée l'envoi à la caisse, comme la transaction Postgres.
+  const markPaid = payments.markPaid.bind(payments);
+  payments.markPaid = async (pi, amount, currency) => {
+    const result = await markPaid(pi, amount, currency);
+    if (result.ok && result.changed && !dispatches.has(result.orderId)) {
+      dispatches.set(result.orderId, {
+        tenantId: result.tenantId,
+        status: 'pending',
+        attempts: 0,
+        nextAt: 0,
+        error: null,
+      });
+    }
+    return result;
+  };
+
+  const operations: OperationsStore = {
+    claimDueDispatches(limit) {
+      const now = Date.now();
+      const due = [...dispatches.entries()]
+        .filter(([, d]) => d.status === 'pending' && d.nextAt <= now)
+        .slice(0, limit);
+      return Promise.resolve(
+        due.map(([orderId, d]) => {
+          d.attempts += 1;
+          d.nextAt = now + 120_000;
+          return { orderId, tenantId: d.tenantId, attempts: d.attempts };
+        }),
+      );
+    },
+    markDispatched(orderId, reference) {
+      const d = dispatches.get(orderId);
+      if (d) d.status = 'sent';
+      const o = orders.find((x) => x.id === orderId);
+      if (o) o.posReference = reference;
+      return Promise.resolve();
+    },
+    markDispatchFailed(orderId, error, retryAt) {
+      const d = dispatches.get(orderId);
+      if (d) {
+        d.error = error;
+        d.status = retryAt ? 'pending' : 'failed';
+        if (retryAt) d.nextAt = retryAt.getTime();
+      }
+      return Promise.resolve();
+    },
+    listFailedDispatches(tenantId) {
+      return Promise.resolve(
+        [...dispatches.entries()]
+          .filter(([, d]) => d.tenantId === tenantId && d.status === 'failed')
+          .map(([orderId, d]) => ({
+            orderId,
+            number: orders.find((o) => o.id === orderId)?.number ?? 0,
+            attempts: d.attempts,
+            lastError: d.error,
+            updatedAt: new Date().toISOString(),
+          })),
+      );
+    },
+    retryDispatch(tenantId, orderId) {
+      const d = dispatches.get(orderId);
+      if (!d || d.tenantId !== tenantId || d.status !== 'failed') return Promise.resolve(false);
+      Object.assign(d, { status: 'pending', attempts: 0, nextAt: 0 });
+      return Promise.resolve(true);
+    },
+    changeStatus(tenantId, orderId, to: OperationalStatus, actor) {
+      const o = orders.find((x) => x.tenantId === tenantId && x.id === orderId);
+      if (!o) return Promise.resolve({ ok: false, error: 'not_found' });
+      const from = o.status as OrderStatus;
+      const check = checkTransition(o.mode, from, to);
+      if (!check.ok) return Promise.resolve({ ok: false, error: check.error });
+      o.status = to;
+      event(o, to, actor);
+      return Promise.resolve({ ok: true, from, to, tenantId, orderId });
+    },
+    findByPosReference(reference) {
+      const o = orders.find((x) => x.posReference === reference);
+      return Promise.resolve(o ? { tenantId: o.tenantId, orderId: o.id } : null);
+    },
+    addPushToken(tenantId, orderId, token) {
+      if (!orders.some((x) => x.tenantId === tenantId && x.id === orderId))
+        return Promise.reject(new Error('tenant_id incohérent'));
+      const set = pushTokens.get(orderId) ?? new Set<string>();
+      set.add(token);
+      pushTokens.set(orderId, set);
+      return Promise.resolve();
+    },
+    listPushTokens(_tenantId, orderId) {
+      return Promise.resolve([...(pushTokens.get(orderId) ?? [])]);
+    },
+  };
+
+  return { orders, ordering, payments, reader, operations, dispatches };
 }

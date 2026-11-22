@@ -15,7 +15,8 @@ import {
 } from '@splash360/contracts';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTenant } from '@/tenant/TenantProvider';
-import { apiGet, apiPost, ApiRequestError } from './client';
+import { getPushToken } from '@/notifications/register';
+import { API_URL, apiGet, apiPost, ApiRequestError } from './client';
 
 export function useRestaurants() {
   const { config } = useTenant();
@@ -154,5 +155,34 @@ export function usePaymentSession(orderId: string, accessToken: string | null) {
             headers: { ...(init?.headers ?? {}), Authorization: `Bearer ${accessToken ?? ''}` },
           }),
       ),
+  });
+}
+
+/** Abonne l'appareil aux notifications de la commande (une fois par commande). */
+export function useRegisterPushToken(
+  orderId: string,
+  accessToken: string | null,
+  enabled: boolean,
+) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useQuery({
+    queryKey: ['push-token', sub, orderId],
+    queryFn: async () => {
+      const token = await getPushToken();
+      if (!token) return false;
+      const res = await fetch(`${API_URL}/v1/tenants/${sub}/orders/${orderId}/push-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken ?? ''}`,
+        },
+        body: JSON.stringify({ token }),
+      });
+      return res.ok;
+    },
+    enabled: enabled && accessToken !== null,
+    staleTime: Infinity,
+    retry: false,
   });
 }

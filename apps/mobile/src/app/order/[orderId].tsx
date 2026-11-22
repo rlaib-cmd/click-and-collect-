@@ -5,7 +5,12 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiRequestError } from '@/api/client';
-import { useAvailability, useOrderTracking, usePaymentSession } from '@/api/hooks';
+import {
+  useAvailability,
+  useOrderTracking,
+  usePaymentSession,
+  useRegisterPushToken,
+} from '@/api/hooks';
 import { useCart } from '@/cart/CartProvider';
 import { ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { formatTime } from '@/lib/dates';
@@ -30,6 +35,10 @@ export default function OrderScreen() {
   const tracking = useOrderTracking(orderId, token ?? null);
   const availability = useAvailability(cart.restaurantId);
   const tz = availability.data?.timezone ?? 'Europe/Paris';
+  const active =
+    tracking.data !== undefined &&
+    !['completed', 'cancelled', 'refunded'].includes(tracking.data.status);
+  useRegisterPushToken(orderId, token ?? null, active);
 
   useEffect(() => {
     void findSavedOrder(config.tenant.subdomain, orderId).then((o) =>

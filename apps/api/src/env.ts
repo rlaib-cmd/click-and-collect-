@@ -11,6 +11,10 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().startsWith('sk_').optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().startsWith('pk_').optional(),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
+  /** Secret partagé avec la caisse Splash360 pour signer les retours de statut. */
+  POS_WEBHOOK_SECRET: z.string().min(32).optional(),
+  /** Jeton d'accès Expo (notifications push), facultatif. */
+  EXPO_ACCESS_TOKEN: z.string().optional(),
   MENU_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(180),
   /** Âge maximal de la carte servie si l'API menu tombe ; au-delà, commande bloquée. Valeur à fixer avec Splash360. */
   /** Géocodeur (API Adresse, format GeoJSON) ; `demo` = adresses de démonstration hors ligne. */

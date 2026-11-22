@@ -133,6 +133,9 @@ export function createPostgresPaymentStore(sql: Sql): PaymentStore {
           return { ok: true as const, orderId: o.id, tenantId: o.tenant_id, changed: false };
         }
         await tx`update public.orders set status = 'paid', paid_at = now() where id = ${o.id}`;
+        // File d'envoi vers la caisse, dans la même transaction : une commande payée n'est jamais oubliée.
+        await tx`insert into public.pos_dispatches (order_id, tenant_id) values (${o.id}, ${o.tenant_id})
+                 on conflict (order_id) do nothing`;
         await tx`insert into public.order_events (tenant_id, order_id, status, actor, detail)
                  values (${o.tenant_id}, ${o.id}, 'paid', 'stripe', ${tx.json({ paymentIntentId, previous: o.status })})`;
         return { ok: true as const, orderId: o.id, tenantId: o.tenant_id, changed: true };

@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import {
+  createPostgresOperationsStore,
   createPostgresOrderingStore,
   createPostgresOrderReader,
   createPostgresPaymentStore,
@@ -11,7 +12,10 @@ import {
 import { createApp } from './app';
 import { loadEnv } from './env';
 import { createBanGeoProvider, createDemoGeoProvider } from './geo';
+import { createNotificationSender } from './notifications/sender';
 import { createStripeGateway } from './payments/gateway';
+import { processDispatches } from './pos/dispatcher';
+import { createDemoPosGateway } from './pos/gateway';
 import { expireUnpaidOrders } from './payments/service';
 
 const env = loadEnv();
@@ -35,14 +39,24 @@ const gateway =
 if (!gateway) console.warn('Clés Stripe absentes : paiement en ligne désactivé.');
 
 const payments = createPostgresPaymentStore(sql);
+const operations = createPostgresOperationsStore(sql);
+const orders = createPostgresOrderReader(sql);
+const restaurants = createPostgresRestaurantStore(sql);
+const log = (m: string, d?: Record<string, unknown>) => console.warn(m, d);
+// En attendant la documentation de la caisse Splash360 : caisse de démonstration.
+const pos = createDemoPosGateway((m) => console.log(m));
 
 const app = createApp({
   tenants: createPostgresTenantStore(sql),
-  restaurants: createPostgresRestaurantStore(sql),
+  restaurants,
   menus,
   ordering: createPostgresOrderingStore(sql),
-  orders: createPostgresOrderReader(sql),
+  orders,
   payments,
+  operations,
+  pos,
+  notifier: createNotificationSender({ expoAccessToken: env.EXPO_ACCESS_TOKEN, log }),
+  posWebhookSecret: env.POS_WEBHOOK_SECRET ?? null,
   gateway,
   tokenSecret: env.ORDER_TOKEN_SECRET,
   geo:
@@ -65,8 +79,16 @@ const expiry = setInterval(() => {
     .catch((error: unknown) => console.error('Expiration des commandes en échec', error));
 }, 60_000);
 
+// Envois à la caisse en attente (nouveaux essais après échec).
+const dispatcher = setInterval(() => {
+  processDispatches({ operations, orders, restaurants, pos, log }).catch((error: unknown) =>
+    console.error('Envoi à la caisse en échec', error),
+  );
+}, 15_000);
+
 function shutdown() {
   clearInterval(expiry);
+  clearInterval(dispatcher);
   server.close();
   void sql.end({ timeout: 5 }).then(() => process.exit(0));
 }

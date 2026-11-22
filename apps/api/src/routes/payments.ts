@@ -1,11 +1,13 @@
 import type { OrderTracking, PaymentSession } from '@splash360/contracts';
-import type { OrderReader, PaymentStore, TenantWithTheme } from '@splash360/db';
+import type { OperationsStore, OrderReader, PaymentStore, TenantWithTheme } from '@splash360/db';
+import { z } from 'zod';
 import type { Hono } from 'hono';
 import { apiError } from '../errors';
 import type { PaymentGateway } from '../payments/gateway';
 import { bearer, tokenMatches } from '../payments/tokens';
 
 export interface PaymentRoutesDeps {
+  readonly operations: OperationsStore;
   readonly payments: PaymentStore;
   readonly orders: OrderReader;
   readonly gateway: PaymentGateway | null;
@@ -41,6 +43,21 @@ export function registerPaymentRoutes(app: Hono<Env>, deps: PaymentRoutesDeps) {
     };
     c.header('Cache-Control', 'no-store');
     return c.json(body);
+  });
+
+  /** Jeton de notification push Expo de l'appareil qui suit la commande. */
+  app.post('/:subdomain/orders/:orderId/push-token', async (c) => {
+    const tenant = c.get('tenant');
+    const detail = await deps.orders.getOrderDetail(tenant.id, c.req.param('orderId'));
+    if (!detail || !tokenMatches(bearer(c.req.header('Authorization')), detail.accessTokenHash)) {
+      return apiError(c, 'not_found', 'Commande inconnue');
+    }
+    const body = z
+      .object({ token: z.string().regex(/^Expo(nent)?PushToken\[[A-Za-z0-9_-]+\]$/) })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return apiError(c, 'invalid_request', 'Jeton de notification invalide');
+    await deps.operations.addPushToken(tenant.id, detail.id, body.data.token);
+    return c.body(null, 204);
   });
 
   app.post('/:subdomain/orders/:orderId/payment', async (c) => {

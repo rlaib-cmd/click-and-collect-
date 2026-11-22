@@ -21,6 +21,7 @@ export interface TenantWithTheme {
 
 export interface TenantStore {
   findBySubdomain(subdomain: string): Promise<TenantWithTheme | null>;
+  findById(id: string): Promise<TenantWithTheme | null>;
 }
 
 interface Row {
@@ -36,37 +37,44 @@ interface Row {
   tagline: string | null;
 }
 
+function toTenant(row: Row): TenantWithTheme {
+  return {
+    id: row.id,
+    name: row.name,
+    subdomain: row.subdomain,
+    status: row.status,
+    applicationFee: { bps: row.application_fee_bps, fixedCents: row.application_fee_fixed_cents },
+    theme:
+      row.primary_color && row.mode
+        ? {
+            primaryColor: row.primary_color,
+            mode: row.mode,
+            logoUrl: row.logo_url,
+            tagline: row.tagline,
+          }
+        : null,
+  };
+}
+
+const TENANT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function createPostgresTenantStore(sql: Sql): TenantStore {
+  const select = (where: ReturnType<Sql>) => sql<Row[]>`
+    select t.id, t.name, t.subdomain, t.status, t.application_fee_bps, t.application_fee_fixed_cents,
+           th.primary_color, th.mode, th.logo_url, th.tagline
+    from public.tenants t
+    left join public.tenant_theme th on th.tenant_id = t.id
+    where ${where}
+    limit 1`;
   return {
     async findBySubdomain(subdomain) {
-      const rows = await sql<Row[]>`
-        select t.id, t.name, t.subdomain, t.status, t.application_fee_bps, t.application_fee_fixed_cents,
-               th.primary_color, th.mode, th.logo_url, th.tagline
-        from public.tenants t
-        left join public.tenant_theme th on th.tenant_id = t.id
-        where t.subdomain = ${subdomain}
-        limit 1`;
-      const row = rows[0];
-      if (!row) return null;
-      return {
-        id: row.id,
-        name: row.name,
-        subdomain: row.subdomain,
-        status: row.status,
-        applicationFee: {
-          bps: row.application_fee_bps,
-          fixedCents: row.application_fee_fixed_cents,
-        },
-        theme:
-          row.primary_color && row.mode
-            ? {
-                primaryColor: row.primary_color,
-                mode: row.mode,
-                logoUrl: row.logo_url,
-                tagline: row.tagline,
-              }
-            : null,
-      };
+      const [row] = await select(sql`t.subdomain = ${subdomain}`);
+      return row ? toTenant(row) : null;
+    },
+    async findById(id) {
+      if (!TENANT_UUID.test(id)) return null;
+      const [row] = await select(sql`t.id = ${id}`);
+      return row ? toTenant(row) : null;
     },
   };
 }
@@ -76,5 +84,6 @@ export function createMemoryTenantStore(tenants: readonly TenantWithTheme[]): Te
   return {
     findBySubdomain: (subdomain) =>
       Promise.resolve(tenants.find((t) => t.subdomain === subdomain) ?? null),
+    findById: (id) => Promise.resolve(tenants.find((t) => t.id === id) ?? null),
   };
 }

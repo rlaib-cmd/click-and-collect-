@@ -9,13 +9,16 @@ import {
 import { createApp, type AppDeps } from './app';
 import { createDemoGeoProvider } from './geo';
 import { createMemoryOrderBackend } from './memory-ordering';
+import { createFakeNotificationSender } from './notifications/sender';
 import { createFakeGateway } from './payments/fake-gateway';
+import { createDemoPosGateway } from './pos/gateway';
 
 export const BELLA_ID = '00000000-0000-4000-8000-000000000001';
 export const GREEN_ID = '00000000-0000-4000-8000-000000000002';
 export const BELLA_RESTO = '10000000-0000-4000-8000-000000000001';
 export const GREEN_RESTO = '10000000-0000-4000-8000-000000000002';
 export const TOKEN_SECRET = 'secret-de-test-pour-les-jetons-de-suivi';
+export const POS_SECRET = 'secret-partage-caisse-de-test-0123456789';
 
 const restaurant = (
   r: Partial<Restaurant> & Pick<Restaurant, 'id' | 'tenantId' | 'name' | 'splash360Id'>,
@@ -81,6 +84,8 @@ export const restaurants: Restaurant[] = [
 export function testSetup(overrides: Partial<AppDeps> = {}) {
   const backend = createMemoryOrderBackend({ [BELLA_RESTO]: bellaConfig }, () => restaurants);
   const stripe = createFakeGateway();
+  const pos = createDemoPosGateway();
+  const notifications = createFakeNotificationSender();
   const deps: AppDeps = {
     tenants: createMemoryTenantStore([
       {
@@ -115,11 +120,15 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
     orders: backend.reader,
     gateway: stripe.gateway,
     tokenSecret: TOKEN_SECRET,
+    operations: backend.operations,
+    pos,
+    notifier: notifications.sender,
+    posWebhookSecret: POS_SECRET,
     geo: createDemoGeoProvider(),
     now: () => NOW,
     ...overrides,
   };
-  return { app: createApp(deps), backend, stripe, deps };
+  return { app: createApp(deps), backend, stripe, pos, notifications, deps };
 }
 
 export const testApp = (overrides: Partial<AppDeps> = {}) => testSetup(overrides).app;

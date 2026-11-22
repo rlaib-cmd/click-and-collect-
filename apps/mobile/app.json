@@ -49,7 +49,8 @@
           "merchantIdentifier": "merchant.fr.splash360.commande",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "reactCompiler": true
