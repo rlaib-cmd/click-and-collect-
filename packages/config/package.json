@@ -1,0 +1,16 @@
+{
+  "name": "@splash360/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.lib.json": "./tsconfig.lib.json",
+    "./eslint": "./eslint.config.js"
+  },
+  "dependencies": {
+    "@eslint/js": "^9",
+    "eslint": "^9",
+    "typescript-eslint": "^8.73.0"
+  }
+}
