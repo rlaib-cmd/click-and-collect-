@@ -1,6 +1,12 @@
 import type { TenantConfig } from '@splash360/contracts';
 import { messages } from '@splash360/i18n';
-import { buildPalette, type Palette } from '@splash360/theme';
+import {
+  buildPalette,
+  radiiFor,
+  type Palette,
+  type Radii,
+  type ThemeStyle,
+} from '@splash360/theme';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { fetchTenantConfig, type TenantLoadError } from './api';
@@ -9,6 +15,8 @@ import { overrideFromSearch, resolveSubdomain } from './resolve';
 interface TenantContextValue {
   readonly config: TenantConfig;
   readonly palette: Palette;
+  readonly style: ThemeStyle;
+  readonly radii: Radii;
 }
 
 const TenantContext = createContext<TenantContextValue | null>(null);
@@ -68,7 +76,12 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       result.ok
         ? {
             status: 'ready',
-            value: { config: result.config, palette: buildPalette(result.config.theme) },
+            value: {
+              config: result.config,
+              palette: buildPalette(result.config.theme),
+              style: result.config.theme.style,
+              radii: radiiFor(result.config.theme.style.corners),
+            },
           }
         : { status: 'error', error: result.error },
     );

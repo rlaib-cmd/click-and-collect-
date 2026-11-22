@@ -103,3 +103,26 @@ describe('carte de démonstration Chicken Street', () => {
     ).toBe(false);
   });
 });
+
+describe('carte de démonstration Bills Burger', () => {
+  it('se calcule : Bills Original en menu, viande obligatoire', async () => {
+    const { priceCart } = await import('@splash360/core');
+    const menu = await createDemoMenuProvider().fetchMenu({
+      restaurantId: 'bb',
+      splash360RestaurantId: 'S360-R-BILLS-1',
+    });
+    // (10,90 + 4,00 menu) × 2 = 29,80 €
+    expect(
+      priceCart(menu, [
+        { productId: 'bb-original', quantity: 2, optionIds: ['bb-opt-crispy', 'bb-opt-menu'] },
+      ]),
+    ).toMatchObject({ ok: true, subtotalCents: 2980 });
+    expect(
+      priceCart(menu, [{ productId: 'bb-original', quantity: 1, optionIds: ['bb-opt-menu'] }]).ok,
+    ).toBe(false);
+    // Les photos viennent du site de l'enseigne, en https.
+    for (const p of menu.products) {
+      if (p.imageUrl) expect(p.imageUrl).toMatch(/^https:\/\/bills-burger\.fr\//);
+    }
+  });
+});

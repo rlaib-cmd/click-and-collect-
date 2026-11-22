@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMenu } from '@/api/hooks';
 import { CartBar } from '@/components/CartBar';
 import { SetupSummary } from '@/components/SetupSummary';
+import { BrandBar, titleStyle } from '@/components/brand';
 import { TenantLogo } from '@/components/TenantLogo';
 import { ErrorState, Loading, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
@@ -15,7 +16,8 @@ import { useTenant } from '@/tenant/TenantProvider';
 
 export default function MenuScreen() {
   const { restaurantId } = useLocalSearchParams<{ restaurantId: string }>();
-  const { config, palette } = useTenant();
+  const { config, palette, style, radii } = useTenant();
+  const brandHeader = style.header === 'brand';
   const menu = useMenu(restaurantId);
   const insets = useSafeAreaInsets();
   const list = useRef<SectionList<ProductDto>>(null);
@@ -43,12 +45,25 @@ export default function MenuScreen() {
 
   return (
     <Screen>
-      <View style={[styles.header, { paddingTop: insets.top + 8, borderColor: palette.border }]}>
-        <TenantLogo size={40} />
-        <Text style={[styles.headerTitle, { color: palette.text }]} accessibilityRole="header">
-          {config.tenant.name}
-        </Text>
-      </View>
+      <BrandBar paddingTop={insets.top + 8}>
+        {brandHeader && config.theme.logoUrl ? (
+          <TenantLogo size={36} wide />
+        ) : (
+          <>
+            <TenantLogo size={40} />
+            <Text
+              style={[
+                styles.headerTitle,
+                titleStyle(style),
+                { color: brandHeader ? palette.onPrimary : palette.text },
+              ]}
+              accessibilityRole="header"
+            >
+              {config.tenant.name}
+            </Text>
+          </>
+        )}
+      </BrandBar>
 
       <View style={styles.summary}>
         <SetupSummary />
@@ -82,11 +97,15 @@ export default function MenuScreen() {
                 {
                   backgroundColor: selected ? palette.primary : palette.surface,
                   borderColor: palette.border,
+                  borderRadius: radii.chip,
                 },
               ]}
             >
               <Text
-                style={{ color: selected ? palette.onPrimary : palette.text, fontWeight: '600' }}
+                style={[
+                  { color: selected ? palette.onPrimary : palette.text, fontWeight: '600' },
+                  titleStyle(style),
+                ]}
               >
                 {s.title}
               </Text>
@@ -103,7 +122,10 @@ export default function MenuScreen() {
         contentContainerStyle={styles.listContent}
         onScrollToIndexFailed={() => undefined}
         renderSectionHeader={({ section }) => (
-          <Text style={[styles.section, { color: palette.text }]} accessibilityRole="header">
+          <Text
+            style={[styles.section, titleStyle(style), { color: palette.text }]}
+            accessibilityRole="header"
+          >
             {section.title}
           </Text>
         )}
@@ -125,7 +147,7 @@ export default function MenuScreen() {
 }
 
 function ProductRow({ product, onPress }: { product: ProductDto; onPress: () => void }) {
-  const { palette } = useTenant();
+  const { palette, radii, style } = useTenant();
   const disabled = !product.available;
   return (
     <Pressable
@@ -136,7 +158,9 @@ function ProductRow({ product, onPress }: { product: ProductDto; onPress: () => 
       style={[styles.row, { borderColor: palette.border, opacity: disabled ? 0.45 : 1 }]}
     >
       <View style={styles.rowText}>
-        <Text style={[styles.name, { color: palette.text }]}>{product.name}</Text>
+        <Text style={[styles.name, titleStyle(style), { color: palette.text }]}>
+          {product.name}
+        </Text>
         {product.description ? (
           <Text style={{ color: palette.textMuted }} numberOfLines={2}>
             {product.description}
@@ -146,29 +170,20 @@ function ProductRow({ product, onPress }: { product: ProductDto; onPress: () => 
           {disabled ? messages.menu.unavailable : formatPrice(product.priceCents)}
         </Text>
       </View>
+      {/* Pas de vignette vide : la ligne garde sa hauteur minimale sans photo. */}
       {product.imageUrl ? (
         <Image
           source={{ uri: product.imageUrl }}
-          style={styles.photo}
+          style={[styles.photo, { borderRadius: radii.card }]}
           contentFit="cover"
           accessibilityIgnoresInvertColors
         />
-      ) : (
-        <View style={[styles.photo, { backgroundColor: palette.surface }]} />
-      )}
+      ) : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
   headerTitle: { fontSize: 20, fontWeight: '700' },
   summary: { paddingHorizontal: 16, paddingTop: 12 },
   notice: { padding: 12, marginHorizontal: 16, marginTop: 12, borderRadius: 8 },
@@ -178,7 +193,6 @@ const styles = StyleSheet.create({
   tab: {
     minHeight: 44,
     paddingHorizontal: 16,
-    borderRadius: 22,
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
   },
@@ -194,5 +208,5 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 4 },
   name: { fontSize: 17, fontWeight: '600' },
   price: { fontSize: 15, fontWeight: '600', marginTop: 2 },
-  photo: { width: 88, height: 88, borderRadius: 12 },
+  photo: { width: 88, height: 88 },
 });

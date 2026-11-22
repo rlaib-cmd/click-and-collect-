@@ -1,3 +1,4 @@
+import { DEFAULT_STYLE } from '@splash360/theme';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import { cents } from '@splash360/core';
 import {
@@ -135,7 +136,13 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
       subdomain: 'bella',
       status: 'active',
       applicationFee: { bps: 250, fixedCents: 0 },
-      theme: { primaryColor: '#C8102E', mode: 'light', logoUrl: null, tagline: 'Napolitaine' },
+      theme: {
+        primaryColor: '#C8102E',
+        mode: 'light',
+        logoUrl: null,
+        tagline: 'Napolitaine',
+        style: DEFAULT_STYLE,
+      },
     },
     {
       id: GREEN_ID,

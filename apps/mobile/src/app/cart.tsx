@@ -7,12 +7,13 @@ import { useCart } from '@/cart/CartProvider';
 import { ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
 import { displayCart } from '@/menu/display';
+import { titleStyle } from '@/components/brand';
 import { useTenant } from '@/tenant/TenantProvider';
 
 /** Panier (lot 2 : contenu et quantités ; récapitulatif, frais et minimum au lot 3). */
 export default function CartScreen() {
   const { cart, dispatch } = useCart();
-  const { palette } = useTenant();
+  const { palette, style: brand } = useTenant();
   const insets = useSafeAreaInsets();
   const restaurantId = cart.restaurantId ?? '';
   const menu = useMenu(restaurantId);
@@ -33,7 +34,10 @@ export default function CartScreen() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
-        <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
+        <Text
+          style={[styles.title, titleStyle(brand), { color: palette.text }]}
+          accessibilityRole="header"
+        >
           {messages.cart.title}
         </Text>
         {lines.map(({ line, product, optionNames, totalCents }) => (

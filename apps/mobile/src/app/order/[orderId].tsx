@@ -17,6 +17,7 @@ import { formatTime } from '@/lib/dates';
 import { formatPrice } from '@/lib/format';
 import { findSavedOrder } from '@/orders/storage';
 import { PaymentForm } from '@/payments/PaymentForm';
+import { titleStyle } from '@/components/brand';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const STEPS = {
@@ -28,7 +29,7 @@ type StepKey = keyof typeof messages.order.steps;
 /** Paiement puis suivi de la commande (sections 4 et 5). */
 export default function OrderScreen() {
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
-  const { config, palette } = useTenant();
+  const { config, palette, style: brand } = useTenant();
   const { cart, dispatch } = useCart();
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null | undefined>(undefined);
@@ -69,7 +70,10 @@ export default function OrderScreen() {
           { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
         ]}
       >
-        <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
+        <Text
+          style={[styles.title, titleStyle(brand), { color: palette.text }]}
+          accessibilityRole="header"
+        >
           {messages.order.title(order.number)}
         </Text>
         <Text style={[styles.status, { color: palette.accent }]} accessibilityLiveRegion="polite">

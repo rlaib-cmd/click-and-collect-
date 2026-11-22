@@ -195,6 +195,7 @@ describe('design, carte et réglages', () => {
       mode: 'dark',
       logoUrl: 'https://cdn.example.fr/logo.png',
       tagline: 'Nouveau slogan',
+      style: { header: 'brand', corners: 'square', uppercaseTitles: true, pattern: 'checker' },
     };
     expect(
       (

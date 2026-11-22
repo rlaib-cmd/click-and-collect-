@@ -15,7 +15,7 @@ export function Chip({
   disabled?: boolean;
   role?: 'radio' | 'tab';
 }) {
-  const { palette } = useTenant();
+  const { palette, radii } = useTenant();
   return (
     <Pressable
       accessibilityRole={role}
@@ -27,6 +27,7 @@ export function Chip({
         {
           backgroundColor: selected ? palette.primary : palette.surface,
           borderColor: selected ? palette.primary : palette.border,
+          borderRadius: radii.chip,
           opacity: disabled ? 0.45 : 1,
         },
       ]}
@@ -42,7 +43,6 @@ const styles = StyleSheet.create({
   chip: {
     minHeight: 44,
     paddingHorizontal: 16,
-    borderRadius: 22,
     justifyContent: 'center',
     borderWidth: 1,
   },

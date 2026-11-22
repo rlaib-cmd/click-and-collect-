@@ -12,3 +12,4 @@ Format : Contexte, Décision, Conséquences, Statut.
 | [0005](0005-back-office-auth.md) | Back-office : identité Supabase Auth, droits et données via `apps/api`, journal d'audit | Acceptée |
 | [0006](0006-carte-de-demonstration.md) | Carte et caisse de démonstration en attendant l'API Splash360 | Acceptée |
 | [0007](0007-apercu-sur-supabase-edge-functions.md) | Aperçu et recette : API servie par une fonction Supabase | Acceptée |
+| [0008](0008-style-de-l-enseigne.md) | Style de l'enseigne : en-tête, angles, titres, motif | Acceptée |

@@ -6,8 +6,9 @@ import { useTenant } from '@/tenant/TenantProvider';
 
 /**
  * Logo de l'enseigne ; monogramme à ses couleurs si le logo manque ou ne charge pas.
+ * `wide` : logo horizontal (texte compris), sans cadre, pour les en-têtes aux couleurs de l'enseigne.
  */
-export function TenantLogo({ size = 120 }: { size?: number }) {
+export function TenantLogo({ size = 120, wide = false }: { size?: number; wide?: boolean }) {
   const { config, palette } = useTenant();
   const [failed, setFailed] = useState(false);
   const { name } = config.tenant;
@@ -17,7 +18,7 @@ export function TenantLogo({ size = 120 }: { size?: number }) {
     return (
       <Image
         source={{ uri: config.theme.logoUrl }}
-        style={box}
+        style={wide ? { width: size * 3.3, height: size } : box}
         contentFit="contain"
         accessibilityLabel={messages.app.logoAlt(name)}
         onError={() => setFailed(true)}

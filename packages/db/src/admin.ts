@@ -1,4 +1,5 @@
 import type { Sql } from './client';
+import { toThemeStyle, type ThemeStyle, type ThemeStyleRow } from './tenants';
 
 export type StaffRole = 'super_admin' | 'tenant_admin' | 'staff';
 
@@ -117,6 +118,15 @@ const toStaff = (r: {
   restaurantId: r.restaurant_id,
 });
 
+/** Design d'une enseigne, tel qu'édité au back-office. */
+export interface ThemeRecord {
+  primaryColor: string;
+  mode: 'light' | 'dark';
+  logoUrl: string | null;
+  tagline: string | null;
+  style: ThemeStyle;
+}
+
 export interface AdminStore {
   /** Retrouve le compte d'un utilisateur connecté ; le rattache à son identifiant Auth à la première connexion. */
   resolveStaff(authUserId: string, email: string): Promise<StaffUser[]>;
@@ -153,21 +163,8 @@ export interface AdminStore {
     status: 'active' | 'paused',
   ): Promise<boolean>;
 
-  getTheme(tenantId: string): Promise<{
-    primaryColor: string;
-    mode: 'light' | 'dark';
-    logoUrl: string | null;
-    tagline: string | null;
-  } | null>;
-  updateTheme(
-    tenantId: string,
-    theme: {
-      primaryColor: string;
-      mode: 'light' | 'dark';
-      logoUrl: string | null;
-      tagline: string | null;
-    },
-  ): Promise<void>;
+  getTheme(tenantId: string): Promise<ThemeRecord | null>;
+  updateTheme(tenantId: string, theme: ThemeRecord): Promise<void>;
   getLegalText(tenantId: string): Promise<string | null>;
   setLegalText(tenantId: string, text: string | null): Promise<void>;
 
@@ -322,24 +319,35 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
 
     async getTheme(tenantId) {
       const [r] = await sql<
-        {
+        ({
           primary_color: string;
           mode: 'light' | 'dark';
           logo_url: string | null;
           tagline: string | null;
-        }[]
+        } & ThemeStyleRow)[]
       >`
-        select primary_color, mode, logo_url, tagline from public.tenant_theme where tenant_id = ${tenantId}`;
+        select primary_color, mode, logo_url, tagline, header_style, corner_style, uppercase_titles, pattern
+        from public.tenant_theme where tenant_id = ${tenantId}`;
       return r
-        ? { primaryColor: r.primary_color, mode: r.mode, logoUrl: r.logo_url, tagline: r.tagline }
+        ? {
+            primaryColor: r.primary_color,
+            mode: r.mode,
+            logoUrl: r.logo_url,
+            tagline: r.tagline,
+            style: toThemeStyle(r),
+          }
         : null;
     },
 
     async updateTheme(tenantId, t) {
-      await sql`insert into public.tenant_theme (tenant_id, primary_color, mode, logo_url, tagline)
-                values (${tenantId}, ${t.primaryColor}, ${t.mode}, ${t.logoUrl}, ${t.tagline})
+      await sql`insert into public.tenant_theme (tenant_id, primary_color, mode, logo_url, tagline,
+                  header_style, corner_style, uppercase_titles, pattern)
+                values (${tenantId}, ${t.primaryColor}, ${t.mode}, ${t.logoUrl}, ${t.tagline},
+                  ${t.style.header}, ${t.style.corners}, ${t.style.uppercaseTitles}, ${t.style.pattern})
                 on conflict (tenant_id) do update set primary_color = excluded.primary_color, mode = excluded.mode,
-                  logo_url = excluded.logo_url, tagline = excluded.tagline`;
+                  logo_url = excluded.logo_url, tagline = excluded.tagline,
+                  header_style = excluded.header_style, corner_style = excluded.corner_style,
+                  uppercase_titles = excluded.uppercase_titles, pattern = excluded.pattern`;
     },
 
     async getLegalText(tenantId) {

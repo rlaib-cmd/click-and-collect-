@@ -13,6 +13,7 @@ import { SetupSummary } from '@/components/SetupSummary';
 import { ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { formatPrice } from '@/lib/format';
 import { saveOrder } from '@/orders/storage';
+import { titleStyle } from '@/components/brand';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const CONTACT_KEY = 'contact';
@@ -21,7 +22,7 @@ type Contact = { name: string; phone: string; email: string };
 /** Récapitulatif : montants recalculés par le serveur, coordonnées, conditions de vente. */
 export default function CheckoutScreen() {
   const { cart } = useCart();
-  const { palette, config } = useTenant();
+  const { palette, config, style: brand } = useTenant();
   const insets = useSafeAreaInsets();
   const [contact, setContact] = useState<Contact>({ name: '', phone: '', email: '' });
   const [marketing, setMarketing] = useState(false);
@@ -106,7 +107,10 @@ export default function CheckoutScreen() {
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
+        <Text
+          style={[styles.title, titleStyle(brand), { color: palette.text }]}
+          accessibilityRole="header"
+        >
           {messages.checkout.title}
         </Text>
         <SetupSummary />
@@ -204,7 +208,7 @@ export default function CheckoutScreen() {
 }
 
 function Issues({ codes }: { codes: readonly string[] }) {
-  const { palette } = useTenant();
+  const { palette, style: brand } = useTenant();
   const texts = [
     ...new Set(
       codes.map(
@@ -216,7 +220,10 @@ function Issues({ codes }: { codes: readonly string[] }) {
   return (
     <Screen>
       <View style={styles.issues}>
-        <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
+        <Text
+          style={[styles.title, titleStyle(brand), { color: palette.text }]}
+          accessibilityRole="header"
+        >
           {messages.checkout.issuesTitle}
         </Text>
         {texts.map((t) => (

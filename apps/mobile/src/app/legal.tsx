@@ -5,11 +5,12 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { z } from 'zod';
 import { apiGet } from '@/api/client';
 import { Loading, PrimaryButton, Screen } from '@/components/ui';
+import { titleStyle } from '@/components/brand';
 import { useTenant } from '@/tenant/TenantProvider';
 
 /** Conditions générales de vente et mentions légales, saisies par l'enseigne au back-office. */
 export default function LegalScreen() {
-  const { config, palette } = useTenant();
+  const { config, palette, style: brand } = useTenant();
   const sub = config.tenant.subdomain;
   const legal = useQuery({
     queryKey: ['legal', sub],
@@ -19,7 +20,10 @@ export default function LegalScreen() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
+        <Text
+          style={[styles.title, titleStyle(brand), { color: palette.text }]}
+          accessibilityRole="header"
+        >
           {messages.legal.title}
         </Text>
         <Text style={{ color: palette.text, lineHeight: 22 }}>

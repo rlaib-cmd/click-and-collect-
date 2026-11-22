@@ -351,7 +351,272 @@ const chickenStreet: Menu = {
   ],
 };
 
-const MENUS = new Map([bella, greenBowl, chickenStreet].map((m) => [m.restaurantId, m]));
+/*
+ * Bills Burger : intitulés et descriptions repris de la carte publique de l'enseigne
+ * (bills-burger.fr/menu), photos servies par son site. Prix fictifs, à remplacer par la carte Splash360.
+ */
+const smashProtein: OptionGroup = {
+  id: 'bb-grp-viande',
+  name: 'Viande',
+  min: 1,
+  max: 1,
+  options: [
+    { id: 'bb-opt-boeuf', name: '2 steaks de bœuf smashé', priceCents: cents(0), available: true },
+    { id: 'bb-opt-crispy', name: '1 Big crispy chicken', priceCents: cents(0), available: true },
+  ],
+};
+
+const smashFormula: OptionGroup = {
+  id: 'bb-grp-formule',
+  name: 'Formule',
+  min: 1,
+  max: 1,
+  options: [
+    { id: 'bb-opt-seul', name: 'Burger seul', priceCents: cents(0), available: true },
+    { id: 'bb-opt-menu', name: 'Menu : frites + boisson', priceCents: cents(400), available: true },
+  ],
+};
+
+const tastyComposition: OptionGroup = {
+  id: 'bb-grp-composition',
+  name: 'Composition des frites',
+  min: 1,
+  max: 1,
+  options: [
+    { id: 'bb-opt-truffe', name: 'Truffe & parmesan', priceCents: cents(0), available: true },
+    { id: 'bb-opt-cheddar-bacon', name: 'Cheddar & bacon', priceCents: cents(0), available: true },
+    { id: 'bb-opt-bbq', name: 'BBQ & oignons crispy', priceCents: cents(0), available: true },
+  ],
+};
+
+const drinkFlavour: OptionGroup = {
+  id: 'bb-grp-saveur',
+  name: 'Saveur',
+  min: 1,
+  max: 1,
+  options: [
+    { id: 'bb-opt-pepsi', name: 'Pepsi', priceCents: cents(0), available: true },
+    { id: 'bb-opt-pepsi-max', name: 'Pepsi Max', priceCents: cents(0), available: true },
+    { id: 'bb-opt-pepsi-cherry', name: 'Pepsi Cherry', priceCents: cents(0), available: true },
+  ],
+};
+
+const SMASH_BASE = 'Bun potato large, 2 steaks de bœuf smashé ou 1 Big crispy chicken';
+
+const billsBurger: Menu = {
+  restaurantId: 'S360-R-BILLS-1',
+  categories: [
+    { id: 'bb-cat-smash', name: 'Smash burger', position: 1 },
+    { id: 'bb-cat-bon-plan', name: 'Bon plan', position: 2 },
+    { id: 'bb-cat-sides', name: 'Les sides', position: 3 },
+    { id: 'bb-cat-desserts', name: 'Desserts', position: 4 },
+    { id: 'bb-cat-boissons', name: 'Boissons', position: 5 },
+  ],
+  products: [
+    product({
+      id: 'bb-original',
+      categoryId: 'bb-cat-smash',
+      name: 'Bills Original',
+      description: `${SMASH_BASE}, american cheese, pickles, oignons caramélisés et sauce smash.`,
+      priceCents: cents(1090),
+      allergens: ['gluten', 'lait', 'moutarde'],
+      optionGroups: [smashProtein, smashFormula],
+    }),
+    product({
+      id: 'bb-smoke',
+      categoryId: 'bb-cat-smash',
+      name: 'Bills Smoke',
+      description: `${SMASH_BASE}, bacon, american cheese, oignons caramélisés et sauce smoky.`,
+      priceCents: cents(1190),
+      allergens: ['gluten', 'lait', 'moutarde'],
+      optionGroups: [smashProtein, smashFormula],
+    }),
+    product({
+      id: 'bb-frenchy',
+      categoryId: 'bb-cat-smash',
+      name: 'Bills Frenchy',
+      description: `${SMASH_BASE}, raclette fondue, oignons caramélisés, bacon fumé et sauce beef.`,
+      priceCents: cents(1250),
+      allergens: ['gluten', 'lait', 'moutarde'],
+      optionGroups: [smashProtein, smashFormula],
+    }),
+    product({
+      id: 'bb-farmer',
+      categoryId: 'bb-cat-smash',
+      name: 'Bills Farmer',
+      description: `${SMASH_BASE}, american cheese, bacon, oignons caramélisés, œuf, Boursin et american sauce.`,
+      priceCents: cents(1290),
+      allergens: ['gluten', 'lait', 'oeufs', 'moutarde'],
+      optionGroups: [smashProtein, smashFormula],
+    }),
+    product({
+      id: 'bb-honey',
+      categoryId: 'bb-cat-smash',
+      name: 'Bills Honey',
+      description: `${SMASH_BASE}, oignons caramélisés, fromage de chèvre fondu, miel et sauce honey.`,
+      priceCents: cents(1250),
+      allergens: ['gluten', 'lait', 'moutarde'],
+      optionGroups: [smashProtein, smashFormula],
+    }),
+    product({
+      id: 'bb-crispy',
+      categoryId: 'bb-cat-smash',
+      name: 'Bills Crispy',
+      description:
+        'Bun potato large, 1 Big crispy chicken, american cheese, oignons caramélisés, salade et sauce chicky.',
+      priceCents: cents(1150),
+      allergens: ['gluten', 'lait', 'oeufs'],
+      optionGroups: [smashFormula],
+    }),
+    product({
+      id: 'bb-kansas',
+      categoryId: 'bb-cat-smash',
+      name: 'Bills Kansas',
+      description:
+        'Pain brioché, bœuf effiloché mariné, raclette, oignons confits et sauce truffe.',
+      priceCents: cents(1390),
+      allergens: ['gluten', 'lait', 'oeufs'],
+      imageUrl: 'https://bills-burger.fr/img/menu/smash/MENU-BILLS-KANSAS.png',
+      optionGroups: [smashFormula],
+    }),
+    product({
+      id: 'bb-tasty-golden',
+      categoryId: 'bb-cat-bon-plan',
+      name: 'Tasty Golden',
+      description:
+        'Limited Box : 3 Bills Original, 3 frites et une composition au choix : truffe & parmesan, cheddar & bacon ou BBQ & oignons crispy.',
+      priceCents: cents(3490),
+      allergens: ['gluten', 'lait', 'moutarde'],
+      imageUrl: 'https://bills-burger.fr/img/menu/smash/tasty-golden.jpeg',
+      optionGroups: [tastyComposition],
+    }),
+    product({
+      id: 'bb-tasty',
+      categoryId: 'bb-cat-bon-plan',
+      name: "Bill's Tasty",
+      description:
+        '1 smash au choix, 1 frite et une composition au choix : truffe & parmesan, cheddar & bacon ou BBQ & oignons crispy.',
+      priceCents: cents(1490),
+      allergens: ['gluten', 'lait', 'moutarde'],
+      imageUrl: 'https://bills-burger.fr/img/menu/smash/bills-tasty.jpeg',
+      optionGroups: [smashProtein, tastyComposition],
+    }),
+    product({
+      id: 'bb-kids',
+      categoryId: 'bb-cat-bon-plan',
+      name: 'Formule Mini',
+      description: '1 Bills Original mini + 1 frite classique + 1 boisson + 3 churros.',
+      priceCents: cents(890),
+      allergens: ['gluten', 'lait'],
+      optionGroups: [drinkFlavour],
+    }),
+    product({
+      id: 'bb-cheesy-smash',
+      categoryId: 'bb-cat-sides',
+      name: 'Cheesy smash',
+      description: null,
+      priceCents: cents(590),
+      allergens: ['gluten', 'lait'],
+    }),
+    product({
+      id: 'bb-twister',
+      categoryId: 'bb-cat-sides',
+      name: 'Twister original',
+      description: null,
+      priceCents: cents(390),
+      allergens: ['gluten'],
+    }),
+    product({
+      id: 'bb-wings',
+      categoryId: 'bb-cat-sides',
+      name: 'Wings BBQ',
+      description: null,
+      priceCents: cents(690),
+      allergens: ['gluten', 'moutarde'],
+    }),
+    product({
+      id: 'bb-frites',
+      categoryId: 'bb-cat-sides',
+      name: 'Frites',
+      description: null,
+      priceCents: cents(350),
+      allergens: [],
+    }),
+    product({
+      id: 'bb-frites-cajun',
+      categoryId: 'bb-cat-sides',
+      name: 'Frites cajun',
+      description: null,
+      priceCents: cents(390),
+      allergens: [],
+    }),
+    product({
+      id: 'bb-patates-douces',
+      categoryId: 'bb-cat-sides',
+      name: 'Frites de patate douce',
+      description: null,
+      priceCents: cents(450),
+      allergens: [],
+    }),
+    product({
+      id: 'bb-frites-cheddar-bacon',
+      categoryId: 'bb-cat-sides',
+      name: 'Frites cheddar bacon',
+      description: null,
+      priceCents: cents(550),
+      allergens: ['lait'],
+    }),
+    product({
+      id: 'bb-cookie-blanc',
+      categoryId: 'bb-cat-desserts',
+      name: 'Cookie chocolat blanc',
+      description: null,
+      priceCents: cents(290),
+      allergens: ['gluten', 'lait', 'oeufs'],
+      imageUrl: 'https://bills-burger.fr/img/menu/dessert/cookie-chocolat-blanc.jpg',
+    }),
+    product({
+      id: 'bb-cookie-lait',
+      categoryId: 'bb-cat-desserts',
+      name: 'Cookie chocolat au lait',
+      description: null,
+      priceCents: cents(290),
+      allergens: ['gluten', 'lait', 'oeufs'],
+      imageUrl: 'https://bills-burger.fr/img/menu/dessert/cookie-chocolat-au-lait.jpg',
+    }),
+    product({
+      id: 'bb-cookie-brownie',
+      categoryId: 'bb-cat-desserts',
+      name: 'Cookie brownie',
+      description: null,
+      priceCents: cents(320),
+      allergens: ['gluten', 'lait', 'oeufs'],
+      imageUrl: 'https://bills-burger.fr/img/menu/dessert/cookie-brownie.jpg',
+    }),
+    product({
+      id: 'bb-pepsi',
+      categoryId: 'bb-cat-boissons',
+      name: 'Pepsi 33 cl',
+      description: null,
+      priceCents: cents(250),
+      allergens: [],
+      imageUrl: 'https://bills-burger.fr/img/menu/boissons/pepsi.jpg',
+    }),
+    product({
+      id: 'bb-pepsi-cherry',
+      categoryId: 'bb-cat-boissons',
+      name: 'Pepsi Cherry 33 cl',
+      description: null,
+      priceCents: cents(250),
+      allergens: [],
+      imageUrl: 'https://bills-burger.fr/img/menu/boissons/pepsi-cherry.jpg',
+    }),
+  ],
+};
+
+const MENUS = new Map(
+  [bella, greenBowl, chickenStreet, billsBurger].map((m) => [m.restaurantId, m]),
+);
 
 export function createDemoMenuProvider(): MenuProvider {
   return {

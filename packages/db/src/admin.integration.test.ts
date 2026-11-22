@@ -4,6 +4,7 @@ import { createPostgresAdminStore } from './admin';
 import { createSql } from './client';
 import { createPostgresOrderingStore } from './ordering';
 import { createPostgresRestaurantStore } from './restaurants';
+import { createPostgresTenantStore } from './tenants';
 
 /** Nécessite DATABASE_URL sur une base migrée et chargée avec supabase/seed.sql. */
 const url = process.env.DATABASE_URL;
@@ -117,7 +118,25 @@ describe.skipIf(!url)('AdminStore Postgres', () => {
       splash360Id: `T-${run}`,
       adminEmail: `Admin-${run}@Example.fr`,
     });
-    expect(await admin.getTheme(tenantId)).toMatchObject({ primaryColor: '#1F6FEB' });
+    expect(await admin.getTheme(tenantId)).toMatchObject({
+      primaryColor: '#1F6FEB',
+      style: { header: 'plain', corners: 'rounded', uppercaseTitles: false, pattern: 'none' },
+    });
+    const style = {
+      header: 'brand',
+      corners: 'pill',
+      uppercaseTitles: true,
+      pattern: 'checker',
+    } as const;
+    await admin.updateTheme(tenantId, {
+      primaryColor: '#CF2028',
+      mode: 'light',
+      logoUrl: null,
+      tagline: null,
+      style,
+    });
+    expect(await admin.getTheme(tenantId)).toMatchObject({ primaryColor: '#CF2028', style });
+    expect((await createPostgresTenantStore(sql).findById(tenantId))?.theme?.style).toEqual(style);
     expect((await admin.listStaff(tenantId))[0]).toMatchObject({
       role: 'tenant_admin',
       email: `admin-${run}@example.fr`,

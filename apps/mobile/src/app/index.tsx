@@ -7,13 +7,15 @@ import { useAvailability, useDeliveryCheck, useRestaurants } from '@/api/hooks';
 import type { OrderSetup } from '@/cart/cart';
 import { useCart } from '@/cart/CartProvider';
 import { SetupForm } from '@/components/SetupForm';
+import { CheckerBand, titleStyle } from '@/components/brand';
 import { TenantLogo } from '@/components/TenantLogo';
 import { ErrorState, Loading, PrimaryButton } from '@/components/ui';
 import { useTenant } from '@/tenant/TenantProvider';
 
 /** Accueil : restaurant, mode, adresse, jour et heure, puis la carte. */
 export default function HomeScreen() {
-  const { config, palette } = useTenant();
+  const { config, palette, style, radii } = useTenant();
+  const brandHeader = style.header === 'brand';
   const { cart, dispatch } = useCart();
   const insets = useSafeAreaInsets();
   const restaurants = useRestaurants();
@@ -55,22 +57,55 @@ export default function HomeScreen() {
       style={{ backgroundColor: palette.background }}
       contentContainerStyle={[
         styles.container,
-        { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 },
+        { paddingTop: brandHeader ? 0 : insets.top + 24, paddingBottom: insets.bottom + 24 },
       ]}
     >
-      <View style={styles.brand}>
-        <TenantLogo />
-        <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
-          {config.tenant.name}
-        </Text>
-        {config.theme.tagline ? (
-          <Text style={[styles.tagline, { color: palette.textMuted }]}>{config.theme.tagline}</Text>
-        ) : null}
-      </View>
+      {brandHeader ? (
+        <View style={styles.hero}>
+          <View
+            style={[
+              styles.heroBar,
+              { backgroundColor: palette.primary, paddingTop: insets.top + 28 },
+            ]}
+          >
+            {config.theme.logoUrl ? (
+              <TenantLogo size={72} wide />
+            ) : (
+              <Text
+                style={[styles.title, titleStyle(style), { color: palette.onPrimary }]}
+                accessibilityRole="header"
+              >
+                {config.tenant.name}
+              </Text>
+            )}
+            {config.theme.tagline ? (
+              <Text style={[styles.tagline, titleStyle(style), { color: palette.onPrimary }]}>
+                {config.theme.tagline}
+              </Text>
+            ) : null}
+          </View>
+          <CheckerBand />
+        </View>
+      ) : (
+        <View style={styles.brand}>
+          <TenantLogo />
+          <Text
+            style={[styles.title, titleStyle(style), { color: palette.text }]}
+            accessibilityRole="header"
+          >
+            {config.tenant.name}
+          </Text>
+          {config.theme.tagline ? (
+            <Text style={[styles.tagline, { color: palette.textMuted }]}>
+              {config.theme.tagline}
+            </Text>
+          ) : null}
+        </View>
+      )}
 
       {list.length > 1 ? (
         <View style={styles.list}>
-          <Text style={[styles.subtitle, { color: palette.text }]}>
+          <Text style={[styles.subtitle, titleStyle(style), { color: palette.text }]}>
             {messages.menu.chooseRestaurant}
           </Text>
           {list.map((r) => {
@@ -86,6 +121,7 @@ export default function HomeScreen() {
                   {
                     borderColor: selected ? palette.accent : palette.border,
                     backgroundColor: palette.surface,
+                    borderRadius: radii.card,
                   },
                 ]}
               >
@@ -141,12 +177,15 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { alignItems: 'center', gap: 16, paddingHorizontal: 16 },
   brand: { alignItems: 'center', gap: 8 },
+  // Pleine largeur malgré la marge du contenu.
+  hero: { alignSelf: 'stretch', marginHorizontal: -16 },
+  heroBar: { alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 28 },
   title: { fontSize: 28, fontWeight: '700', textAlign: 'center' },
   tagline: { fontSize: 16, textAlign: 'center' },
   cta: { marginTop: 8 },
   list: { alignSelf: 'stretch', gap: 12, maxWidth: 560, width: '100%', marginHorizontal: 'auto' },
   subtitle: { fontSize: 18, fontWeight: '600' },
-  restaurant: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 4, minHeight: 44 },
+  restaurant: { borderWidth: 1, padding: 16, gap: 4, minHeight: 44 },
   restaurantName: { fontSize: 17, fontWeight: '600' },
   notice: { fontSize: 15 },
 });

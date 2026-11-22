@@ -2,12 +2,48 @@ import { BLACK, contrastRatio, readableTextOn, WHITE } from './color';
 
 export type ThemeMode = 'light' | 'dark';
 
+/** Style visuel de l'enseigne, au-delà des couleurs. */
+export interface ThemeStyle {
+  /** `brand` : en-têtes sur fond de la couleur de l'enseigne (logo clair attendu). */
+  readonly header: 'plain' | 'brand';
+  readonly corners: 'rounded' | 'pill' | 'square';
+  readonly uppercaseTitles: boolean;
+  /** Motif décoratif sous les en-têtes (`checker` : damier aux couleurs de l'enseigne). */
+  readonly pattern: 'none' | 'checker';
+}
+
+export const DEFAULT_STYLE: ThemeStyle = {
+  header: 'plain',
+  corners: 'rounded',
+  uppercaseTitles: false,
+  pattern: 'none',
+};
+
 /** Réglages de design saisis par l'enseigne. */
 export interface TenantTheme {
   readonly primaryColor: string;
   readonly mode: ThemeMode;
   readonly logoUrl: string | null;
   readonly tagline: string | null;
+  readonly style: ThemeStyle;
+}
+
+/** Rayons des angles (boutons, cartes, puces) selon le style. */
+export interface Radii {
+  readonly button: number;
+  readonly card: number;
+  readonly chip: number;
+}
+
+export function radiiFor(corners: ThemeStyle['corners']): Radii {
+  switch (corners) {
+    case 'pill':
+      return { button: 999, card: 16, chip: 999 };
+    case 'square':
+      return { button: 2, card: 2, chip: 2 };
+    default:
+      return { button: 12, card: 12, chip: 22 };
+  }
 }
 
 /** Palette complète utilisée par les écrans. */
@@ -61,4 +97,5 @@ export const DEFAULT_THEME: TenantTheme = {
   mode: 'light',
   logoUrl: null,
   tagline: null,
+  style: DEFAULT_STYLE,
 };

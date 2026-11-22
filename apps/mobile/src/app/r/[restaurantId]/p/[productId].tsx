@@ -18,6 +18,7 @@ import {
   toggleOption,
   type Selection,
 } from '@/menu/selection';
+import { titleStyle } from '@/components/brand';
 import { useTenant } from '@/tenant/TenantProvider';
 
 function groupHint(g: OptionGroupDto): string {
@@ -31,7 +32,7 @@ export default function ProductScreen() {
     restaurantId: string;
     productId: string;
   }>();
-  const { palette } = useTenant();
+  const { palette, style: brand } = useTenant();
   const { dispatch } = useCart();
   const insets = useSafeAreaInsets();
   const menu = useMenu(restaurantId);
@@ -81,7 +82,10 @@ export default function ProductScreen() {
         {product.imageUrl ? (
           <Image source={{ uri: product.imageUrl }} style={styles.photo} contentFit="cover" />
         ) : null}
-        <Text style={[styles.title, { color: palette.text }]} accessibilityRole="header">
+        <Text
+          style={[styles.title, titleStyle(brand), { color: palette.text }]}
+          accessibilityRole="header"
+        >
           {product.name}
         </Text>
         {product.description ? (

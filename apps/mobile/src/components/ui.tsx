@@ -15,7 +15,7 @@ export function PrimaryButton({
   disabled?: boolean;
   style?: ViewStyle;
 }) {
-  const { palette } = useTenant();
+  const { palette, radii, style: brand } = useTenant();
   return (
     <Pressable
       accessibilityRole="button"
@@ -26,13 +26,18 @@ export function PrimaryButton({
         styles.primary,
         {
           backgroundColor: disabled ? palette.border : palette.primary,
+          borderRadius: radii.button,
           opacity: pressed ? 0.85 : 1,
         },
         style,
       ]}
     >
       <Text
-        style={[styles.primaryText, { color: disabled ? palette.textMuted : palette.onPrimary }]}
+        style={[
+          styles.primaryText,
+          brand.uppercaseTitles ? styles.upper : null,
+          { color: disabled ? palette.textMuted : palette.onPrimary },
+        ]}
       >
         {label}
       </Text>
@@ -72,9 +77,9 @@ const styles = StyleSheet.create({
   primary: {
     minHeight: 52,
     paddingHorizontal: 20,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryText: { fontSize: 17, fontWeight: '700' },
+  upper: { textTransform: 'uppercase', fontWeight: '800', letterSpacing: 0.5 },
 });

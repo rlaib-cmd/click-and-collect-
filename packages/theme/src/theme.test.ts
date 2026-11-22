@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contrastRatio, isHexColor, parseHex, readableTextOn, relativeLuminance } from './color';
-import { buildPalette, MIN_UI_CONTRAST } from './theme';
+import { buildPalette, DEFAULT_STYLE, DEFAULT_THEME, MIN_UI_CONTRAST, radiiFor } from './theme';
 
 describe('couleurs', () => {
   it('lit une couleur #RRGGBB', () => {
@@ -51,5 +51,29 @@ describe('palette', () => {
     expect(contrastRatio(redOnWhite.accent, redOnWhite.background)).toBeGreaterThanOrEqual(
       MIN_UI_CONTRAST,
     );
+  });
+});
+
+describe('style', () => {
+  it('par défaut : en-tête simple, angles arrondis, sans motif', () => {
+    expect(DEFAULT_THEME.style).toEqual(DEFAULT_STYLE);
+    expect(DEFAULT_STYLE).toEqual({
+      header: 'plain',
+      corners: 'rounded',
+      uppercaseTitles: false,
+      pattern: 'none',
+    });
+  });
+
+  it('donne des rayons cohérents pour chaque forme', () => {
+    expect(radiiFor('pill').button).toBeGreaterThan(radiiFor('rounded').button);
+    expect(radiiFor('square')).toEqual({ button: 2, card: 2, chip: 2 });
+    expect(radiiFor('rounded')).toEqual({ button: 12, card: 12, chip: 22 });
+  });
+
+  it('Bills Burger (#CF2028) : texte blanc lisible sur la couleur', () => {
+    const p = buildPalette({ primaryColor: '#CF2028', mode: 'light' });
+    expect(p.onPrimary).toBe('#FFFFFF');
+    expect(contrastRatio(p.primary, p.onPrimary)).toBeGreaterThanOrEqual(4.5);
   });
 });

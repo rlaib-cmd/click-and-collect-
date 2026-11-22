@@ -61,6 +61,20 @@
         "BRAND": "chickenstreet",
         "EXPO_PUBLIC_TENANT": "chickenstreet"
       }
+    },
+    "billsburger-preview": {
+      "extends": "preview",
+      "env": {
+        "BRAND": "billsburger",
+        "EXPO_PUBLIC_TENANT": "billsburger"
+      }
+    },
+    "billsburger-production": {
+      "extends": "production",
+      "env": {
+        "BRAND": "billsburger",
+        "EXPO_PUBLIC_TENANT": "billsburger"
+      }
     }
   },
   "submit": {

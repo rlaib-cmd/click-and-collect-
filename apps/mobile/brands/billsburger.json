@@ -1,0 +1,9 @@
+{
+  "name": "Bills Burger",
+  "subdomain": "billsburger",
+  "iosBundleIdentifier": "fr.splash360.commande.billsburger",
+  "androidPackage": "fr.splash360.commande.billsburger",
+  "scheme": "billsburger",
+  "primaryColor": "#CF2028",
+  "appleMerchantId": "merchant.fr.splash360.commande.billsburger"
+}

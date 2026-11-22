@@ -37,7 +37,7 @@ jobs:
         env:
           CI: '1'
       - name: Configuration des builds par enseigne
-        run: for b in default bella greenbowl chickenstreet; do BRAND=$b pnpm --filter mobile exec expo config --type public > /dev/null; done
+        run: for b in default bella greenbowl chickenstreet billsburger; do BRAND=$b pnpm --filter mobile exec expo config --type public > /dev/null; done
       - name: Image Docker de l'API
         run: docker build -f apps/api/Dockerfile -t splash360-api:ci .
 

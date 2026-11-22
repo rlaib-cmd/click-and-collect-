@@ -1,3 +1,4 @@
+import { DEFAULT_STYLE } from '@splash360/theme';
 import { randomUUID } from 'node:crypto';
 import type {
   AdminStore,
@@ -34,7 +35,13 @@ export function createMemoryAdminStore(input: {
   const themes = new Map(
     input.tenants.map((t) => [
       t.id,
-      t.theme ?? { primaryColor: '#1F6FEB', mode: 'light' as const, logoUrl: null, tagline: null },
+      t.theme ?? {
+        primaryColor: '#1F6FEB',
+        mode: 'light' as const,
+        logoUrl: null,
+        tagline: null,
+        style: DEFAULT_STYLE,
+      },
     ]),
   );
   const legal = new Map<string, string | null>();

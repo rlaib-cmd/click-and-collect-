@@ -16,8 +16,27 @@ const valid = {
 };
 
 describe('contrat de configuration d’enseigne', () => {
-  it('accepte une configuration valide', () => {
-    expect(tenantConfigSchema.parse(valid)).toEqual(valid);
+  it('accepte une configuration valide et complète le style par défaut', () => {
+    expect(tenantConfigSchema.parse(valid)).toEqual({
+      ...valid,
+      theme: {
+        ...valid.theme,
+        style: { header: 'plain', corners: 'rounded', uppercaseTitles: false, pattern: 'none' },
+      },
+    });
+  });
+
+  it('garde un style personnalisé et refuse une valeur inconnue', () => {
+    const style = { header: 'brand', corners: 'pill', uppercaseTitles: true, pattern: 'checker' };
+    expect(
+      tenantConfigSchema.parse({ ...valid, theme: { ...valid.theme, style } }).theme.style,
+    ).toEqual(style);
+    expect(
+      tenantConfigSchema.safeParse({
+        ...valid,
+        theme: { ...valid.theme, style: { ...style, corners: 'wavy' } },
+      }).success,
+    ).toBe(false);
   });
 
   it('refuse un logo hors https et une couleur invalide', () => {

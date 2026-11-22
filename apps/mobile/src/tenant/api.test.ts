@@ -3,7 +3,13 @@ import { fetchTenantConfig } from './api';
 
 const config = {
   tenant: { id: '00000000-0000-4000-8000-000000000001', name: 'Bella', subdomain: 'bella' },
-  theme: { primaryColor: '#C8102E', mode: 'light', logoUrl: null, tagline: null },
+  theme: {
+    primaryColor: '#C8102E',
+    mode: 'light',
+    logoUrl: null,
+    tagline: null,
+    style: { header: 'brand', corners: 'pill', uppercaseTitles: true, pattern: 'checker' },
+  },
 };
 
 function fakeFetch(status: number, body: unknown): typeof fetch {
