@@ -50,12 +50,12 @@
           "enableGooglePay": true
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "./plugins/with-android-release-lint"
     ],
     "experiments": {
       "reactCompiler": true
     },
-    "newArchEnabled": true,
     "owner": "rlaib",
     "extra": {
       "eas": {

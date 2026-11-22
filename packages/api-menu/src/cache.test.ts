@@ -80,3 +80,26 @@ describe('cartes de démonstration', () => {
     ).rejects.toBeInstanceOf(MenuUnavailableError);
   });
 });
+
+describe('carte de démonstration Chicken Street', () => {
+  it('se calcule : menu avec tenders 6 pièces, potatoes et sauce Cheezy', async () => {
+    const { priceCart } = await import('@splash360/core');
+    const menu = await createDemoMenuProvider().fetchMenu({
+      restaurantId: 'cs',
+      splash360RestaurantId: 'S360-R-CHICKEN-1',
+    });
+    const result = priceCart(menu, [
+      {
+        productId: 'p-menu-tenders',
+        quantity: 2,
+        optionIds: ['opt-tenders-6', 'opt-sauce-cheezy', 'opt-potatoes', 'opt-ice-tea'],
+      },
+    ]);
+    // (10,50 + 2,50 + 0,50 + 0,50) × 2 = 28,00 €
+    expect(result).toMatchObject({ ok: true, subtotalCents: 2800 });
+    expect(
+      priceCart(menu, [{ productId: 'p-menu-tenders', quantity: 1, optionIds: ['opt-tenders-4'] }])
+        .ok,
+    ).toBe(false);
+  });
+});

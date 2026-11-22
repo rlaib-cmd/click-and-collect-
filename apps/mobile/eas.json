@@ -1,29 +1,66 @@
 {
-  "cli": { "version": ">= 27.0.0", "appVersionSource": "remote" },
+  "cli": {
+    "version": ">= 27.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
       "environment": "development"
     },
-    "preview": { "distribution": "internal", "environment": "preview" },
-    "production": { "autoIncrement": true, "environment": "production" },
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview"
+    },
+    "production": {
+      "autoIncrement": true,
+      "environment": "production"
+    },
     "bella-preview": {
       "extends": "preview",
-      "env": { "BRAND": "bella", "EXPO_PUBLIC_TENANT": "bella" }
+      "env": {
+        "BRAND": "bella",
+        "EXPO_PUBLIC_TENANT": "bella"
+      }
     },
     "bella-production": {
       "extends": "production",
-      "env": { "BRAND": "bella", "EXPO_PUBLIC_TENANT": "bella" }
+      "env": {
+        "BRAND": "bella",
+        "EXPO_PUBLIC_TENANT": "bella"
+      }
     },
     "greenbowl-preview": {
       "extends": "preview",
-      "env": { "BRAND": "greenbowl", "EXPO_PUBLIC_TENANT": "greenbowl" }
+      "env": {
+        "BRAND": "greenbowl",
+        "EXPO_PUBLIC_TENANT": "greenbowl"
+      }
     },
     "greenbowl-production": {
       "extends": "production",
-      "env": { "BRAND": "greenbowl", "EXPO_PUBLIC_TENANT": "greenbowl" }
+      "env": {
+        "BRAND": "greenbowl",
+        "EXPO_PUBLIC_TENANT": "greenbowl"
+      }
+    },
+    "chickenstreet-preview": {
+      "extends": "preview",
+      "env": {
+        "BRAND": "chickenstreet",
+        "EXPO_PUBLIC_TENANT": "chickenstreet"
+      }
+    },
+    "chickenstreet-production": {
+      "extends": "production",
+      "env": {
+        "BRAND": "chickenstreet",
+        "EXPO_PUBLIC_TENANT": "chickenstreet"
+      }
     }
   },
-  "submit": { "production": {} }
+  "submit": {
+    "production": {}
+  }
 }

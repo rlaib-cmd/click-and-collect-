@@ -47,3 +47,37 @@ select tenant_id, id, 'equipe@bella.test', 'Équipe Bella Bastille', 'staff' fro
 
 update public.tenants set legal_text = 'Conditions générales de vente de démonstration. Vendeur : Pizzeria Bella SAS, 12 rue de la Roquette, 75011 Paris.'
 where subdomain = 'bella';
+
+-- Chicken Street (démonstration) : enseigne d'exemple, carte et restaurant fictifs.
+insert into public.tenants (id, name, subdomain, splash360_id) values
+  ('00000000-0000-4000-8000-000000000004', 'Chicken Street', 'chickenstreet', 'S360-DEMO-CHICKEN')
+on conflict (id) do nothing;
+
+insert into public.tenant_theme (tenant_id, logo_url, primary_color, mode, tagline) values
+  ('00000000-0000-4000-8000-000000000004', null, '#D62828', 'light', 'Le poulet croustillant, en retrait ou livré')
+on conflict (tenant_id) do nothing;
+
+insert into public.restaurants (tenant_id, name, splash360_id, address_line, postal_code, city, latitude, longitude) values
+  ('00000000-0000-4000-8000-000000000004', 'Chicken Street (démo)', 'S360-R-CHICKEN-1', '1 place de la Démonstration', '75020', 'Paris', 48.8686, 2.3824)
+on conflict (tenant_id, splash360_id) do nothing;
+
+insert into public.restaurant_settings (restaurant_id, tenant_id, pickup_enabled, delivery_enabled, prep_minutes,
+  slot_step_minutes, max_orders_per_slot, days_ahead, delivery_minimum_cents, free_delivery_threshold_cents, service_fee_cents)
+select id, tenant_id, true, true, 15, 10, 6, 3, 1200, 3000, 0 from public.restaurants where splash360_id = 'S360-R-CHICKEN-1'
+on conflict (restaurant_id) do nothing;
+
+-- Ouvert tous les jours, 11:00–23:00.
+insert into public.opening_hours (tenant_id, restaurant_id, iso_weekday, opens, closes)
+select r.tenant_id, r.id, d, time '11:00', time '23:00' from public.restaurants r, generate_series(1, 7) d
+where r.splash360_id = 'S360-R-CHICKEN-1'
+  and not exists (select 1 from public.opening_hours h where h.restaurant_id = r.id);
+
+insert into public.delivery_zones (tenant_id, restaurant_id, name, kind, radius_meters, fee_cents)
+select r.tenant_id, r.id, z.name, 'radius', z.radius, z.fee
+from public.restaurants r, (values ('Moins de 2 km', 2000, 190), ('Moins de 4 km', 4000, 290)) as z(name, radius, fee)
+where r.splash360_id = 'S360-R-CHICKEN-1'
+  and not exists (select 1 from public.delivery_zones dz where dz.restaurant_id = r.id);
+
+insert into public.staff_users (tenant_id, email, name, role)
+select '00000000-0000-4000-8000-000000000004', 'gerant@chickenstreet.test', 'Gérant Chicken Street', 'tenant_admin'
+where not exists (select 1 from public.staff_users where email = 'gerant@chickenstreet.test');

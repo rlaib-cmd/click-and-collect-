@@ -1,0 +1,9 @@
+{
+  "name": "Chicken Street",
+  "subdomain": "chickenstreet",
+  "iosBundleIdentifier": "fr.splash360.commande.chickenstreet",
+  "androidPackage": "fr.splash360.commande.chickenstreet",
+  "scheme": "chickenstreet",
+  "primaryColor": "#D62828",
+  "appleMerchantId": "merchant.fr.splash360.commande.chickenstreet"
+}

@@ -168,7 +168,190 @@ const greenBowl: Menu = {
   ],
 };
 
-const MENUS = new Map([bella, greenBowl].map((m) => [m.restaurantId, m]));
+/** Chicken Street (démonstration) : carte fictive, à remplacer par la carte Splash360 réelle. */
+const sauce: OptionGroup = {
+  id: 'grp-sauce',
+  name: 'Sauce',
+  min: 1,
+  max: 2,
+  options: [
+    { id: 'opt-sauce-algerienne', name: 'Algérienne', priceCents: cents(0), available: true },
+    { id: 'opt-sauce-samourai', name: 'Samouraï', priceCents: cents(0), available: true },
+    { id: 'opt-sauce-barbecue', name: 'Barbecue', priceCents: cents(0), available: true },
+    { id: 'opt-sauce-blanche', name: 'Blanche', priceCents: cents(0), available: true },
+    { id: 'opt-sauce-cheezy', name: 'Cheezy', priceCents: cents(50), available: true },
+  ],
+};
+
+const supplementsChicken: OptionGroup = {
+  id: 'grp-supplements-chicken',
+  name: 'Suppléments',
+  min: 0,
+  max: 3,
+  options: [
+    { id: 'opt-cheddar', name: 'Cheddar', priceCents: cents(80), available: true },
+    { id: 'opt-bacon-dinde', name: 'Bacon de dinde', priceCents: cents(120), available: true },
+    { id: 'opt-oignons-frits', name: 'Oignons frits', priceCents: cents(60), available: true },
+    { id: 'opt-jalapenos', name: 'Jalapeños', priceCents: cents(60), available: true },
+  ],
+};
+
+const menuSide: OptionGroup = {
+  id: 'grp-accompagnement',
+  name: 'Accompagnement du menu',
+  min: 1,
+  max: 1,
+  options: [
+    { id: 'opt-frites', name: 'Frites', priceCents: cents(0), available: true },
+    { id: 'opt-potatoes', name: 'Potatoes', priceCents: cents(50), available: true },
+    { id: 'opt-onion-rings', name: 'Onion rings', priceCents: cents(100), available: true },
+  ],
+};
+
+const menuDrink: OptionGroup = {
+  id: 'grp-boisson-menu',
+  name: 'Boisson du menu',
+  min: 1,
+  max: 1,
+  options: [
+    { id: 'opt-cola', name: 'Cola 33 cl', priceCents: cents(0), available: true },
+    { id: 'opt-cola-zero', name: 'Cola zéro 33 cl', priceCents: cents(0), available: true },
+    { id: 'opt-ice-tea', name: 'Thé glacé 33 cl', priceCents: cents(0), available: true },
+    { id: 'opt-eau-plate', name: 'Eau 50 cl', priceCents: cents(0), available: true },
+  ],
+};
+
+const tendersCount: OptionGroup = {
+  id: 'grp-nb-tenders',
+  name: 'Nombre de pièces',
+  min: 1,
+  max: 1,
+  options: [
+    { id: 'opt-tenders-4', name: '4 pièces', priceCents: cents(0), available: true },
+    { id: 'opt-tenders-6', name: '6 pièces', priceCents: cents(250), available: true },
+    { id: 'opt-tenders-9', name: '9 pièces', priceCents: cents(550), available: true },
+  ],
+};
+
+const chickenStreet: Menu = {
+  restaurantId: 'S360-R-CHICKEN-1',
+  categories: [
+    { id: 'cat-menus', name: 'Menus', position: 1 },
+    { id: 'cat-burgers', name: 'Burgers', position: 2 },
+    { id: 'cat-tenders', name: 'Tenders & wings', position: 3 },
+    { id: 'cat-accompagnements', name: 'Accompagnements', position: 4 },
+    { id: 'cat-desserts', name: 'Desserts', position: 5 },
+    { id: 'cat-boissons', name: 'Boissons', position: 6 },
+  ],
+  products: [
+    product({
+      id: 'p-menu-classic',
+      categoryId: 'cat-menus',
+      name: 'Menu Chicken Classic',
+      description: 'Burger poulet croustillant, accompagnement et boisson',
+      priceCents: cents(1090),
+      allergens: ['gluten', 'oeufs', 'moutarde'],
+      optionGroups: [sauce, menuSide, menuDrink, supplementsChicken],
+    }),
+    product({
+      id: 'p-menu-tenders',
+      categoryId: 'cat-menus',
+      name: 'Menu Tenders',
+      description: 'Tenders de poulet, accompagnement et boisson',
+      priceCents: cents(1050),
+      allergens: ['gluten', 'oeufs'],
+      optionGroups: [tendersCount, sauce, menuSide, menuDrink],
+    }),
+    product({
+      id: 'p-chicken-classic',
+      categoryId: 'cat-burgers',
+      name: 'Chicken Classic',
+      description: 'Filet de poulet pané, salade, tomate, sauce maison',
+      priceCents: cents(790),
+      allergens: ['gluten', 'oeufs', 'moutarde'],
+      optionGroups: [sauce, supplementsChicken],
+    }),
+    product({
+      id: 'p-chicken-spicy',
+      categoryId: 'cat-burgers',
+      name: 'Chicken Spicy',
+      description: 'Poulet pané épicé, cheddar, jalapeños, sauce samouraï',
+      priceCents: cents(850),
+      allergens: ['gluten', 'oeufs', 'lait'],
+      optionGroups: [sauce, supplementsChicken],
+    }),
+    product({
+      id: 'p-double-chicken',
+      categoryId: 'cat-burgers',
+      name: 'Double Chicken Cheese',
+      description: 'Deux filets de poulet, double cheddar, oignons frits',
+      priceCents: cents(990),
+      allergens: ['gluten', 'oeufs', 'lait'],
+      optionGroups: [sauce, supplementsChicken],
+    }),
+    product({
+      id: 'p-tenders',
+      categoryId: 'cat-tenders',
+      name: 'Tenders',
+      description: 'Aiguillettes de poulet croustillantes',
+      priceCents: cents(590),
+      allergens: ['gluten', 'oeufs'],
+      optionGroups: [tendersCount, sauce],
+    }),
+    product({
+      id: 'p-wings',
+      categoryId: 'cat-tenders',
+      name: 'Wings x6',
+      description: 'Ailes de poulet marinées',
+      priceCents: cents(650),
+      allergens: ['gluten'],
+      optionGroups: [sauce],
+      available: false,
+    }),
+    product({
+      id: 'p-frites',
+      categoryId: 'cat-accompagnements',
+      name: 'Frites',
+      description: null,
+      priceCents: cents(290),
+      allergens: [],
+    }),
+    product({
+      id: 'p-potatoes',
+      categoryId: 'cat-accompagnements',
+      name: 'Potatoes',
+      description: null,
+      priceCents: cents(340),
+      allergens: [],
+    }),
+    product({
+      id: 'p-cookie',
+      categoryId: 'cat-desserts',
+      name: 'Cookie chocolat',
+      description: null,
+      priceCents: cents(250),
+      allergens: ['gluten', 'lait', 'oeufs'],
+    }),
+    product({
+      id: 'p-milkshake',
+      categoryId: 'cat-desserts',
+      name: 'Milkshake vanille',
+      description: null,
+      priceCents: cents(390),
+      allergens: ['lait'],
+    }),
+    product({
+      id: 'p-cola',
+      categoryId: 'cat-boissons',
+      name: 'Cola 33 cl',
+      description: null,
+      priceCents: cents(250),
+      allergens: [],
+    }),
+  ],
+};
+
+const MENUS = new Map([bella, greenBowl, chickenStreet].map((m) => [m.restaurantId, m]));
 
 export function createDemoMenuProvider(): MenuProvider {
   return {
