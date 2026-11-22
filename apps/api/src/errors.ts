@@ -6,6 +6,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   not_found: 404,
   tenant_suspended: 403,
   invalid_request: 400,
+  menu_unavailable: 503,
   internal_error: 500,
 };
 

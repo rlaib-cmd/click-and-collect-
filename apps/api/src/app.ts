@@ -1,4 +1,5 @@
-import type { TenantStore } from '@splash360/db';
+import type { MenuCache } from '@splash360/api-menu';
+import type { RestaurantStore, TenantStore } from '@splash360/db';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -8,6 +9,8 @@ import { tenantRoutes } from './routes/tenants';
 
 export interface AppDeps {
   readonly tenants: TenantStore;
+  readonly restaurants: RestaurantStore;
+  readonly menus: MenuCache;
   readonly corsOrigins?: readonly string[] | '*';
   readonly log?: boolean;
 }
@@ -28,7 +31,7 @@ export function createApp(deps: AppDeps) {
   );
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
-  app.route('/v1/tenants', tenantRoutes(deps.tenants));
+  app.route('/v1/tenants', tenantRoutes(deps));
 
   app.notFound((c) => apiError(c, 'not_found', 'Route inconnue'));
   app.onError((err, c) => {

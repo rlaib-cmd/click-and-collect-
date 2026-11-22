@@ -1,33 +1,8 @@
 import { tenantConfigSchema } from '@splash360/contracts';
-import { createMemoryTenantStore } from '@splash360/db';
 import { describe, expect, it } from 'vitest';
-import { createApp } from './app';
+import { testApp } from './test-fixtures';
 
-const app = createApp({
-  tenants: createMemoryTenantStore([
-    {
-      id: '00000000-0000-4000-8000-000000000001',
-      name: 'Pizzeria Bella',
-      subdomain: 'bella',
-      status: 'active',
-      theme: { primaryColor: '#C8102E', mode: 'light', logoUrl: null, tagline: 'Napolitaine' },
-    },
-    {
-      id: '00000000-0000-4000-8000-000000000002',
-      name: 'Sans thème',
-      subdomain: 'sans-theme',
-      status: 'active',
-      theme: null,
-    },
-    {
-      id: '00000000-0000-4000-8000-000000000003',
-      name: 'Suspendue',
-      subdomain: 'suspendue',
-      status: 'suspended',
-      theme: null,
-    },
-  ]),
-});
+const app = testApp();
 
 describe('GET /health', () => {
   it('répond ok', async () => {
@@ -49,7 +24,7 @@ describe('GET /v1/tenants/:subdomain/config', () => {
 
   it("applique le thème par défaut si l'enseigne n'en a pas", async () => {
     const body = tenantConfigSchema.parse(
-      await (await app.request('/v1/tenants/sans-theme/config')).json(),
+      await (await app.request('/v1/tenants/greenbowl/config')).json(),
     );
     expect(body.theme.primaryColor).toBe('#1F6FEB');
   });

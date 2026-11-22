@@ -5,6 +5,9 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   /** Origines web autorisées (CORS), séparées par des virgules. `*` en développement. */
   CORS_ORIGINS: z.string().default('*'),
+  MENU_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(180),
+  /** Âge maximal de la carte servie si l'API menu tombe ; au-delà, commande bloquée. Valeur à fixer avec Splash360. */
+  MENU_MAX_STALE_MINUTES: z.coerce.number().int().nonnegative().default(60),
 });
 
 export type Env = z.infer<typeof envSchema>;

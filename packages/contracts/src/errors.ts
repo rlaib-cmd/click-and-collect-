@@ -3,7 +3,13 @@ import { z } from 'zod';
 /** Format unique des erreurs de l'API. */
 export const apiErrorSchema = z.object({
   error: z.object({
-    code: z.enum(['not_found', 'tenant_suspended', 'invalid_request', 'internal_error']),
+    code: z.enum([
+      'not_found',
+      'tenant_suspended',
+      'invalid_request',
+      'menu_unavailable',
+      'internal_error',
+    ]),
     message: z.string(),
   }),
 });

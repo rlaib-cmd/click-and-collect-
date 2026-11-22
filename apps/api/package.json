@@ -17,7 +17,8 @@
     "@splash360/db": "workspace:*",
     "@splash360/core": "workspace:*",
     "@splash360/theme": "workspace:*",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "@splash360/api-menu": "workspace:*"
   },
   "devDependencies": {
     "@splash360/config": "workspace:*",

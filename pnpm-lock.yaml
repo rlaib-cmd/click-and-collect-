@@ -63,6 +63,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.11
         version: 2.1.11(hono@4.13.20)
+      '@splash360/api-menu':
+        specifier: workspace:*
+        version: link:../../packages/api-menu
       '@splash360/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
