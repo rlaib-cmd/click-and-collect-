@@ -29,13 +29,15 @@
     "react-native-safe-area-context": "~5.11.1",
     "react-native-screens": "~4.30.1",
     "react-native-web": "~0.21.4",
-    "react-native-worklets": "0.13.0"
+    "react-native-worklets": "0.13.0",
+    "@splash360/contracts": "workspace:*"
   },
   "devDependencies": {
     "@splash360/config": "workspace:*",
     "@types/react": "~19.3.0",
     "eslint": "^9.39.5",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.1.1"
   },
   "scripts": {
     "start": "expo start",
@@ -45,7 +47,8 @@
     "dev": "expo start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "doctor": "expo-doctor"
+    "doctor": "expo-doctor",
+    "test": "vitest run"
   },
   "private": true
 }
