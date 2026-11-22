@@ -62,3 +62,35 @@ jobs:
         run: pnpm test
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+  e2e:
+    name: Parcours client de bout en bout
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      STRIPE_WEBHOOK_SECRET: whsec_e2e
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Base Supabase avec données de démonstration
+        run: pnpm exec supabase db start && pnpm db:reset
+      - name: Navigateur Playwright
+        run: pnpm --filter e2e exec playwright install --with-deps chromium
+      - name: Démarrer l'API et l'application web
+        run: |
+          (cd apps/api && GEOCODER_URL=demo ORDER_TOKEN_SECRET=secret-e2e-0123456789-0123456789-0123 \
+            STRIPE_SECRET_KEY=sk_test_e2e STRIPE_PUBLISHABLE_KEY=pk_test_e2e \
+            nohup pnpm start > ../../api.log 2>&1 &)
+          (cd apps/mobile && CI=1 EXPO_PUBLIC_API_URL=http://localhost:8787 nohup npx expo start --web --port 8081 > ../../web.log 2>&1 &)
+          for i in $(seq 1 60); do curl -sf http://localhost:8787/ready && break; sleep 2; done
+          for i in $(seq 1 90); do curl -sf -o /dev/null http://localhost:8081 && break; sleep 2; done
+      - name: Parcours
+        run: pnpm --filter e2e e2e
+      - name: Journaux en cas d'échec
+        if: failure()
+        run: tail -n 100 api.log web.log

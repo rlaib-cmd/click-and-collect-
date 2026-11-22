@@ -1,0 +1,5 @@
+{
+  "extends": "@splash360/config/tsconfig.lib.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["tests", "playwright.config.ts"]
+}

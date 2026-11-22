@@ -1,0 +1,20 @@
+{
+  "name": "e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test --trace off",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@splash360/config": "workspace:*",
+    "@types/node": "^22",
+    "eslint": "^9.39.5",
+    "postgres": "^4.1.1",
+    "stripe": "^23.2.0",
+    "typescript": "~6.0.3"
+  }
+}
