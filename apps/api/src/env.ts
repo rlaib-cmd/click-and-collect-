@@ -13,6 +13,10 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
   /** Secret partagé avec la caisse Splash360 pour signer les retours de statut. */
   POS_WEBHOOK_SECRET: z.string().min(32).optional(),
+  /** Fidélité de test (ADR 0009) : 'demo' active le programme de démonstration, 'off' le coupe. */
+  LOYALTY: z.enum(['demo', 'off']).default('demo'),
+  /** Connexion au club par simple e-mail, sans vérification : jamais en production. */
+  LOYALTY_DEMO_LOGIN: z.enum(['0', '1']).default('0'),
   /** Back-office : vérification des sessions Supabase Auth (JWKS recommandé, secret HS256 en local). */
   SUPABASE_JWKS_URL: z.url().optional(),
   SUPABASE_JWT_SECRET: z.string().min(32).optional(),

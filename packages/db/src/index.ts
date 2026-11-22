@@ -5,3 +5,4 @@ export * from './ordering';
 export * from './payments';
 export * from './restaurants';
 export * from './tenants';
+export * from './loyalty-demo';

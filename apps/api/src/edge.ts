@@ -1,3 +1,4 @@
+import { createDemoLoyaltyProvider } from '@splash360/api-loyalty';
 /**
  * Point d'entrée « Supabase Edge Functions » (aperçu et recette).
  *
@@ -13,6 +14,7 @@
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import {
   createPostgresAdminStore,
+  createPostgresDemoLoyaltyStore,
   createPostgresOperationsStore,
   createPostgresOrderingStore,
   createPostgresOrderReader,
@@ -22,7 +24,7 @@ import {
   createSql,
 } from '@splash360/db';
 import { Hono } from 'hono';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { createSupabaseVerifier } from './admin/auth';
 import { createApp } from './app';
 import { createBanGeoProvider } from './geo';
@@ -98,6 +100,9 @@ function build() {
     verifier,
     gateway,
     tokenSecret,
+    // Aperçu : fidélité de test, connexion par e-mail (ADR 0009).
+    loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
+    loyaltyDemoLogin: env('LOYALTY_DEMO_LOGIN') !== '0',
     geo,
     adminUrl: env('ADMIN_URL') ?? 'http://localhost:3000',
     corsOrigins: '*',

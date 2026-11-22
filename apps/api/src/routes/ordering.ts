@@ -97,7 +97,7 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
     if (!request) return apiError(c, 'invalid_request', 'Panier invalide');
     const ctx = await load(c, c.req.param('restaurantId'));
     if (!ctx) return apiError(c, 'not_found', 'Restaurant inconnu');
-    const result = await quote(deps, ctx.restaurant, ctx.config, request);
+    const result = await quote(deps, ctx.restaurant, ctx.config, request, c.get('tenant'));
     if (!result.ok) return orderInvalid(c, result.issues);
     const body: Quote = {
       lines: result.lines.map((l) => ({
@@ -115,6 +115,9 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
       })),
       totals: result.totals,
       at: result.at,
+      loyalty: result.loyalty
+        ? { pointsEarned: result.loyalty.pointsEarned, rewardId: result.loyalty.reward?.id ?? null }
+        : null,
     };
     return c.json(body);
   });
@@ -125,7 +128,7 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
     const tenant = c.get('tenant');
     const ctx = await load(c, request.restaurantId);
     if (!ctx) return apiError(c, 'not_found', 'Restaurant inconnu');
-    const result = await quote(deps, ctx.restaurant, ctx.config, request);
+    const result = await quote(deps, ctx.restaurant, ctx.config, request, c.get('tenant'));
     if (!result.ok) return orderInvalid(c, result.issues);
 
     const orderId = randomUUID();
@@ -151,6 +154,9 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
       }),
       accessTokenHash: hashToken(orderAccessToken(deps.tokenSecret, orderId)),
       maxOrdersPerSlot: ctx.config.schedule.maxOrdersPerSlot,
+      loyalty: result.loyalty
+        ? { memberId: result.loyalty.memberId, reward: result.loyalty.reward }
+        : null,
     });
     if (!created.ok) return apiError(c, 'slot_full', 'Ce créneau vient d’être complété');
 

@@ -26,6 +26,7 @@ export interface StoredOrder extends NewOrder {
   createdAt: string;
   events: { status: string; actor: string; at: string }[];
   posReference?: string;
+  loyaltySettled?: boolean;
 }
 
 const PAID = ['paid', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'completed'];
@@ -184,6 +185,11 @@ export function createMemoryOrderBackend(
       accounts.set(accountId, enabled);
       return Promise.resolve();
     },
+    markLoyaltySettled(tenantId, orderId) {
+      const o = orders.find((x) => x.tenantId === tenantId && x.id === orderId);
+      if (o) o.loyaltySettled = true;
+      return Promise.resolve();
+    },
   };
 
   const reader: OrderReader = {
@@ -202,6 +208,14 @@ export function createMemoryOrderBackend(
         createdAt: o.createdAt,
         totals: o.totals,
         refundedCents: o.refundedCents,
+        loyalty: o.loyalty
+          ? {
+              memberId: o.loyalty.memberId,
+              rewardId: o.loyalty.reward?.id ?? null,
+              rewardPoints: o.loyalty.reward?.costPoints ?? null,
+              settled: o.loyaltySettled ?? false,
+            }
+          : null,
         customer: o.customer,
         deliveryAddress: o.deliveryAddress,
         lines: o.lines.map((l) => ({

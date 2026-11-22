@@ -224,6 +224,7 @@ export function createMemoryAdminStore(input: {
         id,
         name: i.name,
         subdomain: i.subdomain,
+        splash360Id: i.splash360Id,
         status: 'active',
         applicationFee: { bps: 0, fixedCents: 0 },
         theme: null,

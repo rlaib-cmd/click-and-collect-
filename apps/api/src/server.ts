@@ -1,8 +1,11 @@
+import { createDemoLoyaltyProvider } from '@splash360/api-loyalty';
+import { randomUUID } from 'node:crypto';
 import { serve } from '@hono/node-server';
 import * as Sentry from '@sentry/node';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import {
   createPostgresAdminStore,
+  createPostgresDemoLoyaltyStore,
   createPostgresOperationsStore,
   createPostgresOrderingStore,
   createPostgresOrderReader,
@@ -71,6 +74,12 @@ const app = createApp({
   adminUrl: env.ADMIN_URL,
   gateway,
   tokenSecret: env.ORDER_TOKEN_SECRET,
+  ...(env.LOYALTY === 'demo'
+    ? {
+        loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
+        loyaltyDemoLogin: env.LOYALTY_DEMO_LOGIN === '1',
+      }
+    : {}),
   geo:
     env.GEOCODER_URL === 'demo' ? createDemoGeoProvider() : createBanGeoProvider(env.GEOCODER_URL),
   corsOrigins: origins,

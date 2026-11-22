@@ -33,6 +33,8 @@ export interface TenantWithTheme {
   readonly id: string;
   readonly name: string;
   readonly subdomain: string;
+  /** Identifiant de l'enseigne chez Splash360 (fidélité, caisse). */
+  readonly splash360Id: string;
   readonly status: TenantStatus;
   /** Commission Splash360 (lot 4). */
   readonly applicationFee: { readonly bps: number; readonly fixedCents: number };
@@ -54,6 +56,7 @@ interface Row extends ThemeStyleRow {
   id: string;
   name: string;
   subdomain: string;
+  splash360_id: string;
   status: TenantStatus;
   application_fee_bps: number;
   application_fee_fixed_cents: number;
@@ -68,6 +71,7 @@ function toTenant(row: Row): TenantWithTheme {
     id: row.id,
     name: row.name,
     subdomain: row.subdomain,
+    splash360Id: row.splash360_id,
     status: row.status,
     applicationFee: { bps: row.application_fee_bps, fixedCents: row.application_fee_fixed_cents },
     theme:
@@ -87,7 +91,7 @@ const TENANT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 
 export function createPostgresTenantStore(sql: Sql): TenantStore {
   const select = (where: ReturnType<Sql>) => sql<Row[]>`
-    select t.id, t.name, t.subdomain, t.status, t.application_fee_bps, t.application_fee_fixed_cents,
+    select t.id, t.name, t.subdomain, t.splash360_id, t.status, t.application_fee_bps, t.application_fee_fixed_cents,
            th.primary_color, th.mode, th.logo_url, th.tagline,
            th.header_style, th.corner_style, th.uppercase_titles, th.pattern
     from public.tenants t

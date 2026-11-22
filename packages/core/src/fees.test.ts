@@ -12,7 +12,13 @@ describe('frais et minimum', () => {
   it('à emporter : ni frais de livraison ni minimum', () => {
     expect(computeTotals({ mode: 'pickup', subtotalCents: cents(800), settings })).toEqual({
       ok: true,
-      totals: { subtotalCents: 800, deliveryFeeCents: 0, serviceFeeCents: 50, totalCents: 850 },
+      totals: {
+        subtotalCents: 800,
+        deliveryFeeCents: 0,
+        serviceFeeCents: 50,
+        discountCents: 0,
+        totalCents: 850,
+      },
     });
   });
 
@@ -25,7 +31,13 @@ describe('frais et minimum', () => {
     });
     expect(r).toEqual({
       ok: true,
-      totals: { subtotalCents: 2000, deliveryFeeCents: 290, serviceFeeCents: 50, totalCents: 2340 },
+      totals: {
+        subtotalCents: 2000,
+        deliveryFeeCents: 290,
+        serviceFeeCents: 50,
+        discountCents: 0,
+        totalCents: 2340,
+      },
     });
   });
 

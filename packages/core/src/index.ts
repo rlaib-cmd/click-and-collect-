@@ -6,3 +6,4 @@ export * from './slots';
 export * from './status';
 export * from './time';
 export * from './zones';
+export * from './loyalty';

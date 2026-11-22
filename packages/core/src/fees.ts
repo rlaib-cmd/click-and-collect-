@@ -16,6 +16,8 @@ export interface Totals {
   readonly subtotalCents: Cents;
   readonly deliveryFeeCents: Cents;
   readonly serviceFeeCents: Cents;
+  /** Récompense fidélité déduite (0 sans récompense). */
+  readonly discountCents: Cents;
   readonly totalCents: Cents;
 }
 
@@ -61,6 +63,7 @@ export function computeTotals(input: {
       subtotalCents,
       deliveryFeeCents,
       serviceFeeCents,
+      discountCents: cents(0),
       totalCents: addCents(subtotalCents, deliveryFeeCents, serviceFeeCents),
     },
   };

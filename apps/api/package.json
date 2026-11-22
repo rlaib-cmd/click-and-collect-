@@ -16,6 +16,7 @@
   "dependencies": {
     "@hono/node-server": "^2.1.11",
     "@sentry/node": "^11.16.0",
+    "@splash360/api-loyalty": "workspace:*",
     "@splash360/api-menu": "workspace:*",
     "@splash360/contracts": "workspace:*",
     "@splash360/core": "workspace:*",

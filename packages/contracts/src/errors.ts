@@ -43,6 +43,11 @@ export const orderIssueSchema = z.object({
     'scheduling_disabled',
     'slot_unavailable',
     'menu_outdated',
+    // Fidélité
+    'loyalty_session_invalid',
+    'unknown_reward',
+    'reward_product_missing',
+    'insufficient_points',
   ]),
   line: z.number().int().nonnegative().optional(),
   productId: z.string().optional(),

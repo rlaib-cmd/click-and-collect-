@@ -58,6 +58,8 @@ export interface PaymentStore {
   ): Promise<RefundResult>;
   /** Webhook account.updated. */
   setChargesEnabled(stripeAccountId: string, enabled: boolean): Promise<void>;
+  /** Points crédités et récompense consommée chez Splash360 (lot 8). */
+  markLoyaltySettled(tenantId: string, orderId: string): Promise<void>;
 }
 
 interface OrderRow {
@@ -210,6 +212,10 @@ export function createPostgresPaymentStore(sql: Sql): PaymentStore {
 
     async setChargesEnabled(stripeAccountId, enabled) {
       await sql`update public.restaurants set stripe_charges_enabled = ${enabled} where stripe_account_id = ${stripeAccountId}`;
+    },
+    async markLoyaltySettled(tenantId, orderId) {
+      await sql`update public.orders set loyalty_settled_at = coalesce(loyalty_settled_at, now())
+                where tenant_id = ${tenantId} and id = ${orderId}`;
     },
   };
 }

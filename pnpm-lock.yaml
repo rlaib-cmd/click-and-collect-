@@ -78,6 +78,9 @@ importers:
       '@sentry/node':
         specifier: ^11.16.0
         version: 11.16.0
+      '@splash360/api-loyalty':
+        specifier: workspace:*
+        version: link:../../packages/api-loyalty
       '@splash360/api-menu':
         specifier: workspace:*
         version: link:../../packages/api-menu
@@ -281,6 +284,25 @@ importers:
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
+
+  packages/api-loyalty:
+    dependencies:
+      '@splash360/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@splash360/config':
+        specifier: workspace:*
+        version: link:../config
+      eslint:
+        specifier: ^9.39.5
+        version: 9.39.5
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^5.1.1
+        version: 5.1.1(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.1)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(terser@5.51.4)(tsx@4.23.15))
 
   packages/api-menu:
     dependencies:

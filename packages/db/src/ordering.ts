@@ -57,6 +57,13 @@ export interface NewOrder {
   readonly accessTokenHash: string;
   /** Capacité du créneau, revérifiée sous verrou ; null = illimitée. */
   readonly maxOrdersPerSlot: number | null;
+  /** Membre du programme de fidélité et récompense utilisée (lot 8). */
+  readonly loyalty?: OrderLoyalty | null;
+}
+
+export interface OrderLoyalty {
+  readonly memberId: string;
+  readonly reward: { readonly id: string; readonly costPoints: number } | null;
 }
 
 export interface OrderSummary {
@@ -239,13 +246,16 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
           { id: string; number: number; status: string; total_cents: number; created_at: Date }[]
         >`
           insert into public.orders (id, tenant_id, restaurant_id, customer_id, number, mode, requested_slot, estimated_at,
-            delivery_address, delivery_zone_id, subtotal_cents, delivery_fee_cents, service_fee_cents, total_cents,
-            idempotency_key, application_fee_cents, access_token_hash)
+            delivery_address, delivery_zone_id, subtotal_cents, delivery_fee_cents, service_fee_cents, discount_cents,
+            total_cents, idempotency_key, application_fee_cents, access_token_hash,
+            loyalty_member_id, loyalty_reward_id, loyalty_reward_points)
           values (${o.id}, ${o.tenantId}, ${o.restaurantId}, ${customer?.id ?? null}, ${counter?.n ?? 0}, ${o.mode},
             ${o.requestedSlot}, ${o.estimatedAt},
             ${o.deliveryAddress ? tx.json(o.deliveryAddress as unknown as Parameters<typeof tx.json>[0]) : null},
             ${o.deliveryZoneId}, ${o.totals.subtotalCents}, ${o.totals.deliveryFeeCents}, ${o.totals.serviceFeeCents},
-            ${o.totals.totalCents}, ${o.idempotencyKey}, ${o.applicationFeeCents}, ${o.accessTokenHash})
+            ${o.totals.discountCents}, ${o.totals.totalCents}, ${o.idempotencyKey}, ${o.applicationFeeCents},
+            ${o.accessTokenHash}, ${o.loyalty?.memberId ?? null}, ${o.loyalty?.reward?.id ?? null},
+            ${o.loyalty?.reward?.costPoints ?? null})
           returning id, number, status, total_cents, created_at`;
         if (!order) throw new Error('Insertion de commande sans retour');
 
@@ -312,6 +322,12 @@ export interface OrderDetail {
     readonly at: string;
   }[];
   readonly accessTokenHash: string | null;
+  readonly loyalty: {
+    readonly memberId: string;
+    readonly rewardId: string | null;
+    readonly rewardPoints: number | null;
+    readonly settled: boolean;
+  } | null;
 }
 
 export interface OrderReader {
@@ -338,8 +354,13 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           subtotal_cents: number;
           delivery_fee_cents: number;
           service_fee_cents: number;
+          discount_cents: number;
           total_cents: number;
           refunded_cents: number;
+          loyalty_member_id: string | null;
+          loyalty_reward_id: string | null;
+          loyalty_reward_points: number | null;
+          loyalty_settled_at: Date | null;
           delivery_address: DeliveryAddressRecord | null;
           access_token_hash: string | null;
           customer_name: string;
@@ -386,9 +407,18 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           subtotalCents: cents(o.subtotal_cents),
           deliveryFeeCents: cents(o.delivery_fee_cents),
           serviceFeeCents: cents(o.service_fee_cents),
+          discountCents: cents(o.discount_cents),
           totalCents: cents(o.total_cents),
         },
         refundedCents: o.refunded_cents,
+        loyalty: o.loyalty_member_id
+          ? {
+              memberId: o.loyalty_member_id,
+              rewardId: o.loyalty_reward_id,
+              rewardPoints: o.loyalty_reward_points,
+              settled: o.loyalty_settled_at !== null,
+            }
+          : null,
         customer: { name: o.customer_name, email: o.customer_email, phone: o.customer_phone },
         deliveryAddress: o.delivery_address,
         lines: items.map((i) => ({

@@ -134,6 +134,7 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
       id: BELLA_ID,
       name: 'Pizzeria Bella',
       subdomain: 'bella',
+      splash360Id: 'S360-DEMO-BELLA',
       status: 'active',
       applicationFee: { bps: 250, fixedCents: 0 },
       theme: {
@@ -148,6 +149,7 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
       id: GREEN_ID,
       name: 'Green Bowl',
       subdomain: 'greenbowl',
+      splash360Id: 'S360-DEMO-GREEN',
       status: 'active',
       applicationFee: { bps: 0, fixedCents: 0 },
       theme: null,
@@ -156,6 +158,7 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
       id: '00000000-0000-4000-8000-000000000003',
       name: 'Suspendue',
       subdomain: 'suspendue',
+      splash360Id: 'S360-DEMO-SUSPENDED',
       status: 'suspended',
       applicationFee: { bps: 0, fixedCents: 0 },
       theme: null,

@@ -19,3 +19,14 @@ Tenu à jour pendant le développement autonome. Chaque point indique ce qu'il b
 | 13 | ~~Projet Supabase de recette~~ — **fait** (`docs/environnement-recette.md`) ; reste : production, Supabase Auth (premier super-administrateur) et activation de Supabase Auth pour le back-office | Lot 6 (connexion réelle) | Connexion de développement locale |
 | 14 | Nom de domaine des enseignes (`<enseigne>.<domaine>`) et hébergeurs retenus | Lot 7 | Recommandations dans `mise-en-production.md` |
 | 15 | Enseigne pilote, ses comptes Apple Developer / Google Play, icône et écran de démarrage | Lot 7 | Marques de démonstration `bella`, `greenbowl` |
+
+## API fidélité Splash360 (lot 8)
+
+Le lot 8 tourne sur des données de test (ADR 0009). À obtenir de Splash360 :
+
+1. Création de compte client et **vérification** (code SMS ou e-mail) : la connexion de test par simple e-mail ne peut pas aller en production.
+2. Lecture du solde, de l'historique et du **contenu du QR code** présenté en caisse (format attendu par la caisse).
+3. Règles du programme par enseigne : points par euro, points de bienvenue, récompenses (produit offert ? remise ?).
+4. Crédit des points d'une commande en ligne, avec **idempotence** par commande.
+5. Consommation d'une récompense : réservation à la commande, puis confirmation ou libération (paiement échoué, expiré).
+6. Remboursement d'une commande : retrait des points gagnés et restitution de la récompense ?

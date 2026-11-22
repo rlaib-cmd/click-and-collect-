@@ -11,10 +11,11 @@ import { DEFAULT_THEME } from '@splash360/theme';
 import { Hono } from 'hono';
 import { apiError } from '../errors';
 import { toMenuDto } from '../menu-dto';
+import { registerLoyaltyRoutes, type LoyaltyRoutesDeps } from './loyalty';
 import { registerOrderingRoutes, type OrderingRoutesDeps } from './ordering';
 import { registerPaymentRoutes, type PaymentRoutesDeps } from './payments';
 
-export interface TenantRoutesDeps extends OrderingRoutesDeps, PaymentRoutesDeps {
+export interface TenantRoutesDeps extends OrderingRoutesDeps, PaymentRoutesDeps, LoyaltyRoutesDeps {
   readonly admin: AdminStore;
   readonly tenants: TenantStore;
   readonly restaurants: RestaurantStore;
@@ -108,6 +109,7 @@ export function tenantRoutes(deps: TenantRoutesDeps) {
 
   registerOrderingRoutes(app, deps);
   registerPaymentRoutes(app, deps);
+  registerLoyaltyRoutes(app, deps);
 
   return app;
 }

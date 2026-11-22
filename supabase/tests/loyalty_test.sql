@@ -1,0 +1,44 @@
+-- Lot 8 : fidélité (données de test) et récompense sur la commande.
+begin;
+select plan(4);
+
+insert into public.tenants (id, name, subdomain, splash360_id) values
+  ('10000000-0000-4000-8000-000000000001', 'Fidèle A', 'fidele-a', 'S360-FA'),
+  ('10000000-0000-4000-8000-000000000002', 'Fidèle B', 'fidele-b', 'S360-FB');
+insert into public.loyalty_demo_members (id, tenant_id, email, name, card_code) values
+  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'a@example.fr', 'A', 'CARD-A');
+
+-- 1 et 2. Ni anon ni authenticated ne lisent les membres et leurs mouvements.
+set local role anon;
+select is_empty(
+  $$ select 1 from public.loyalty_demo_members union all select 1 from public.loyalty_demo_movements $$,
+  'anon ne lit aucun membre ni mouvement'
+);
+reset role;
+set local role authenticated;
+select is_empty(
+  $$ select 1 from public.loyalty_demo_members union all select 1 from public.loyalty_demo_movements $$,
+  'authenticated ne lit aucun membre ni mouvement'
+);
+reset role;
+
+-- 3. Un mouvement ne peut pas viser le membre d'une autre enseigne.
+select throws_ok(
+  $$ insert into public.loyalty_demo_movements (tenant_id, member_id, kind, points, label)
+     values ('10000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', 'welcome', 100, 'Bienvenue') $$,
+  '23514'
+);
+
+-- 4. Un gain n'est crédité qu'une fois par commande.
+insert into public.loyalty_demo_movements (tenant_id, member_id, kind, points, label, order_id)
+values ('10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'earn', 181, 'Commande',
+        '30000000-0000-4000-8000-000000000001');
+select throws_ok(
+  $$ insert into public.loyalty_demo_movements (tenant_id, member_id, kind, points, label, order_id)
+     values ('10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'earn', 181, 'Commande',
+             '30000000-0000-4000-8000-000000000001') $$,
+  '23505'
+);
+
+select * from finish();
+rollback;

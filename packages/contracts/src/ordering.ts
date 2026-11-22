@@ -66,6 +66,14 @@ export const quoteRequestSchema = z.object({
   address: addressSchema.nullable(),
   requestedTime: requestedTimeSchema,
   lines: z.array(cartLineSchema).max(50),
+  /** Membre connecté au club et récompense choisie (lot 8) ; jamais de montant ni de solde. */
+  loyalty: z
+    .object({
+      memberToken: z.string().min(20).max(300),
+      rewardId: z.string().min(1).max(100).nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const pricedLineSchema = z.object({
@@ -82,6 +90,8 @@ export const totalsSchema = z.object({
   subtotalCents: cents,
   deliveryFeeCents: cents,
   serviceFeeCents: cents,
+  /** Récompense fidélité déduite (0 sans récompense ; absent des anciennes réponses). */
+  discountCents: cents.default(0),
   totalCents: cents,
 });
 
@@ -90,6 +100,11 @@ export const quoteSchema = z.object({
   totals: totalsSchema,
   /** Heure retenue (créneau ou estimation « dès que possible »). */
   at: z.iso.datetime(),
+  /** Points que la commande rapportera et récompense appliquée ; null hors club. */
+  loyalty: z
+    .object({ pointsEarned: z.number().int().nonnegative(), rewardId: z.string().nullable() })
+    .nullable()
+    .default(null),
 });
 
 export const customerSchema = z.object({

@@ -1,0 +1,4 @@
+{
+  "extends": "@splash360/config/tsconfig.lib.json",
+  "include": ["src"]
+}

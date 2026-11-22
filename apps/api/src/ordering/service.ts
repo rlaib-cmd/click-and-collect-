@@ -1,7 +1,10 @@
 import type { MenuCache } from '@splash360/api-menu';
 import type { AddressDto, OrderIssue, QuoteRequest } from '@splash360/contracts';
+import type { LoyaltyTenant } from '@splash360/api-loyalty';
 import {
+  applyReward,
   asapAvailability,
+  pointsForAmount,
   bookableDates,
   checkRequestedTime,
   computeTotals,
@@ -16,8 +19,9 @@ import {
   type Totals,
 } from '@splash360/core';
 import type { OrderingConfig, OrderingStore, Restaurant } from '@splash360/db';
+import { verifyMemberToken, type LoyaltyDeps } from '../loyalty/service';
 
-export interface OrderingDeps {
+export interface OrderingDeps extends LoyaltyDeps {
   readonly ordering: OrderingStore;
   /** Produits et catégories masqués au back-office : absents de la commande en ligne. */
   readonly hiddenItems?: (
@@ -94,6 +98,12 @@ export type QuoteResult =
       readonly at: string;
       readonly slot: string | null;
       readonly zoneId: string | null;
+      /** Membre du club : points à gagner et récompense appliquée. */
+      readonly loyalty: {
+        readonly memberId: string;
+        readonly pointsEarned: number;
+        readonly reward: { readonly id: string; readonly costPoints: number } | null;
+      } | null;
     }
   | { readonly ok: false; readonly issues: readonly OrderIssue[] };
 
@@ -106,6 +116,7 @@ export async function quote(
   restaurant: Restaurant,
   config: OrderingConfig,
   request: QuoteRequest,
+  tenant?: LoyaltyTenant,
 ): Promise<QuoteResult> {
   const issues: OrderIssue[] = [];
 
@@ -179,6 +190,44 @@ export async function quote(
   const time = checkRequestedTime(schedule, request.requestedTime, now, load);
   if (!time.ok) issues.push({ code: time.error });
 
+  // Fidélité : membre reconnu par son jeton, récompense recontrôlée (solde lu chez Splash360).
+  let loyalty: Extract<QuoteResult, { ok: true }>['loyalty'] = null;
+  if (request.loyalty && tenant && deps.loyalty) {
+    const memberId = verifyMemberToken(deps.tokenSecret, tenant.id, request.loyalty.memberToken);
+    const [program, member] = await Promise.all([
+      deps.loyalty.getProgram(tenant),
+      memberId ? deps.loyalty.getMember(tenant, memberId) : Promise.resolve(null),
+    ]);
+    if (!program || !member) {
+      issues.push({ code: 'loyalty_session_invalid' });
+    } else {
+      let reward: { id: string; costPoints: number } | null = null;
+      if (request.loyalty.rewardId) {
+        const chosen = program.rewards.find((r) => r.id === request.loyalty?.rewardId);
+        if (!chosen) issues.push({ code: 'unknown_reward' });
+        else if (totals && priced.ok) {
+          const applied = applyReward({
+            totals,
+            lines: priced.lines,
+            reward: chosen,
+            balance: member.points,
+          });
+          if (applied.ok) {
+            totals = applied.totals;
+            reward = { id: chosen.id, costPoints: chosen.costPoints };
+          } else issues.push({ code: applied.error, productId: chosen.productId });
+        }
+      }
+      loyalty = {
+        memberId: member.id,
+        pointsEarned: totals ? pointsForAmount(totals.totalCents, program) : 0,
+        reward,
+      };
+    }
+  } else if (request.loyalty && !deps.loyalty) {
+    issues.push({ code: 'loyalty_session_invalid' });
+  }
+
   if (issues.length > 0 || !priced.ok || !totals || !time.ok) {
     return { ok: false, issues };
   }
@@ -189,5 +238,6 @@ export async function quote(
     at: time.at,
     slot: time.slot,
     zoneId: zone?.id ?? null,
+    loyalty,
   };
 }

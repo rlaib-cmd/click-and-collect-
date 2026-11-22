@@ -1,3 +1,4 @@
+import type { LoyaltyProvider } from '@splash360/api-loyalty';
 import type { MenuCache } from '@splash360/api-menu';
 import type {
   AdminStore,
@@ -24,6 +25,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { apiError } from './errors';
 import { jsonLog, requestLogger, type Log } from './http/logging';
 import { rateLimit } from './http/rate-limit';
+import { settleLoyalty } from './loyalty/settle';
 import { tenantRoutes } from './routes/tenants';
 import { webhookRoutes } from './routes/webhooks';
 
@@ -61,6 +63,10 @@ export interface AppDeps {
   /** Requêtes par minute et par IP : création/paiement/devis, et lectures publiques. */
   readonly rateLimits?: { orders: number; reads: number };
   readonly trustProxy?: boolean;
+  /** Club fidélité Splash360 (lot 8) ; absent = pas de fidélité. */
+  readonly loyalty?: LoyaltyProvider;
+  /** Connexion au club par simple e-mail : données de test uniquement (ADR 0009). */
+  readonly loyaltyDemoLogin?: boolean;
 }
 
 /**
@@ -101,6 +107,8 @@ export function createApp(deps: AppDeps) {
     '/v1/tenants/:s/orders',
     '/v1/tenants/:s/orders/:id/payment',
     '/v1/tenants/:s/restaurants/:r/quote',
+    '/v1/tenants/:s/loyalty/join',
+    '/v1/tenants/:s/loyalty/login',
   ]) {
     app.on('POST', path, strict);
   }
@@ -123,6 +131,17 @@ export function createApp(deps: AppDeps) {
   // Paiement confirmé : reçu au client, puis envoi immédiat à la caisse (la tâche périodique rattrape les échecs).
   const onPaid = async (order: { orderId: string; tenantId: string }) => {
     await notifyStatus(notify, order.tenantId, order.orderId, 'paid');
+    await settleLoyalty(
+      {
+        loyalty: deps.loyalty,
+        tenants: deps.tenants,
+        orders: deps.orders,
+        payments: deps.payments,
+        log: warn,
+      },
+      order.tenantId,
+      order.orderId,
+    ).catch((error: unknown) => warn('Fidélité en échec', { error: String(error) }));
     await processDispatches(dispatch).catch((error: unknown) =>
       warn('Envoi immédiat à la caisse en échec', { error: String(error) }),
     );

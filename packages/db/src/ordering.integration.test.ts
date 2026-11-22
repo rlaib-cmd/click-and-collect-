@@ -64,6 +64,7 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
       subtotalCents: cents(2900),
       deliveryFeeCents: cents(0),
       serviceFeeCents: cents(0),
+      discountCents: cents(0),
       totalCents: cents(2900),
     },
     idempotencyKey: `test-${run}-${key}`,
