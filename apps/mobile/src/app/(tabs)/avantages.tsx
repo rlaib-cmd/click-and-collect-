@@ -56,31 +56,46 @@ export default function RewardsScreen() {
         <View style={styles.list}>
           {program.rewards.map((r) => {
             const missing = member ? Math.max(0, r.costPoints - member.points) : null;
+            // Récompense à portée (ou visiteur) : couleur de l'enseigne ; sinon tuile sombre et jauge.
+            const locked = missing !== null && missing > 0;
+            const bg = locked ? palette.text : palette.primary;
+            const fg = locked ? palette.background : palette.onPrimary;
+            const progress = member ? Math.min(1, member.points / r.costPoints) : 0;
             return (
               <View
                 key={r.id}
-                style={[
-                  styles.reward,
-                  { backgroundColor: palette.surface, borderRadius: radii.card },
-                ]}
+                style={[styles.reward, { backgroundColor: bg, borderRadius: radii.card + 4 }]}
               >
-                <Text style={[styles.name, titleStyle(style), { color: palette.text }]}>
-                  {r.name}
-                </Text>
-                <View style={styles.right}>
-                  <Text style={{ color: palette.text, fontWeight: '700' }}>
+                <View style={styles.rewardHead}>
+                  <Text style={[styles.name, titleStyle(style), { color: fg }]}>{r.name}</Text>
+                  <Text style={[styles.cost, titleStyle(style), { color: fg }]}>
                     {t.points(r.costPoints)}
                   </Text>
-                  {missing === 0 ? (
-                    <Text style={{ color: palette.accent, fontWeight: '700', fontSize: 12 }}>
-                      {t.available}
+                </View>
+                {missing === 0 ? (
+                  <View style={[styles.badge, { backgroundColor: palette.onPrimary }]}>
+                    <Text style={[styles.badgeText, { color: palette.primary }]}>
+                      {t.availableBadge}
                     </Text>
-                  ) : missing !== null ? (
-                    <Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                  </View>
+                ) : locked ? (
+                  <View style={styles.lockedRow}>
+                    <View style={[styles.track, { backgroundColor: palette.textMuted }]}>
+                      <View
+                        style={[
+                          styles.fill,
+                          {
+                            width: `${Math.round(progress * 100)}%`,
+                            backgroundColor: palette.primary,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={{ color: fg, fontSize: 12, fontWeight: '600' }}>
                       {t.rewardTooExpensive(missing)}
                     </Text>
-                  ) : null}
-                </View>
+                  </View>
+                ) : null}
               </View>
             );
           })}
@@ -128,15 +143,20 @@ const styles = StyleSheet.create({
   clubWord: { fontSize: 22, fontWeight: '900', letterSpacing: 1 },
   h2: { fontSize: 20, fontWeight: '800' },
   list: { gap: 10 },
-  reward: {
+  reward: { padding: 18, gap: 12, minHeight: 72, justifyContent: 'center' },
+  rewardHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    minHeight: 56,
+    gap: 12,
   },
-  name: { fontSize: 18, fontWeight: '800', flex: 1 },
-  right: { alignItems: 'flex-end', gap: 2 },
+  name: { fontSize: 20, fontWeight: '900', flex: 1 },
+  cost: { fontSize: 18, fontWeight: '900' },
+  badge: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 },
+  badgeText: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
+  lockedRow: { gap: 6 },
+  track: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  fill: { height: 6, borderRadius: 3 },
   move: {
     flexDirection: 'row',
     alignItems: 'center',

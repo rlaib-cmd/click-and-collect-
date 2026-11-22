@@ -217,6 +217,7 @@ export const fr = {
     rewardsTitle: 'À la carte du club',
     rewardCost: (n: number) => `${n} points`,
     available: 'disponible',
+    availableBadge: 'DISPONIBLE · À UTILISER AU PANIER',
     cashierTip: 'Le bon réflexe en caisse.',
     cashierHint: 'Montre ta carte avant de payer : tes points arrivent avec le ticket.',
     earnHint: (n: number) => `${n} points par euro dépensé, en caisse comme en ligne.`,
