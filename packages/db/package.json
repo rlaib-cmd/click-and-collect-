@@ -17,6 +17,10 @@
     "@splash360/config": "workspace:*",
     "eslint": "^9.39.5",
     "typescript": "~6.0.3",
-    "vitest": "^5.1.1"
+    "vitest": "^5.1.1",
+    "@types/node": "^22"
+  },
+  "dependencies": {
+    "postgres": "^4.1.1"
   }
 }
