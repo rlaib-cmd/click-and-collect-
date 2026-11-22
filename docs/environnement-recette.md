@@ -43,4 +43,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_S6sTwCD5rcnrtR5gk-SInQ_2KwqX64e
 
 - Compte plateforme `acct_1DaN…` (France). Clé secrète de test enregistrée comme secret réseau de l'environnement cloud `click-and-collect` (jamais dans le dépôt).
 - Paiement de test de 18,00 € par carte Visa de test puis remboursement : OK (2026-11-22).
-- **À faire** : activer Stripe Connect (dashboard.stripe.com/test/connect) pour créer les comptes des restaurants.
+- Stripe Connect activé (modèle plateforme, paiements directs, frais Stripe payés par le restaurant, risques gérés par Stripe, tableau de bord Stripe complet).
+- Comptes connectés de test (rattachés dans `restaurants.stripe_account_id`) :
+  - Bella Bastille : `acct_1UedVlAKHbYphR6t`
+  - Green Bowl Opéra : `acct_1UedW6A5tvdaheca`
+- **À faire** : terminer leur inscription (lien d'inscription Stripe, bouton « données de test ») pour activer les paiements.
