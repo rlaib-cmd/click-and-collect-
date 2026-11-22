@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { cents } from '@splash360/core';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createSql } from './client';
@@ -31,6 +32,7 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
     slot: string,
     max: number | null,
   ): NewOrder => ({
+    id: randomUUID(),
     tenantId: BELLA,
     restaurantId,
     customer: {

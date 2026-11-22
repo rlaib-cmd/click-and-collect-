@@ -12,13 +12,14 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.11",
-    "hono": "^4.13.20",
+    "@splash360/api-menu": "workspace:*",
     "@splash360/contracts": "workspace:*",
-    "@splash360/db": "workspace:*",
     "@splash360/core": "workspace:*",
+    "@splash360/db": "workspace:*",
     "@splash360/theme": "workspace:*",
-    "zod": "^4.6.7",
-    "@splash360/api-menu": "workspace:*"
+    "hono": "^4.13.20",
+    "stripe": "^23.2.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@splash360/config": "workspace:*",

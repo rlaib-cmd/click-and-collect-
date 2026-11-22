@@ -32,6 +32,8 @@ export interface DeliveryAddressRecord {
 }
 
 export interface NewOrder {
+  /** Identifiant généré par le serveur (sert à dériver le jeton de suivi). */
+  readonly id: string;
   readonly tenantId: string;
   readonly restaurantId: string;
   readonly customer: {
@@ -236,10 +238,10 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
         const [order] = await tx<
           { id: string; number: number; status: string; total_cents: number; created_at: Date }[]
         >`
-          insert into public.orders (tenant_id, restaurant_id, customer_id, number, mode, requested_slot, estimated_at,
+          insert into public.orders (id, tenant_id, restaurant_id, customer_id, number, mode, requested_slot, estimated_at,
             delivery_address, delivery_zone_id, subtotal_cents, delivery_fee_cents, service_fee_cents, total_cents,
             idempotency_key, application_fee_cents, access_token_hash)
-          values (${o.tenantId}, ${o.restaurantId}, ${customer?.id ?? null}, ${counter?.n ?? 0}, ${o.mode},
+          values (${o.id}, ${o.tenantId}, ${o.restaurantId}, ${customer?.id ?? null}, ${counter?.n ?? 0}, ${o.mode},
             ${o.requestedSlot}, ${o.estimatedAt},
             ${o.deliveryAddress ? tx.json(o.deliveryAddress as unknown as Parameters<typeof tx.json>[0]) : null},
             ${o.deliveryZoneId}, ${o.totals.subtotalCents}, ${o.totals.deliveryFeeCents}, ${o.totals.serviceFeeCents},
@@ -278,6 +280,134 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
           },
         };
       });
+    },
+  };
+}
+
+export interface OrderDetail {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly restaurantId: string;
+  readonly number: number;
+  readonly status: string;
+  readonly mode: OrderMode;
+  readonly requestedSlot: string | null;
+  readonly estimatedAt: string;
+  readonly createdAt: string;
+  readonly totals: Totals;
+  readonly refundedCents: number;
+  readonly customer: { readonly name: string; readonly email: string; readonly phone: string };
+  readonly deliveryAddress: DeliveryAddressRecord | null;
+  readonly lines: readonly {
+    readonly name: string;
+    readonly quantity: number;
+    readonly unitPriceCents: number;
+    readonly totalCents: number;
+    readonly note: string | null;
+    readonly options: readonly { readonly name: string; readonly priceCents: number }[];
+  }[];
+  readonly events: readonly {
+    readonly status: string;
+    readonly actor: string;
+    readonly at: string;
+  }[];
+  readonly accessTokenHash: string | null;
+}
+
+export interface OrderReader {
+  getOrderDetail(tenantId: string, orderId: string): Promise<OrderDetail | null>;
+}
+
+const ORDER_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function createPostgresOrderReader(sql: Sql): OrderReader {
+  return {
+    async getOrderDetail(tenantId, orderId) {
+      if (!ORDER_UUID.test(orderId)) return null;
+      const [o] = await sql<
+        {
+          id: string;
+          tenant_id: string;
+          restaurant_id: string;
+          number: number;
+          status: string;
+          mode: OrderMode;
+          requested_slot: Date | null;
+          estimated_at: Date;
+          created_at: Date;
+          subtotal_cents: number;
+          delivery_fee_cents: number;
+          service_fee_cents: number;
+          total_cents: number;
+          refunded_cents: number;
+          delivery_address: DeliveryAddressRecord | null;
+          access_token_hash: string | null;
+          customer_name: string;
+          customer_email: string;
+          customer_phone: string;
+        }[]
+      >`
+        select o.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone
+        from public.orders o join public.customers c on c.id = o.customer_id
+        where o.tenant_id = ${tenantId} and o.id = ${orderId}`;
+      if (!o) return null;
+      const [items, options, events] = await Promise.all([
+        sql<
+          {
+            id: string;
+            name: string;
+            quantity: number;
+            unit_price_cents: number;
+            total_cents: number;
+            note: string | null;
+          }[]
+        >`
+          select id, name, quantity, unit_price_cents, total_cents, note from public.order_items
+          where tenant_id = ${tenantId} and order_id = ${orderId} order by position`,
+        sql<{ order_item_id: string; name: string; price_cents: number }[]>`
+          select oio.order_item_id, oio.name, oio.price_cents from public.order_item_options oio
+          join public.order_items oi on oi.id = oio.order_item_id
+          where oi.tenant_id = ${tenantId} and oi.order_id = ${orderId} order by oio.id`,
+        sql<{ status: string; actor: string; created_at: Date }[]>`
+          select status, actor, created_at from public.order_events
+          where tenant_id = ${tenantId} and order_id = ${orderId} order by created_at, id`,
+      ]);
+      return {
+        id: o.id,
+        tenantId: o.tenant_id,
+        restaurantId: o.restaurant_id,
+        number: o.number,
+        status: o.status,
+        mode: o.mode,
+        requestedSlot: o.requested_slot?.toISOString() ?? null,
+        estimatedAt: o.estimated_at.toISOString(),
+        createdAt: o.created_at.toISOString(),
+        totals: {
+          subtotalCents: cents(o.subtotal_cents),
+          deliveryFeeCents: cents(o.delivery_fee_cents),
+          serviceFeeCents: cents(o.service_fee_cents),
+          totalCents: cents(o.total_cents),
+        },
+        refundedCents: o.refunded_cents,
+        customer: { name: o.customer_name, email: o.customer_email, phone: o.customer_phone },
+        deliveryAddress: o.delivery_address,
+        lines: items.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          unitPriceCents: i.unit_price_cents,
+          totalCents: i.total_cents,
+          note: i.note,
+          options: options
+            .filter((x) => x.order_item_id === i.id)
+            .map((x) => ({ name: x.name, priceCents: x.price_cents })),
+        })),
+        events: events.map((e) => ({
+          status: e.status,
+          actor: e.actor,
+          at: e.created_at.toISOString(),
+        })),
+        accessTokenHash: o.access_token_hash,
+      };
     },
   };
 }

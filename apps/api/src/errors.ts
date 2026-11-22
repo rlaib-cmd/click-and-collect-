@@ -9,6 +9,9 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   menu_unavailable: 503,
   order_invalid: 422,
   slot_full: 409,
+  unauthorized: 401,
+  payments_unavailable: 503,
+  order_not_payable: 409,
   internal_error: 500,
 };
 

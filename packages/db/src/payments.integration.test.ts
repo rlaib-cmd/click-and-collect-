@@ -1,7 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { cents } from '@splash360/core';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createSql } from './client';
-import { createPostgresOrderingStore } from './ordering';
+import { createPostgresOrderingStore, createPostgresOrderReader } from './ordering';
 import { createPostgresPaymentStore } from './payments';
 import { createPostgresRestaurantStore } from './restaurants';
 
@@ -24,6 +25,7 @@ describe.skipIf(!url)('PaymentStore Postgres', () => {
   async function newOrder(key: string) {
     const [r] = await restaurants.listByTenant(BELLA);
     const result = await ordering.createOrder({
+      id: randomUUID(),
       tenantId: BELLA,
       restaurantId: r?.id ?? '',
       customer: {
@@ -130,5 +132,22 @@ describe.skipIf(!url)('PaymentStore Postgres', () => {
       ok: true,
       changed: true,
     });
+  });
+});
+
+describe.skipIf(!url)('OrderReader Postgres', () => {
+  const sql = createSql(url ?? '', { max: 2 });
+  afterAll(() => sql.end());
+
+  it('lit le détail d’une commande, jamais celui d’une autre enseigne', async () => {
+    const reader = createPostgresOrderReader(sql);
+    const [any] = await sql<
+      { id: string }[]
+    >`select id from public.orders where tenant_id = ${BELLA} limit 1`;
+    if (!any) return;
+    const detail = await reader.getOrderDetail(BELLA, any.id);
+    expect(detail?.lines.length).toBeGreaterThan(0);
+    expect(detail?.events[0]?.status).toBe('pending_payment');
+    expect(await reader.getOrderDetail(GREEN, any.id)).toBeNull();
   });
 });

@@ -11,7 +11,10 @@ import {
 } from '@splash360/contracts';
 import type { Restaurant, RestaurantStore, TenantWithTheme } from '@splash360/db';
 import type { Context, Hono } from 'hono';
+import { cents, computeApplicationFee } from '@splash360/core';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { hashToken, orderAccessToken } from '../payments/tokens';
 import { apiError } from '../errors';
 import type { GeoProvider } from '../geo';
 import {
@@ -25,6 +28,8 @@ import {
 export interface OrderingRoutesDeps extends OrderingDeps {
   readonly restaurants: RestaurantStore;
   readonly geo: GeoProvider;
+  /** Clé secrète de dérivation des jetons de suivi (ORDER_TOKEN_SECRET). */
+  readonly tokenSecret: string;
 }
 
 type Env = { Variables: { tenant: TenantWithTheme } };
@@ -123,7 +128,9 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
     const result = await quote(deps, ctx.restaurant, ctx.config, request);
     if (!result.ok) return orderInvalid(c, result.issues);
 
+    const orderId = randomUUID();
     const created = await deps.ordering.createOrder({
+      id: orderId,
       tenantId: tenant.id,
       restaurantId: ctx.restaurant.id,
       customer: request.customer,
@@ -138,6 +145,11 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
       lines: result.lines,
       totals: result.totals,
       idempotencyKey: request.idempotencyKey,
+      applicationFeeCents: computeApplicationFee(result.totals.totalCents, {
+        bps: tenant.applicationFee.bps,
+        fixedCents: cents(tenant.applicationFee.fixedCents),
+      }),
+      accessTokenHash: hashToken(orderAccessToken(deps.tokenSecret, orderId)),
       maxOrdersPerSlot: ctx.config.schedule.maxOrdersPerSlot,
     });
     if (!created.ok) return apiError(c, 'slot_full', 'Ce créneau vient d’être complété');
@@ -148,6 +160,8 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
       status: created.order.status,
       totals: result.totals,
       at: result.at,
+      // Rejeu idempotent : même commande, donc même jeton.
+      accessToken: orderAccessToken(deps.tokenSecret, created.order.id),
     };
     return c.json(body, created.replayed ? 200 : 201);
   });

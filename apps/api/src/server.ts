@@ -2,6 +2,8 @@ import { serve } from '@hono/node-server';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import {
   createPostgresOrderingStore,
+  createPostgresOrderReader,
+  createPostgresPaymentStore,
   createPostgresRestaurantStore,
   createPostgresTenantStore,
   createSql,
@@ -9,6 +11,8 @@ import {
 import { createApp } from './app';
 import { loadEnv } from './env';
 import { createBanGeoProvider, createDemoGeoProvider } from './geo';
+import { createStripeGateway } from './payments/gateway';
+import { expireUnpaidOrders } from './payments/service';
 
 const env = loadEnv();
 const sql = createSql(env.DATABASE_URL);
@@ -20,11 +24,27 @@ const menus = createMenuCache(createDemoMenuProvider(), {
   maxStaleMs: env.MENU_MAX_STALE_MINUTES * 60_000,
 });
 
+const gateway =
+  env.STRIPE_SECRET_KEY && env.STRIPE_PUBLISHABLE_KEY && env.STRIPE_WEBHOOK_SECRET
+    ? createStripeGateway({
+        secretKey: env.STRIPE_SECRET_KEY,
+        publishableKey: env.STRIPE_PUBLISHABLE_KEY,
+        webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+      })
+    : null;
+if (!gateway) console.warn('Clés Stripe absentes : paiement en ligne désactivé.');
+
+const payments = createPostgresPaymentStore(sql);
+
 const app = createApp({
   tenants: createPostgresTenantStore(sql),
   restaurants: createPostgresRestaurantStore(sql),
   menus,
   ordering: createPostgresOrderingStore(sql),
+  orders: createPostgresOrderReader(sql),
+  payments,
+  gateway,
+  tokenSecret: env.ORDER_TOKEN_SECRET,
   geo:
     env.GEOCODER_URL === 'demo' ? createDemoGeoProvider() : createBanGeoProvider(env.GEOCODER_URL),
   corsOrigins: origins,
@@ -35,7 +55,18 @@ const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   console.log(`API Splash360 Commande à l'écoute sur http://localhost:${info.port}`);
 });
 
+// Commandes non payées après 15 min : annulées, créneau libéré. Sûr avec plusieurs instances
+// (une seule mise à jour atomique par commande).
+const expiry = setInterval(() => {
+  expireUnpaidOrders({ payments, gateway, log: (m, d) => console.warn(m, d) }, new Date())
+    .then((n) => {
+      if (n > 0) console.log(`${n} commande(s) non payée(s) annulée(s)`);
+    })
+    .catch((error: unknown) => console.error('Expiration des commandes en échec', error));
+}, 60_000);
+
 function shutdown() {
+  clearInterval(expiry);
   server.close();
   void sql.end({ timeout: 5 }).then(() => process.exit(0));
 }

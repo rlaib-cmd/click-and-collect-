@@ -116,6 +116,51 @@ export const placedOrderSchema = z.object({
   status: z.string(),
   totals: totalsSchema,
   at: z.iso.datetime(),
+  /** Jeton secret pour payer et suivre cette commande (en-tête Authorization: Bearer). */
+  accessToken: z.string().min(20),
+});
+
+export const orderStatusSchema = z.enum([
+  'pending_payment',
+  'paid',
+  'accepted',
+  'preparing',
+  'ready',
+  'out_for_delivery',
+  'completed',
+  'payment_failed',
+  'cancelled',
+  'refunded',
+]);
+
+/** Ce dont l'application a besoin pour afficher la feuille de paiement Stripe (paiement direct). */
+export const paymentSessionSchema = z.object({
+  clientSecret: z.string(),
+  publishableKey: z.string(),
+  /** Compte Stripe du restaurant : à passer à Stripe côté application pour un paiement direct. */
+  stripeAccountId: z.string(),
+  amountCents: cents,
+});
+
+export const orderTrackingSchema = z.object({
+  orderId: z.uuid(),
+  number: z.number().int(),
+  status: orderStatusSchema,
+  mode: orderModeSchema,
+  estimatedAt: z.iso.datetime(),
+  scheduled: z.boolean(),
+  totals: totalsSchema,
+  refundedCents: cents,
+  lines: z.array(
+    z.object({
+      name: z.string(),
+      quantity: z.number().int(),
+      totalCents: cents,
+      options: z.array(z.string()),
+      note: z.string().nullable(),
+    }),
+  ),
+  history: z.array(z.object({ status: z.string(), at: z.iso.datetime() })),
 });
 
 export type Availability = z.infer<typeof availabilitySchema>;
@@ -126,4 +171,7 @@ export type QuoteRequest = z.infer<typeof quoteRequestSchema>;
 export type Quote = z.infer<typeof quoteSchema>;
 export type PlaceOrderRequest = z.infer<typeof placeOrderRequestSchema>;
 export type PlacedOrder = z.infer<typeof placedOrderSchema>;
+export type PaymentSession = z.infer<typeof paymentSessionSchema>;
+export type OrderTracking = z.infer<typeof orderTrackingSchema>;
+export type OrderStatus = z.infer<typeof orderStatusSchema>;
 export type CustomerDto = z.infer<typeof customerSchema>;

@@ -6,8 +6,9 @@ import { Hono } from 'hono';
 import { apiError } from '../errors';
 import { toMenuDto } from '../menu-dto';
 import { registerOrderingRoutes, type OrderingRoutesDeps } from './ordering';
+import { registerPaymentRoutes, type PaymentRoutesDeps } from './payments';
 
-export interface TenantRoutesDeps extends OrderingRoutesDeps {
+export interface TenantRoutesDeps extends OrderingRoutesDeps, PaymentRoutesDeps {
   readonly tenants: TenantStore;
   readonly restaurants: RestaurantStore;
   readonly menus: MenuCache;
@@ -90,6 +91,7 @@ export function tenantRoutes(deps: TenantRoutesDeps) {
   });
 
   registerOrderingRoutes(app, deps);
+  registerPaymentRoutes(app, deps);
 
   return app;
 }
