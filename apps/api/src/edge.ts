@@ -79,7 +79,20 @@ const verifier = createSupabaseVerifier({
   jwksUrl: `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
   issuer: `${supabaseUrl}/auth/v1`,
 });
-const notifier = createNotificationSender({ expoAccessToken: env('EXPO_ACCESS_TOKEN'), log });
+const brevoKey = env('BREVO_API_KEY'),
+  sender = env('EMAIL_SENDER');
+const notifier = createNotificationSender({
+  expoAccessToken: env('EXPO_ACCESS_TOKEN'),
+  brevo:
+    brevoKey && sender
+      ? {
+          apiKey: brevoKey,
+          senderEmail: sender,
+          senderName: env('EMAIL_SENDER_NAME') ?? 'Commande en ligne',
+        }
+      : undefined,
+  log,
+});
 const pos = createDemoPosGateway((m) => jsonLog('info', m));
 const geo = createBanGeoProvider(env('GEOCODER_URL') ?? 'https://data.geopf.fr/geocodage/search');
 

@@ -40,6 +40,20 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 
 `EXPO_PUBLIC_API_URL`, et pour un build d'enseigne `BRAND` + `EXPO_PUBLIC_TENANT` (fixés par les profils `eas.json`).
 
+## Production retenue : Fly.io + Supabase + Brevo
+
+1. **Supabase** : projet `splash360-commande-prod` (région Paris `eu-west-3`, organisation Splash 360).
+2. **Fly.io** : `flyctl launch --no-deploy --copy-config` (application `splash360-commande-api`, région `cdg`, fichier `fly.toml`),
+   puis `fly secrets set DATABASE_URL=… ORDER_TOKEN_SECRET=… SUPABASE_JWKS_URL=… ADMIN_URL=… CORS_ORIGINS=…`
+   (et plus tard `STRIPE_*`, `POS_WEBHOOK_SECRET`, `BREVO_API_KEY`, `EMAIL_SENDER`).
+3. **GitHub** (Settings → Environments → `production`) : secrets `FLY_API_TOKEN`, `SUPABASE_ACCESS_TOKEN`,
+   `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`. Déploiement : onglet Actions → « Déploiement production » → Run
+   (migrations puis API, vérification `/ready`).
+4. **Brevo** : domaine d'envoi authentifié (SPF, DKIM), adresse d'expédition vérifiée, clé API transactionnelle
+   (`BREVO_API_KEY`, `EMAIL_SENDER`, `EMAIL_SENDER_NAME`). Sans clé, les e-mails sont seulement journalisés.
+5. **Application** : profil `<enseigne>-production` (API `https://splash360-commande-api.fly.dev`), Google Play :
+   [`stores/google-play.md`](stores/google-play.md).
+
 ## Base de données
 
 1. Créer le projet Supabase (région UE), activer PITR en production.

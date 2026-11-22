@@ -18,7 +18,13 @@
     },
     "production": {
       "autoIncrement": true,
-      "environment": "production"
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://splash360-commande-api.fly.dev"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
     },
     "bella-preview": {
       "extends": "preview",
@@ -78,6 +84,13 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "billsburger-production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
   }
 }

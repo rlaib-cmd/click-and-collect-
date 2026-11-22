@@ -63,7 +63,18 @@ const app = createApp({
   payments,
   operations,
   pos,
-  notifier: createNotificationSender({ expoAccessToken: env.EXPO_ACCESS_TOKEN, log }),
+  notifier: createNotificationSender({
+    expoAccessToken: env.EXPO_ACCESS_TOKEN,
+    brevo:
+      env.BREVO_API_KEY && env.EMAIL_SENDER
+        ? {
+            apiKey: env.BREVO_API_KEY,
+            senderEmail: env.EMAIL_SENDER,
+            senderName: env.EMAIL_SENDER_NAME,
+          }
+        : undefined,
+    log,
+  }),
   posWebhookSecret: env.POS_WEBHOOK_SECRET ?? null,
   admin: createPostgresAdminStore(sql),
   verifier: createSupabaseVerifier({

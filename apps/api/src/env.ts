@@ -30,6 +30,10 @@ const envSchema = z.object({
   SENTRY_ENVIRONMENT: z.string().default('development'),
   /** Jeton d'accès Expo (notifications push), facultatif. */
   EXPO_ACCESS_TOKEN: z.string().optional(),
+  /** E-mails transactionnels Brevo ; sans clé, les e-mails sont seulement journalisés. */
+  BREVO_API_KEY: z.string().min(10).optional(),
+  EMAIL_SENDER: z.email().optional(),
+  EMAIL_SENDER_NAME: z.string().default('Commande en ligne'),
   MENU_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(180),
   /** Âge maximal de la carte servie si l'API menu tombe ; au-delà, commande bloquée. Valeur à fixer avec Splash360. */
   /** Géocodeur (API Adresse, format GeoJSON) ; `demo` = adresses de démonstration hors ligne. */

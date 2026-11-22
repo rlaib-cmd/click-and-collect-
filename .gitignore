@@ -18,3 +18,6 @@ supabase/.temp/
 next-env.d.ts
 test-results/
 playwright-report/
+
+# Clé de service Google Play (eas submit) : jamais commitée
+apps/mobile/google-play-service-account.json
