@@ -81,17 +81,20 @@ export function createMemoryOrderBackend(
         }
       }
       counter += 1;
+      const onSite = o.paymentMethod === 'on_site';
       const stored: StoredOrder = {
         ...o,
         number: counter,
-        status: 'pending_payment',
+        status: onSite ? 'confirmed' : 'pending_payment',
         paymentIntentId: null,
         refundedCents: 0,
         createdAt: new Date().toISOString(),
         events: [],
       };
-      event(stored, 'pending_payment', 'customer');
+      event(stored, onSite ? 'confirmed' : 'pending_payment', 'customer');
       orders.push(stored);
+      // Sur place : envoi en caisse créé avec la commande, comme la transaction Postgres.
+      if (onSite) newDispatch(stored.id, stored.tenantId);
       return Promise.resolve({ ok: true, replayed: false, order: summary(stored) });
     },
   };
@@ -208,6 +211,7 @@ export function createMemoryOrderBackend(
         createdAt: o.createdAt,
         totals: o.totals,
         refundedCents: o.refundedCents,
+        paymentMethod: o.paymentMethod ?? 'online',
         loyalty: o.loyalty
           ? {
               memberId: o.loyalty.memberId,
@@ -243,21 +247,17 @@ export function createMemoryOrderBackend(
       error: string | null;
     }
   >();
+  function newDispatch(orderId: string, tenantId: string) {
+    if (dispatches.has(orderId)) return;
+    dispatches.set(orderId, { tenantId, status: 'pending', attempts: 0, nextAt: 0, error: null });
+  }
   const pushTokens = new Map<string, Set<string>>();
 
   // Le passage à « payée » crée l'envoi à la caisse, comme la transaction Postgres.
   const markPaid = payments.markPaid.bind(payments);
   payments.markPaid = async (pi, amount, currency) => {
     const result = await markPaid(pi, amount, currency);
-    if (result.ok && result.changed && !dispatches.has(result.orderId)) {
-      dispatches.set(result.orderId, {
-        tenantId: result.tenantId,
-        status: 'pending',
-        attempts: 0,
-        nextAt: 0,
-        error: null,
-      });
-    }
+    if (result.ok && result.changed) newDispatch(result.orderId, result.tenantId);
     return result;
   };
 

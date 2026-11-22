@@ -135,6 +135,7 @@ export const fr = {
       pending_payment: 'En attente de paiement',
       payment_failed: 'Paiement refusé',
       paid: 'Commande confirmée',
+      confirmed: 'Confirmée · à payer sur place',
       accepted: 'Acceptée par le restaurant',
       preparing: 'En préparation',
       ready: 'Prête',

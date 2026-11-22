@@ -21,7 +21,13 @@ export const availabilitySchema = z.object({
     })
     .nullable(),
   serviceFeeCents: cents,
+  /** Moyens de paiement proposés (ADR 0010) ; absent des anciennes réponses : en ligne seulement. */
+  payment: z
+    .object({ online: z.boolean(), onSite: z.boolean() })
+    .default({ online: true, onSite: false }),
 });
+
+export const paymentMethodSchema = z.enum(['online', 'on_site']);
 
 export const slotsSchema = z.object({
   date: z.iso.date(),
@@ -123,6 +129,8 @@ export const placeOrderRequestSchema = quoteRequestSchema.extend({
   /** Généré par l'application, une fois par tentative de commande. */
   idempotencyKey: z.string().min(16).max(100),
   acceptedTerms: z.literal(true),
+  /** Sur place : réservé aux membres du club (jeton dans `loyalty`) et aux restaurants qui l'acceptent. */
+  paymentMethod: paymentMethodSchema.default('online'),
 });
 
 export const placedOrderSchema = z.object({
@@ -133,11 +141,13 @@ export const placedOrderSchema = z.object({
   at: z.iso.datetime(),
   /** Jeton secret pour payer et suivre cette commande (en-tête Authorization: Bearer). */
   accessToken: z.string().min(20),
+  paymentMethod: paymentMethodSchema.default('online'),
 });
 
 export const orderStatusSchema = z.enum([
   'pending_payment',
   'paid',
+  'confirmed',
   'accepted',
   'preparing',
   'ready',
@@ -160,6 +170,9 @@ export const paymentSessionSchema = z.object({
 export const orderTrackingSchema = z.object({
   orderId: z.uuid(),
   number: z.number().int(),
+  paymentMethod: paymentMethodSchema.default('online'),
+  /** Contenu du QR code à présenter au comptoir pour retrouver la commande. */
+  pickupCode: z.string().default(''),
   status: orderStatusSchema,
   mode: orderModeSchema,
   estimatedAt: z.iso.datetime(),
@@ -184,9 +197,11 @@ export type AddressDto = z.infer<typeof addressSchema>;
 export type DeliveryCheck = z.infer<typeof deliveryCheckSchema>;
 export type QuoteRequest = z.infer<typeof quoteRequestSchema>;
 export type Quote = z.infer<typeof quoteSchema>;
-export type PlaceOrderRequest = z.infer<typeof placeOrderRequestSchema>;
+/** Ce que l'application envoie (moyen de paiement facultatif : en ligne par défaut). */
+export type PlaceOrderRequest = z.input<typeof placeOrderRequestSchema>;
 export type PlacedOrder = z.infer<typeof placedOrderSchema>;
 export type PaymentSession = z.infer<typeof paymentSessionSchema>;
 export type OrderTracking = z.infer<typeof orderTrackingSchema>;
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
+export type PaymentMethodDto = z.infer<typeof paymentMethodSchema>;
 export type CustomerDto = z.infer<typeof customerSchema>;

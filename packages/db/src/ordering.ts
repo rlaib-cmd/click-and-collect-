@@ -14,6 +14,8 @@ import type { Queryable, Sql } from './client';
 /** Réglages de commande d'un restaurant, convertis dans les types de `@splash360/core`. */
 export interface OrderingConfig {
   readonly pickupEnabled: boolean;
+  /** Paiement sur place accepté (membres du club seulement, ADR 0010). */
+  readonly payOnSiteEnabled?: boolean;
   readonly deliveryEnabled: boolean;
   /** Délai supplémentaire de livraison, ajouté à la préparation. */
   readonly deliveryMinutes: number;
@@ -59,6 +61,8 @@ export interface NewOrder {
   readonly maxOrdersPerSlot: number | null;
   /** Membre du programme de fidélité et récompense utilisée (lot 8). */
   readonly loyalty?: OrderLoyalty | null;
+  /** Sur place : commande confirmée tout de suite et envoyée en caisse (ADR 0010). */
+  readonly paymentMethod?: 'online' | 'on_site';
 }
 
 export interface OrderLoyalty {
@@ -89,6 +93,7 @@ export interface OrderingStore {
 export const SLOT_HOLDING_STATUSES = [
   'pending_payment',
   'paid',
+  'confirmed',
   'accepted',
   'preparing',
   'ready',
@@ -121,6 +126,7 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
         {
           pickup_enabled: boolean;
           delivery_enabled: boolean;
+          pay_on_site_enabled: boolean;
           prep_minutes: number;
           delivery_minutes: number;
           slot_step_minutes: SlotStep;
@@ -155,6 +161,7 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
       ]);
       return {
         pickupEnabled: s.pickup_enabled,
+        payOnSiteEnabled: s.pay_on_site_enabled,
         deliveryEnabled: s.delivery_enabled,
         deliveryMinutes: s.delivery_minutes,
         schedule: {
@@ -199,6 +206,7 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
     slotLoad: (restaurantId, from, to) => load(sql, restaurantId, from, to),
 
     async createOrder(o) {
+      const onSite = o.paymentMethod === 'on_site';
       return sql.begin(async (tx) => {
         // Rejeu idempotent : même clé → même commande (double clic, réseau instable).
         const [existing] = await tx<
@@ -248,14 +256,15 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
           insert into public.orders (id, tenant_id, restaurant_id, customer_id, number, mode, requested_slot, estimated_at,
             delivery_address, delivery_zone_id, subtotal_cents, delivery_fee_cents, service_fee_cents, discount_cents,
             total_cents, idempotency_key, application_fee_cents, access_token_hash,
-            loyalty_member_id, loyalty_reward_id, loyalty_reward_points)
+            loyalty_member_id, loyalty_reward_id, loyalty_reward_points, payment_method, status)
           values (${o.id}, ${o.tenantId}, ${o.restaurantId}, ${customer?.id ?? null}, ${counter?.n ?? 0}, ${o.mode},
             ${o.requestedSlot}, ${o.estimatedAt},
             ${o.deliveryAddress ? tx.json(o.deliveryAddress as unknown as Parameters<typeof tx.json>[0]) : null},
             ${o.deliveryZoneId}, ${o.totals.subtotalCents}, ${o.totals.deliveryFeeCents}, ${o.totals.serviceFeeCents},
             ${o.totals.discountCents}, ${o.totals.totalCents}, ${o.idempotencyKey}, ${o.applicationFeeCents},
             ${o.accessTokenHash}, ${o.loyalty?.memberId ?? null}, ${o.loyalty?.reward?.id ?? null},
-            ${o.loyalty?.reward?.costPoints ?? null})
+            ${o.loyalty?.reward?.costPoints ?? null}, ${onSite ? 'on_site' : 'online'},
+            ${onSite ? 'confirmed' : 'pending_payment'})
           returning id, number, status, total_cents, created_at`;
         if (!order) throw new Error('Insertion de commande sans retour');
 
@@ -276,7 +285,12 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
 
         await tx`
           insert into public.order_events (tenant_id, order_id, status, actor)
-          values (${o.tenantId}, ${order.id}, 'pending_payment', 'customer')`;
+          values (${o.tenantId}, ${order.id}, ${onSite ? 'confirmed' : 'pending_payment'}, 'customer')`;
+        // Sur place : rien à attendre de Stripe, la commande part en caisse (même transaction).
+        if (onSite) {
+          await tx`insert into public.pos_dispatches (order_id, tenant_id) values (${order.id}, ${o.tenantId})
+                   on conflict (order_id) do nothing`;
+        }
 
         return {
           ok: true as const,
@@ -322,6 +336,7 @@ export interface OrderDetail {
     readonly at: string;
   }[];
   readonly accessTokenHash: string | null;
+  readonly paymentMethod: 'online' | 'on_site';
   readonly loyalty: {
     readonly memberId: string;
     readonly rewardId: string | null;
@@ -361,6 +376,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           loyalty_reward_id: string | null;
           loyalty_reward_points: number | null;
           loyalty_settled_at: Date | null;
+          payment_method: 'online' | 'on_site';
           delivery_address: DeliveryAddressRecord | null;
           access_token_hash: string | null;
           customer_name: string;
@@ -411,6 +427,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           totalCents: cents(o.total_cents),
         },
         refundedCents: o.refunded_cents,
+        paymentMethod: o.payment_method,
         loyalty: o.loyalty_member_id
           ? {
               memberId: o.loyalty_member_id,

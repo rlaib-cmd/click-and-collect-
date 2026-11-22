@@ -43,7 +43,22 @@ function dayBounds(schedule: ScheduleSettings, date: string): [Date, Date] {
   return [fromLocal(date, 0, schedule.timezone), fromLocal(date, 24 * 60 - 1, schedule.timezone)];
 }
 
-export function availability(restaurant: Restaurant, config: OrderingConfig, now: Date) {
+/** Le restaurant peut encaisser en ligne : Stripe configuré et compte du restaurant autorisé. */
+export function onlinePaymentAvailable(
+  restaurant: Restaurant,
+  gatewayConfigured: boolean,
+): boolean {
+  return (
+    gatewayConfigured && restaurant.stripeAccountId !== null && restaurant.stripeChargesEnabled
+  );
+}
+
+export function availability(
+  restaurant: Restaurant,
+  config: OrderingConfig,
+  now: Date,
+  gatewayConfigured = true,
+) {
   const s = config.schedule;
   return {
     modes: { pickup: config.pickupEnabled, delivery: config.deliveryEnabled },
@@ -58,6 +73,10 @@ export function availability(restaurant: Restaurant, config: OrderingConfig, now
         }
       : null,
     serviceFeeCents: config.fees.serviceFeeCents,
+    payment: {
+      online: onlinePaymentAvailable(restaurant, gatewayConfigured),
+      onSite: config.payOnSiteEnabled === true,
+    },
   };
 }
 

@@ -9,6 +9,8 @@ export interface NotifyDeps {
   readonly tenantName: (tenantId: string) => Promise<string>;
   readonly notifier: NotificationSender;
   readonly log?: (message: string, detail?: Record<string, unknown>) => void;
+  /** Appelé à chaque changement de statut (fidélité des commandes payées sur place). */
+  readonly afterStatus?: (tenantId: string, orderId: string, status: string) => Promise<void>;
 }
 
 /** Notifie le client d'un changement de statut ; un échec de notification ne bloque jamais la commande. */
@@ -16,8 +18,13 @@ export async function notifyStatus(
   deps: NotifyDeps,
   tenantId: string,
   orderId: string,
-  status: 'paid' | OperationalStatus,
+  status: 'paid' | 'confirmed' | OperationalStatus,
 ) {
+  await deps
+    .afterStatus?.(tenantId, orderId, status)
+    .catch((error: unknown) =>
+      deps.log?.('Suite du changement de statut en échec', { orderId, error: String(error) }),
+    );
   try {
     const order = await deps.orders.getOrderDetail(tenantId, orderId);
     if (!order) return;
@@ -25,7 +32,7 @@ export async function notifyStatus(
     const message = statusNotification(status, order.number, name);
     const tokens = await deps.operations.listPushTokens(tenantId, orderId);
     if (message) await deps.notifier.push(tokens, { ...message, data: { orderId } });
-    if (status === 'paid') {
+    if (status === 'paid' || status === 'confirmed') {
       await deps.notifier.email(
         order.customer.email,
         receiptEmail({

@@ -16,10 +16,14 @@ export async function settleLoyalty(
   },
   tenantId: string,
   orderId: string,
+  /** Statut qui déclenche le règlement : « paid » en ligne, « completed » sur place. */
+  trigger: string,
 ): Promise<void> {
   if (!deps.loyalty) return;
   const order = await deps.orders.getOrderDetail(tenantId, orderId);
   if (!order?.loyalty || order.loyalty.settled) return;
+  // Sur place : les points ne sont acquis qu'une fois la commande remise (donc encaissée) — ADR 0010.
+  if (order.paymentMethod === 'on_site' ? trigger !== 'completed' : trigger !== 'paid') return;
   const tenantRow = await deps.tenants.findById(tenantId);
   if (!tenantRow) return;
   const tenant = { id: tenantRow.id, splash360Id: tenantRow.splash360Id };

@@ -49,6 +49,9 @@ export const orderIssueSchema = z.object({
     'reward_product_missing',
     'insufficient_points',
     'reward_needs_paid_items',
+    // Paiement
+    'payment_method_unavailable',
+    'on_site_requires_member',
   ]),
   line: z.number().int().nonnegative().optional(),
   productId: z.string().optional(),

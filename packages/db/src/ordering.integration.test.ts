@@ -73,6 +73,33 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
     maxOrdersPerSlot: max,
   });
 
+  it('paiement sur place : commande confirmée et envoyée en caisse dans la même transaction', async () => {
+    const restaurantId = await bellaId();
+    const slot = '2030-01-15T11:00:00.000Z';
+    // Réservé aux membres : refusé par la base sans compte fidélité.
+    await expect(
+      store.createOrder({
+        ...newOrder(restaurantId, 'sur-place-0', slot, null),
+        paymentMethod: 'on_site',
+      }),
+    ).rejects.toThrow();
+    const created = await store.createOrder({
+      ...newOrder(restaurantId, 'sur-place-1', slot, null),
+      paymentMethod: 'on_site',
+      loyalty: { memberId: 'membre-test', reward: null },
+    });
+    if (!created.ok) throw new Error('commande refusée');
+    expect(created.order.status).toBe('confirmed');
+    const [row] = await sql<{ payment_method: string; dispatches: number }[]>`
+      select o.payment_method, (select count(*)::int from public.pos_dispatches d where d.order_id = o.id) as dispatches
+      from public.orders o where o.id = ${created.order.id}`;
+    expect(row).toEqual({ payment_method: 'on_site', dispatches: 1 });
+    // Une commande sur place ne peut jamais passer « payée ».
+    await expect(
+      sql`update public.orders set status = 'paid' where id = ${created.order.id}`,
+    ).rejects.toThrow();
+  });
+
   it('lit les réglages de commande du restaurant', async () => {
     const config = await store.getConfig(BELLA, await bellaId());
     expect(config).toMatchObject({

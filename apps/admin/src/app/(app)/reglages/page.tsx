@@ -98,6 +98,14 @@ export default function SettingsPage() {
           />{' '}
           {t.delivery}
         </label>
+        <label className="inline">
+          <input
+            type="checkbox"
+            checked={s.payOnSiteEnabled ?? false}
+            onChange={(e) => set('payOnSiteEnabled', e.target.checked)}
+          />{' '}
+          {t.payOnSite}
+        </label>
         <label>
           {t.prep}
           <input

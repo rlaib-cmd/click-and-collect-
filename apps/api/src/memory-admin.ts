@@ -115,6 +115,7 @@ export function createMemoryAdminStore(input: {
             estimatedAt: o.estimatedAt,
             createdAt: o.createdAt,
             itemCount: o.lines.reduce((n, l) => n + l.quantity, 0),
+            paymentMethod: o.paymentMethod ?? 'online',
           })),
       );
     },

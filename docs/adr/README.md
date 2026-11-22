@@ -14,3 +14,4 @@ Format : Contexte, Décision, Conséquences, Statut.
 | [0007](0007-apercu-sur-supabase-edge-functions.md) | Aperçu et recette : API servie par une fonction Supabase | Acceptée |
 | [0008](0008-style-de-l-enseigne.md) | Style de l'enseigne : en-tête, angles, titres, motif | Acceptée |
 | [0009](0009-fidelite-splash360.md) | Fidélité Splash360 : `api-loyalty`, données de test, points au paiement | Acceptée |
+| [0010](0010-paiement-sur-place.md) | Paiement sur place : option par restaurant, membres du club, statut « confirmée » | Acceptée |

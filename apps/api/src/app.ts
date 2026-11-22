@@ -113,12 +113,21 @@ export function createApp(deps: AppDeps) {
     app.on('POST', path, strict);
   }
   app.use('/v1/tenants/*', rateLimit({ limit: limits.reads, windowMs: 60_000, trustProxy }));
+  const loyaltyDeps = {
+    loyalty: deps.loyalty,
+    tenants: deps.tenants,
+    orders: deps.orders,
+    payments: deps.payments,
+    log: warn,
+  };
   const notify = {
     operations: deps.operations,
     orders: deps.orders,
     tenantName: tenantNameResolver(deps.tenants),
     notifier: deps.notifier,
     log: warn,
+    afterStatus: (tenantId: string, orderId: string, status: string) =>
+      settleLoyalty(loyaltyDeps, tenantId, orderId, status),
   };
   const dispatch = {
     operations: deps.operations,
@@ -131,17 +140,6 @@ export function createApp(deps: AppDeps) {
   // Paiement confirmé : reçu au client, puis envoi immédiat à la caisse (la tâche périodique rattrape les échecs).
   const onPaid = async (order: { orderId: string; tenantId: string }) => {
     await notifyStatus(notify, order.tenantId, order.orderId, 'paid');
-    await settleLoyalty(
-      {
-        loyalty: deps.loyalty,
-        tenants: deps.tenants,
-        orders: deps.orders,
-        payments: deps.payments,
-        log: warn,
-      },
-      order.tenantId,
-      order.orderId,
-    ).catch((error: unknown) => warn('Fidélité en échec', { error: String(error) }));
     await processDispatches(dispatch).catch((error: unknown) =>
       warn('Envoi immédiat à la caisse en échec', { error: String(error) }),
     );
@@ -188,9 +186,16 @@ export function createApp(deps: AppDeps) {
       categories: new Set(overrides.filter((o) => o.kind === 'category').map((o) => o.itemId)),
     };
   };
+  // Commande à payer sur place : confirmée tout de suite, envoyée en caisse sans attendre (ADR 0010).
+  const onConfirmed = async (order: { orderId: string; tenantId: string }) => {
+    await notifyStatus(notify, order.tenantId, order.orderId, 'confirmed');
+    await processDispatches(dispatch).catch((error: unknown) =>
+      warn('Envoi immédiat à la caisse en échec', { error: String(error) }),
+    );
+  };
   app.route(
     '/v1/tenants',
-    tenantRoutes({ ...deps, hiddenItems, now: deps.now ?? (() => new Date()) }),
+    tenantRoutes({ ...deps, hiddenItems, onConfirmed, now: deps.now ?? (() => new Date()) }),
   );
 
   app.notFound((c) => apiError(c, 'not_found', 'Route inconnue'));

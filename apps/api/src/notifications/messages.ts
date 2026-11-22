@@ -5,6 +5,10 @@ const STATUS_TEXT: Record<string, { title: string; body: string } | undefined> =
     title: 'Commande confirmée',
     body: 'Votre paiement est reçu. Nous transmettons votre commande au restaurant.',
   },
+  confirmed: {
+    title: 'Commande confirmée',
+    body: 'À payer sur place : présentez le QR code de la commande en arrivant au restaurant.',
+  },
   accepted: { title: 'Commande acceptée', body: 'Le restaurant a accepté votre commande.' },
   preparing: { title: 'En préparation', body: 'Votre commande est en cours de préparation.' },
   ready: { title: 'Commande prête', body: 'Votre commande est prête.' },

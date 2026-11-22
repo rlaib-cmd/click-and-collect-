@@ -37,6 +37,8 @@ export const adminOrderSchema = z.object({
   estimatedAt: z.iso.datetime(),
   createdAt: z.iso.datetime(),
   itemCount: z.number().int(),
+  /** Sur place : à encaisser au comptoir (ADR 0010). */
+  paymentMethod: z.enum(['online', 'on_site']).default('online'),
 });
 
 export const adminOrderDetailSchema = z.object({
@@ -84,6 +86,8 @@ export const settingsSchema = z
   .object({
     pickupEnabled: z.boolean(),
     deliveryEnabled: z.boolean(),
+    /** Paiement sur place, réservé aux membres du club (ADR 0010). */
+    payOnSiteEnabled: z.boolean().default(false),
     prepMinutes: z.number().int().min(0).max(240),
     deliveryMinutes: z.number().int().min(0).max(240),
     slotStepMinutes: z.union([z.literal(10), z.literal(15), z.literal(30)]),

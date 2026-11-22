@@ -30,3 +30,8 @@ Le lot 8 tourne sur des données de test (ADR 0009). À obtenir de Splash360 :
 4. Crédit des points d'une commande en ligne, avec **idempotence** par commande.
 5. Consommation d'une récompense : réservation à la commande, puis confirmation ou libération (paiement échoué, expiré).
 6. Remboursement d'une commande : retrait des points gagnés et restitution de la récompense ?
+
+## Paiement sur place (ADR 0010)
+
+1. Format du QR code que la caisse Splash360 sait lire pour retrouver une commande en ligne (provisoire : `S360-CMD-<numéro>-<8 caractères>`).
+2. La caisse peut-elle recevoir une commande « à encaisser » (non payée) et l'encaisser au retrait ?

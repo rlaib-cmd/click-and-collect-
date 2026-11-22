@@ -11,11 +11,12 @@ import {
 } from '@splash360/contracts';
 import type { Restaurant, RestaurantStore, TenantWithTheme } from '@splash360/db';
 import type { Context, Hono } from 'hono';
-import { cents, computeApplicationFee } from '@splash360/core';
+import { cents, checkPaymentMethod, computeApplicationFee } from '@splash360/core';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { hashToken, orderAccessToken } from '../payments/tokens';
 import { apiError } from '../errors';
+import type { PaymentGateway } from '../payments/gateway';
 import type { GeoProvider } from '../geo';
 import {
   availability,
@@ -30,6 +31,10 @@ export interface OrderingRoutesDeps extends OrderingDeps {
   readonly geo: GeoProvider;
   /** Clé secrète de dérivation des jetons de suivi (ORDER_TOKEN_SECRET). */
   readonly tokenSecret: string;
+  /** Paiement en ligne configuré (clés Stripe présentes) ; null sinon. */
+  readonly gateway: PaymentGateway | null;
+  /** Commande à payer sur place créée : notification et envoi en caisse (ADR 0010). */
+  readonly onConfirmed?: (order: { orderId: string; tenantId: string }) => Promise<void>;
 }
 
 type Env = { Variables: { tenant: TenantWithTheme } };
@@ -54,7 +59,12 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
   app.get('/:subdomain/restaurants/:restaurantId/availability', async (c) => {
     const ctx = await load(c, c.req.param('restaurantId'));
     if (!ctx) return apiError(c, 'not_found', 'Restaurant inconnu');
-    const body: Availability = availability(ctx.restaurant, ctx.config, deps.now());
+    const body: Availability = availability(
+      ctx.restaurant,
+      ctx.config,
+      deps.now(),
+      deps.gateway !== null,
+    );
     c.header('Cache-Control', 'no-store');
     return c.json(body);
   });
@@ -130,6 +140,17 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
     if (!ctx) return apiError(c, 'not_found', 'Restaurant inconnu');
     const result = await quote(deps, ctx.restaurant, ctx.config, request, c.get('tenant'));
     if (!result.ok) return orderInvalid(c, result.issues);
+    // Sur place : option du restaurant, réservée aux membres du club (ADR 0010). En ligne, la
+    // capacité d'encaisser du restaurant est contrôlée à la création du paiement.
+    if (request.paymentMethod === 'on_site') {
+      const choice = checkPaymentMethod({
+        method: 'on_site',
+        onlineAvailable: false,
+        onSiteEnabled: ctx.config.payOnSiteEnabled === true,
+        isMember: result.loyalty !== null,
+      });
+      if (!choice.ok) return orderInvalid(c, [{ code: choice.error }]);
+    }
 
     const orderId = randomUUID();
     const created = await deps.ordering.createOrder({
@@ -157,6 +178,7 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
       loyalty: result.loyalty
         ? { memberId: result.loyalty.memberId, reward: result.loyalty.reward }
         : null,
+      paymentMethod: request.paymentMethod,
     });
     if (!created.ok) return apiError(c, 'slot_full', 'Ce créneau vient d’être complété');
 
@@ -168,7 +190,11 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
       at: result.at,
       // Rejeu idempotent : même commande, donc même jeton.
       accessToken: orderAccessToken(deps.tokenSecret, created.order.id),
+      paymentMethod: request.paymentMethod,
     };
+    if (request.paymentMethod === 'on_site' && !created.replayed) {
+      await deps.onConfirmed?.({ orderId: created.order.id, tenantId: tenant.id });
+    }
     return c.json(body, created.replayed ? 200 : 201);
   });
 

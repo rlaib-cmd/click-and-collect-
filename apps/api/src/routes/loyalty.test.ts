@@ -7,12 +7,13 @@ import {
   loyaltyMemberSchema,
   loyaltyProgramSchema,
   loyaltySessionSchema,
+  orderTrackingSchema,
   placedOrderSchema,
   quoteSchema,
   type PlaceOrderRequest,
 } from '@splash360/contracts';
 import { describe, expect, it } from 'vitest';
-import { BELLA_RESTO, testSetup } from '../test-fixtures';
+import { BELLA_RESTO, sessionToken, testSetup } from '../test-fixtures';
 
 const programs = new Map<string, LoyaltyProgram>([
   [
@@ -220,5 +221,106 @@ describe('club fidélité', () => {
     expect(me.points).toBe(105);
     expect(me.history.map((h) => h.kind)).toEqual(['earn', 'redeem', 'welcome']);
     expect(s.backend.orders[0]?.loyaltySettled).toBe(true);
+  });
+});
+
+describe('paiement sur place (ADR 0010)', () => {
+  function onSiteSetup(enabled = true) {
+    const s = setup();
+    const base = s.backend.ordering.getConfig.bind(s.backend.ordering);
+    s.backend.ordering.getConfig = async (tenantId, restaurantId) => {
+      const config = await base(tenantId, restaurantId);
+      return config ? { ...config, payOnSiteEnabled: enabled } : null;
+    };
+    return s;
+  }
+  const onSite = (memberToken: string | null, key: string): PlaceOrderRequest => ({
+    ...order(memberToken ?? '', null, key),
+    loyalty: memberToken ? { memberToken, rewardId: null } : null,
+    paymentMethod: 'on_site',
+  });
+
+  it('annonce les moyens de paiement du restaurant', async () => {
+    const payment = async (s: ReturnType<typeof setup>) =>
+      (
+        (await (await s.app.request(`${base}/restaurants/${BELLA_RESTO}/availability`)).json()) as {
+          payment: unknown;
+        }
+      ).payment;
+    // Bella encaisse par Stripe ; le paiement sur place s'ajoute quand le restaurant l'active.
+    expect(await payment(onSiteSetup())).toEqual({ online: true, onSite: true });
+    expect(await payment(onSiteSetup(false))).toEqual({ online: true, onSite: false });
+    // Sans clés Stripe : seul le paiement sur place reste proposé.
+    const noStripe = onSiteSetup();
+    expect(await payment(testSetup({ ...noStripe.deps, gateway: null }))).toEqual({
+      online: false,
+      onSite: true,
+    });
+  });
+
+  it('confirme la commande, l’envoie en caisse et donne le QR code de retrait', async () => {
+    const s = onSiteSetup();
+    const { memberToken } = await join(s);
+    const res = await post(s, '/orders', onSite(memberToken, 'cle-sur-place-000000001'));
+    expect(res.status).toBe(201);
+    const placed = placedOrderSchema.parse(await res.json());
+    expect(placed).toMatchObject({ status: 'confirmed', paymentMethod: 'on_site' });
+    // Envoyée en caisse sans paiement Stripe.
+    expect(s.pos.submitted).toEqual([placed.orderId]);
+    const tracking = orderTrackingSchema.parse(
+      await (
+        await s.app.request(`${base}/orders/${placed.orderId}`, {
+          headers: { Authorization: `Bearer ${placed.accessToken}` },
+        })
+      ).json(),
+    );
+    expect(tracking).toMatchObject({ status: 'confirmed', paymentMethod: 'on_site' });
+    expect(tracking.pickupCode).toMatch(new RegExp(`^S360-CMD-${placed.number}-[0-9A-F]{8}$`));
+    // Jamais de paiement en ligne sur une commande à payer sur place.
+    const pay = await s.app.request(`${base}/orders/${placed.orderId}/payment`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${placed.accessToken}` },
+    });
+    expect(pay.status).toBe(409);
+  });
+
+  it('réservé aux membres du club et aux restaurants qui l’acceptent', async () => {
+    const issue = async (res: Response) =>
+      ((await res.json()) as { error: { issues: { code: string }[] } }).error.issues[0]?.code;
+    const s = onSiteSetup();
+    expect(await issue(await post(s, '/orders', onSite(null, 'cle-sur-place-000000002')))).toBe(
+      'on_site_requires_member',
+    );
+    const closed = onSiteSetup(false);
+    const { memberToken } = await join(closed);
+    expect(
+      await issue(await post(closed, '/orders', onSite(memberToken, 'cle-sur-place-000000003'))),
+    ).toBe('payment_method_unavailable');
+  });
+
+  it('crédite les points seulement une fois la commande remise', async () => {
+    const s = onSiteSetup();
+    const { memberToken } = await join(s);
+    const placed = placedOrderSchema.parse(
+      await (await post(s, '/orders', onSite(memberToken, 'cle-sur-place-000000004'))).json(),
+    );
+    const points = async () =>
+      loyaltyMemberSchema.parse(
+        await (
+          await s.app.request(`${base}/loyalty/me`, {
+            headers: { Authorization: `Bearer ${memberToken}` },
+          })
+        ).json(),
+      ).points;
+    expect(await points()).toBe(100);
+    for (const status of ['accepted', 'ready', 'completed'] as const) {
+      await s.app.request(`/v1/admin/orders/${placed.orderId}/status`, {
+        method: 'POST',
+        headers: { ...json, Authorization: `Bearer ${await sessionToken('gerant@bella.test')}` },
+        body: JSON.stringify({ status }),
+      });
+    }
+    // 17,00 € → 170 points, crédités à la remise.
+    expect(await points()).toBe(270);
   });
 });

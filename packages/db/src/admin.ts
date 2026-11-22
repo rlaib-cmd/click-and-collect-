@@ -31,10 +31,13 @@ export interface OrderListItem {
   readonly estimatedAt: string;
   readonly createdAt: string;
   readonly itemCount: number;
+  readonly paymentMethod: 'online' | 'on_site';
 }
 
 export interface RestaurantSettingsRecord {
   readonly pickupEnabled: boolean;
+  /** Paiement sur place accepté, pour les membres du club (ADR 0010). */
+  readonly payOnSiteEnabled?: boolean;
   readonly deliveryEnabled: boolean;
   readonly prepMinutes: number;
   readonly deliveryMinutes: number;
@@ -101,6 +104,14 @@ const REVENUE_STATUSES = [
   'completed',
   'refunded',
 ];
+
+/**
+ * Commande comptée dans le chiffre d'affaires : payée en ligne (et au-delà), ou payée sur place,
+ * c'est-à-dire remise au client (ADR 0010).
+ */
+const revenue = (sql: Sql) =>
+  sql`((o.payment_method = 'online' and o.status in ${sql(REVENUE_STATUSES)})
+       or (o.payment_method = 'on_site' and o.status = 'completed'))`;
 
 const toStaff = (r: {
   id: string;
@@ -285,9 +296,10 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
           estimated_at: Date;
           created_at: Date;
           item_count: number;
+          payment_method: 'online' | 'on_site';
         }[]
       >`
-        select o.id, o.number, o.restaurant_id, o.status, o.mode, c.name as customer_name, o.total_cents,
+        select o.id, o.number, o.restaurant_id, o.status, o.mode, o.payment_method, c.name as customer_name, o.total_cents,
                o.estimated_at, o.created_at,
                (select coalesce(sum(quantity), 0)::int from public.order_items i where i.order_id = o.id) as item_count
         from public.orders o join public.customers c on c.id = o.customer_id
@@ -308,6 +320,7 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
         estimatedAt: r.estimated_at.toISOString(),
         createdAt: r.created_at.toISOString(),
         itemCount: r.item_count,
+        paymentMethod: r.payment_method,
       }));
     },
 
@@ -366,6 +379,7 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
         {
           pickup_enabled: boolean;
           delivery_enabled: boolean;
+          pay_on_site_enabled: boolean;
           prep_minutes: number;
           delivery_minutes: number;
           slot_step_minutes: 10 | 15 | 30;
@@ -399,6 +413,7 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
       ]);
       return {
         pickupEnabled: s.pickup_enabled,
+        payOnSiteEnabled: s.pay_on_site_enabled,
         deliveryEnabled: s.delivery_enabled,
         prepMinutes: s.prep_minutes,
         deliveryMinutes: s.delivery_minutes,
@@ -429,16 +444,17 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
         await tx`
           insert into public.restaurant_settings (restaurant_id, tenant_id, pickup_enabled, delivery_enabled, prep_minutes,
             delivery_minutes, slot_step_minutes, max_orders_per_slot, days_ahead, delivery_minimum_cents,
-            free_delivery_threshold_cents, service_fee_cents)
+            free_delivery_threshold_cents, service_fee_cents, pay_on_site_enabled)
           values (${restaurantId}, ${tenantId}, ${s.pickupEnabled}, ${s.deliveryEnabled}, ${s.prepMinutes}, ${s.deliveryMinutes},
             ${s.slotStepMinutes}, ${s.maxOrdersPerSlot}, ${s.daysAhead}, ${s.deliveryMinimumCents},
-            ${s.freeDeliveryThresholdCents}, ${s.serviceFeeCents})
+            ${s.freeDeliveryThresholdCents}, ${s.serviceFeeCents}, ${s.payOnSiteEnabled ?? false})
           on conflict (restaurant_id) do update set
             pickup_enabled = excluded.pickup_enabled, delivery_enabled = excluded.delivery_enabled,
             prep_minutes = excluded.prep_minutes, delivery_minutes = excluded.delivery_minutes,
             slot_step_minutes = excluded.slot_step_minutes, max_orders_per_slot = excluded.max_orders_per_slot,
             days_ahead = excluded.days_ahead, delivery_minimum_cents = excluded.delivery_minimum_cents,
-            free_delivery_threshold_cents = excluded.free_delivery_threshold_cents, service_fee_cents = excluded.service_fee_cents`;
+            free_delivery_threshold_cents = excluded.free_delivery_threshold_cents, service_fee_cents = excluded.service_fee_cents,
+            pay_on_site_enabled = excluded.pay_on_site_enabled`;
         await tx`delete from public.opening_hours where tenant_id = ${tenantId} and restaurant_id = ${restaurantId}`;
         for (const h of s.openingHours) {
           await tx`insert into public.opening_hours (tenant_id, restaurant_id, iso_weekday, opens, closes)
@@ -486,7 +502,7 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
     },
 
     async dashboard(tenantId, from, to, restaurantId) {
-      const scope = sql`o.tenant_id = ${tenantId} and o.status in ${sql(REVENUE_STATUSES)}
+      const scope = sql`o.tenant_id = ${tenantId} and ${revenue(sql)}
         and o.created_at >= ${from} and o.created_at < ${to}
         ${restaurantId ? sql`and o.restaurant_id = ${restaurantId}` : sql``}`;
       const [totals, byDay, byRestaurant] = await Promise.all([
@@ -534,8 +550,8 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
         }[]
       >`
         select c.id, c.name, c.email, c.phone, c.marketing_consent,
-               count(o.id) filter (where o.status in ${sql(REVENUE_STATUSES)})::int as orders,
-               coalesce(sum(o.total_cents - o.refunded_cents) filter (where o.status in ${sql(REVENUE_STATUSES)}), 0)::int as spent,
+               count(o.id) filter (where ${revenue(sql)})::int as orders,
+               coalesce(sum(o.total_cents - o.refunded_cents) filter (where ${revenue(sql)}), 0)::int as spent,
                max(o.created_at) as last_order_at
         from public.customers c left join public.orders o on o.customer_id = c.id
         where c.tenant_id = ${tenantId}

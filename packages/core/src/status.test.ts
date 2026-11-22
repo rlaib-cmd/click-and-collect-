@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkTransition, isFinished } from './status';
+import { checkPaymentMethod, checkTransition, isFinished } from './status';
 
 describe('changements de statut', () => {
   it('avance dans le parcours, en sautant éventuellement des étapes', () => {
@@ -49,5 +49,33 @@ describe('changements de statut', () => {
   it('reconnaît les statuts terminés', () => {
     expect(isFinished('completed')).toBe(true);
     expect(isFinished('ready')).toBe(false);
+  });
+});
+
+describe('paiement sur place', () => {
+  it('une commande confirmée (à payer sur place) suit le parcours comme une commande payée', () => {
+    expect(checkTransition('pickup', 'confirmed', 'accepted')).toEqual({ ok: true });
+    expect(checkTransition('pickup', 'confirmed', 'completed')).toEqual({ ok: true });
+    expect(checkTransition('delivery', 'confirmed', 'out_for_delivery')).toEqual({ ok: true });
+    expect(checkTransition('pickup', 'confirmed', 'cancelled')).toEqual({ ok: true });
+  });
+
+  it('choix du moyen de paiement', () => {
+    const base = { onlineAvailable: true, onSiteEnabled: true, isMember: true };
+    expect(checkPaymentMethod({ ...base, method: 'online' })).toEqual({ ok: true });
+    expect(checkPaymentMethod({ ...base, method: 'online', onlineAvailable: false })).toEqual({
+      ok: false,
+      error: 'payment_method_unavailable',
+    });
+    expect(checkPaymentMethod({ ...base, method: 'on_site' })).toEqual({ ok: true });
+    expect(checkPaymentMethod({ ...base, method: 'on_site', onSiteEnabled: false })).toEqual({
+      ok: false,
+      error: 'payment_method_unavailable',
+    });
+    // Réservé aux membres du club, même si le restaurant l'accepte.
+    expect(checkPaymentMethod({ ...base, method: 'on_site', isMember: false })).toEqual({
+      ok: false,
+      error: 'on_site_requires_member',
+    });
   });
 });

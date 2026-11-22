@@ -15,6 +15,14 @@ export interface PaymentRoutesDeps {
 
 type Env = { Variables: { tenant: TenantWithTheme } };
 
+/**
+ * Contenu du QR code présenté au comptoir : numéro de commande et début de son identifiant.
+ * Format provisoire en attendant celui de la caisse Splash360 (questions-en-attente.md).
+ */
+export function pickupCode(number: number, orderId: string): string {
+  return `S360-CMD-${number}-${orderId.slice(0, 8).toUpperCase()}`;
+}
+
 /** Paiement et suivi d'une commande par son client (jeton de suivi obligatoire). */
 export function registerPaymentRoutes(app: Hono<Env>, deps: PaymentRoutesDeps) {
   app.get('/:subdomain/orders/:orderId', async (c) => {
@@ -26,6 +34,8 @@ export function registerPaymentRoutes(app: Hono<Env>, deps: PaymentRoutesDeps) {
     const body: OrderTracking = {
       orderId: detail.id,
       number: detail.number,
+      paymentMethod: detail.paymentMethod,
+      pickupCode: pickupCode(detail.number, detail.id),
       status: detail.status as OrderTracking['status'],
       mode: detail.mode,
       estimatedAt: detail.estimatedAt,

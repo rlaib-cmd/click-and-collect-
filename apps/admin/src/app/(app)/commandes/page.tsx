@@ -17,7 +17,7 @@ import { useApi } from '@/lib/use-api';
 const t = messages.admin.orders;
 const STATUS = messages.order.status;
 const COLUMNS: { title: string; statuses: AdminOrder['status'][] }[] = [
-  { title: t.new, statuses: ['paid'] },
+  { title: t.new, statuses: ['paid', 'confirmed'] },
   { title: t.inProgress, statuses: ['accepted', 'preparing'] },
   { title: t.ready, statuses: ['ready', 'out_for_delivery'] },
 ];
@@ -27,6 +27,7 @@ const NEXT: Record<
   ('accepted' | 'preparing' | 'ready' | 'out_for_delivery' | 'completed')[]
 > = {
   paid: ['accepted', 'preparing'],
+  confirmed: ['accepted', 'preparing'],
   accepted: ['preparing', 'ready'],
   preparing: ['ready'],
   ready: ['out_for_delivery', 'completed'],
@@ -140,6 +141,9 @@ export default function OrdersPage() {
                   </span>
                   <span>{o.customerName}</span>
                   <span className="status">{STATUS[o.status]}</span>
+                  {o.paymentMethod === 'on_site' ? (
+                    <span className="badge">{t.toCollect}</span>
+                  ) : null}
                 </button>
               ))}
             </section>
