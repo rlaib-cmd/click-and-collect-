@@ -15,8 +15,11 @@ const version = (name) => {
   }
   throw new Error(`Version introuvable : ${name}`);
 };
+// postgres.js 4.x bloque ou coupe les connexions concurrentes sous le runtime Deno de Supabase
+// (CONNECTION_CLOSED, requêtes sans réponse) ; la 3.4, celle de la documentation Supabase, est stable.
+const OVERRIDES = { postgres: '3.4.7' };
 const imports = Object.fromEntries(
-  ['zod', 'stripe', 'postgres', 'jose'].map((n) => [n, `npm:${n}@${version(n)}`]),
+  ['zod', 'stripe', 'postgres', 'jose'].map((n) => [n, `npm:${n}@${OVERRIDES[n] ?? version(n)}`]),
 );
 writeFileSync('dist/edge/deno.json', `${JSON.stringify({ imports }, null, 2)}\n`);
 process.stdout.write(`${JSON.stringify(imports)}\n`);

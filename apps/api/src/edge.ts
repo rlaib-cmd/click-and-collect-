@@ -45,8 +45,7 @@ const required = (name: string) => {
 };
 
 const supabaseUrl = required('SUPABASE_URL');
-// Pooler en mode transaction : quelques connexions par instance suffisent.
-const sql = createSql(required('SUPABASE_DB_URL'), { max: 3 });
+const databaseUrl = required('SUPABASE_DB_URL');
 
 // Clé de dérivation des jetons de suivi : propre au projet, dérivée de la clé de service
 // (jamais exposée), sauf si ORDER_TOKEN_SECRET est fourni explicitement.
@@ -68,49 +67,89 @@ const gateway =
       })
     : null;
 
-const payments = createPostgresPaymentStore(sql);
 const log = (m: string, d?: Record<string, unknown>) => jsonLog('warn', m, d);
-
-const app = createApp({
-  tenants: createPostgresTenantStore(sql),
-  restaurants: createPostgresRestaurantStore(sql),
-  menus: createMenuCache(createDemoMenuProvider(), { ttlMs: 180_000, maxStaleMs: 3_600_000 }),
-  ordering: createPostgresOrderingStore(sql),
-  orders: createPostgresOrderReader(sql),
-  payments,
-  operations: createPostgresOperationsStore(sql),
-  pos: createDemoPosGateway((m) => jsonLog('info', m)),
-  notifier: createNotificationSender({ expoAccessToken: env('EXPO_ACCESS_TOKEN'), log }),
-  admin: createPostgresAdminStore(sql),
-  verifier: createSupabaseVerifier({
-    jwksUrl: `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
-    issuer: `${supabaseUrl}/auth/v1`,
-  }),
-  gateway,
-  tokenSecret,
-  geo: createBanGeoProvider(env('GEOCODER_URL') ?? 'https://data.geopf.fr/geocodage/search'),
-  adminUrl: env('ADMIN_URL') ?? 'http://localhost:3000',
-  corsOrigins: '*',
-  log: true,
-  trustProxy: true,
-  ready: () =>
-    sql`select 1`.then(
-      () => true,
-      () => false,
-    ),
+// Partagés entre les générations de connexions : cache de carte et clés publiques Supabase Auth.
+const menus = createMenuCache(createDemoMenuProvider(), {
+  ttlMs: 180_000,
+  maxStaleMs: 3_600_000,
 });
+const verifier = createSupabaseVerifier({
+  jwksUrl: `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
+  issuer: `${supabaseUrl}/auth/v1`,
+});
+const notifier = createNotificationSender({ expoAccessToken: env('EXPO_ACCESS_TOKEN'), log });
+const pos = createDemoPosGateway((m) => jsonLog('info', m));
+const geo = createBanGeoProvider(env('GEOCODER_URL') ?? 'https://data.geopf.fr/geocodage/search');
 
+function build() {
+  const sql = createSql(databaseUrl, { max: 3, idleTimeout: 10 });
+  const payments = createPostgresPaymentStore(sql);
+  const app = createApp({
+    tenants: createPostgresTenantStore(sql),
+    restaurants: createPostgresRestaurantStore(sql),
+    menus,
+    ordering: createPostgresOrderingStore(sql),
+    orders: createPostgresOrderReader(sql),
+    payments,
+    operations: createPostgresOperationsStore(sql),
+    pos,
+    notifier,
+    admin: createPostgresAdminStore(sql),
+    verifier,
+    gateway,
+    tokenSecret,
+    geo,
+    adminUrl: env('ADMIN_URL') ?? 'http://localhost:3000',
+    corsOrigins: '*',
+    log: true,
+    trustProxy: true,
+    ready: () =>
+      sql`select 1`.then(
+        () => true,
+        () => false,
+      ),
+  });
+  return { sql, payments, app };
+}
+
+/*
+ * Le runtime gèle les instances entre deux rafales de requêtes : les sockets Postgres
+ * meurent sans que les minuteries de postgres.js ne tournent. Après un silence, on repart
+ * donc d'un pool neuf ; l'ancien est fermé une fois ses requêtes en cours terminées.
+ */
+const IDLE_RESET_MS = 3_000;
+let current = build();
+let lastActivity = Date.now();
+let inFlight = 0;
 // Pas de tâche de fond : les commandes non payées depuis 15 min sont annulées au fil des requêtes.
 let lastExpiry = 0;
+
 const root = new Hono();
 root.use('*', async (_c, next) => {
   const now = Date.now();
+  if (inFlight === 0 && now - lastActivity > IDLE_RESET_MS) {
+    const old = current.sql;
+    current = build();
+    void old.end({ timeout: 5 }).catch(() => undefined);
+  }
   if (now - lastExpiry > 60_000) {
     lastExpiry = now;
-    void expireUnpaidOrders({ payments, gateway, log }, new Date()).catch(() => undefined);
+    void expireUnpaidOrders({ payments: current.payments, gateway, log }, new Date()).catch(
+      () => undefined,
+    );
   }
-  await next();
+  inFlight += 1;
+  try {
+    await next();
+  } finally {
+    inFlight -= 1;
+    lastActivity = Date.now();
+  }
 });
-root.route('/api', app);
+root.all('/api/*', (c) => {
+  const url = new URL(c.req.url);
+  url.pathname = url.pathname.slice('/api'.length);
+  return current.app.fetch(new Request(url, c.req.raw));
+});
 
 Deno.serve(root.fetch);

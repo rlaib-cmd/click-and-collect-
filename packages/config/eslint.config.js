@@ -7,6 +7,8 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/.next/**',
+      // Export statique du back-office (ADMIN_STATIC_EXPORT=1).
+      '**/out/**',
       '**/.expo/**',
       '**/node_modules/**',
       '**/*.config.js',

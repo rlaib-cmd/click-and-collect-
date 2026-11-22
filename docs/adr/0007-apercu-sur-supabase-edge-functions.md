@@ -12,7 +12,8 @@ Le projet Supabase de recette existe déjà et sait exécuter du code serveur (r
 - `apps/api/src/edge.ts` sert la même application Hono sous `https://<projet>.supabase.co/functions/v1/api/…`.
 - `pnpm --filter api build:edge` produit `dist/edge/index.js` (code interne regroupé par esbuild)
   et `dist/edge/deno.json` (zod, stripe, postgres, jose en `npm:` aux versions du lockfile).
-- Connexion à la base via `SUPABASE_DB_URL`, fournie par Supabase ; clé des jetons de suivi dérivée
+- Connexion à la base via `SUPABASE_DB_URL`, fournie par Supabase, avec postgres.js 3.4 (la 4.x coupe les
+  connexions concurrentes sous ce runtime) et un pool neuf après chaque période d'inactivité (instances gelées) ; clé des jetons de suivi dérivée
   de la clé de service si `ORDER_TOKEN_SECRET` n'est pas posé.
 - Pas de tâche de fond : l'expiration des commandes non payées est déclenchée au fil des requêtes
   (au plus une fois par minute et par instance) ; l'envoi à la caisse reste immédiat après paiement.
@@ -20,6 +21,9 @@ Le projet Supabase de recette existe déjà et sait exécuter du code serveur (r
   sont posés en secrets de fonction (mode test).
 - La fonction est déployée avec `verify_jwt = false` : l'API fait sa propre authentification
   (jetons de suivi, Supabase Auth pour le back-office, signatures des webhooks).
+
+- Le back-office est exporté en statique (`ADMIN_STATIC_EXPORT=1`, toutes ses pages sont rendues dans le
+  navigateur) et publié sur l'hébergement Expo sous l'alias `admin`.
 
 ## Conséquences
 

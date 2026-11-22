@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:static": "ADMIN_STATIC_EXPORT=1 next build"
   },
   "dependencies": {
     "@splash360/contracts": "workspace:*",
