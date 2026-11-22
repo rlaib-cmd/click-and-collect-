@@ -1,6 +1,6 @@
 'use client';
 
-import { staffMemberSchema } from '@splash360/contracts';
+import { invitationSchema, staffMemberSchema } from '@splash360/contracts';
 import { messages } from '@splash360/i18n';
 import { useState, type FormEvent } from 'react';
 import { z } from 'zod';
@@ -25,11 +25,15 @@ export default function TeamPage() {
     restaurantId: '',
   });
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const report = (email: string, sent: boolean) =>
+    setNotice(sent ? t.invitationSent(email) : t.invitationFailed(email));
 
   const invite = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await api(auth, '/staff', staffMemberSchema.loose(), {
+      const created = await api(auth, '/staff', staffMemberSchema.extend(invitationSchema.shape), {
         method: 'POST',
         body: {
           email: form.email,
@@ -40,6 +44,7 @@ export default function TeamPage() {
       });
       setForm({ ...form, email: '', name: '' });
       setError(null);
+      report(created.email, created.invitationSent);
       await staff.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : messages.admin.common.error);
@@ -49,6 +54,16 @@ export default function TeamPage() {
   const disable = async (id: string) => {
     await api(auth, `/staff/${id}`, z.undefined(), { method: 'PATCH', body: { disabled: true } });
     await staff.reload();
+  };
+
+  const resend = async (s: { id: string; email: string }) => {
+    try {
+      const r = await api(auth, `/staff/${s.id}/invite`, invitationSchema, { method: 'POST' });
+      setError(null);
+      report(s.email, r.invitationSent);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : messages.admin.common.error);
+    }
   };
 
   const remove = async (s: { id: string; email: string }) => {
@@ -65,6 +80,11 @@ export default function TeamPage() {
   return (
     <div className="stack">
       <h1>{messages.admin.nav.team}</h1>
+      {notice ? (
+        <p className="card" role="status">
+          {notice}
+        </p>
+      ) : null}
       <table>
         <thead>
           <tr>
@@ -85,6 +105,9 @@ export default function TeamPage() {
                 {restaurants.data?.restaurants.find((r) => r.id === s.restaurantId)?.name ?? '—'}
               </td>
               <td className="row">
+                <button type="button" className="link" onClick={() => void resend(s)}>
+                  {t.resend}
+                </button>
                 <button type="button" className="link" onClick={() => void disable(s.id)}>
                   {t.disable}
                 </button>

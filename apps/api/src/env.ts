@@ -21,6 +21,9 @@ const envSchema = z.object({
   SUPABASE_JWKS_URL: z.url().optional(),
   SUPABASE_JWT_SECRET: z.string().min(32).optional(),
   SUPABASE_JWT_ISSUER: z.string().optional(),
+  /** Invitations du back-office par Supabase Auth : URL du projet et clé de service, ensemble. */
+  SUPABASE_URL: z.url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
   /** URL publique du back-office (retours Stripe). */
   ADMIN_URL: z.url().default('http://localhost:3000'),
   /** Derrière un proxy de confiance (hébergeur) : adresse client lue dans X-Forwarded-For. */

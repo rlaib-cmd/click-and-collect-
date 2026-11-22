@@ -24,6 +24,23 @@ export const adminFr = {
     devTitle: 'Connexion de développement',
     devHelp: 'Disponible uniquement en local, sans Supabase Auth.',
     notConfigured: 'Supabase Auth n’est pas configuré pour ce back-office.',
+    forgot: 'Mot de passe oublié ?',
+    forgotNeedEmail: 'Saisissez d’abord votre e-mail.',
+    forgotSent: 'Si un compte existe pour cet e-mail, un lien vient de vous être envoyé.',
+  },
+  password: {
+    title: 'Choisir mon mot de passe',
+    intro: (email: string) => `Compte : ${email}`,
+    password: 'Nouveau mot de passe (8 caractères minimum)',
+    confirm: 'Confirmer le mot de passe',
+    mismatch: 'Les deux mots de passe ne correspondent pas.',
+    tooShort: 'Le mot de passe doit faire au moins 8 caractères.',
+    submit: 'Enregistrer et accéder au back-office',
+    checking: 'Vérification du lien…',
+    invalid:
+      'Ce lien a expiré ou n’est plus valable. Demandez-en un nouveau depuis la page de connexion.',
+    backToLogin: 'Retour à la connexion',
+    error: 'Impossible d’enregistrer le mot de passe. Réessayez.',
   },
   common: {
     save: 'Enregistrer',
@@ -173,6 +190,11 @@ export const adminFr = {
     disable: 'Désactiver',
     delete: 'Supprimer',
     confirmDelete: (email: string) => `Supprimer définitivement le compte ${email} ?`,
+    resend: 'Renvoyer l’invitation',
+    invitationSent: (email: string) =>
+      `Invitation envoyée à ${email} : le lien permet de choisir son mot de passe.`,
+    invitationFailed: (email: string) =>
+      `Compte ${email} créé, mais l’e-mail d’invitation n’a pas pu partir. Utilisez « Renvoyer l’invitation ».`,
   },
   club: {
     search: 'Rechercher (nom, e-mail, code carte)',
@@ -208,5 +230,9 @@ export const adminFr = {
     deleteMismatch: 'Nom incorrect : rien n’a été supprimé.',
     fee: 'Commission (%)',
     open: 'Ouvrir',
+    created: (email: string) =>
+      `Enseigne créée. Invitation envoyée à ${email} pour choisir son mot de passe.`,
+    createdNoInvite: (email: string) =>
+      `Enseigne créée, mais l’invitation de ${email} n’a pas pu partir : renvoyez-la depuis la page Équipe de l’enseigne.`,
   },
 } as const;

@@ -34,6 +34,7 @@ import {
   type AdminEnv,
   type TokenVerifier,
 } from '../admin/auth';
+import type { AuthInviter } from '../admin/invite';
 import { apiError } from '../errors';
 import { toMenuDto } from '../menu-dto';
 import { notifyStatus, type NotifyDeps } from '../notifications/service';
@@ -54,6 +55,8 @@ export interface AdminRoutesDeps extends NotifyDeps {
   readonly loyalty?: LoyaltyProvider | undefined;
   /** URL publique du back-office (retours de l'inscription Stripe). */
   readonly adminUrl: string;
+  /** Envoi des invitations Supabase Auth ; null : non configuré (aucun e-mail envoyé). */
+  readonly inviter?: AuthInviter | null;
 }
 
 type C = Context<AdminEnv>;
@@ -81,6 +84,23 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       target,
       detail: detail ?? null,
     });
+
+  /**
+   * Invitation par e-mail (lien « Choisir mon mot de passe »). Un échec n'annule pas le compte :
+   * il est signalé (invitationSent: false) et journalisé, l'invitation peut être renvoyée.
+   */
+  async function sendInvite(c: C, tenant: string | null, email: string): Promise<boolean> {
+    if (!deps.inviter) return false;
+    const outcome = await deps.inviter.invite(email);
+    await deps.admin.audit({
+      tenantId: tenant,
+      actor: ctx(c).staff,
+      action: outcome === 'failed' ? 'staff.invite_failed' : 'staff.invite_sent',
+      target: email,
+      detail: { outcome },
+    });
+    return outcome !== 'failed';
+  }
 
   /** Restaurant de l'enseigne courante, dans le périmètre de l'utilisateur. */
   async function restaurantFor(c: C, id: string) {
@@ -121,7 +141,8 @@ export function adminRoutes(deps: AdminRoutesDeps) {
         action: 'tenant.create',
         target: input.subdomain,
       });
-      return c.json(created, 201);
+      const invitationSent = await sendInvite(c, created.tenantId, input.adminEmail);
+      return c.json({ ...created, invitationSent }, 201);
     } catch {
       return apiError(c, 'conflict', 'Sous-domaine ou identifiant Splash360 déjà utilisé');
     }
@@ -537,10 +558,21 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     try {
       const staff = await deps.admin.inviteStaff({ ...input, tenantId: tenantId(c) });
       await audit(c, 'staff.invite', staff.email, { role: staff.role });
-      return c.json(staff, 201);
+      const invitationSent = await sendInvite(c, tenantId(c), staff.email);
+      return c.json({ ...staff, invitationSent }, 201);
     } catch {
       return apiError(c, 'conflict', 'Ce compte existe déjà');
     }
+  });
+
+  app.post('/staff/:id/invite', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    const member = (await deps.admin.listStaff(tenantId(c))).find(
+      (s) => s.id === c.req.param('id'),
+    );
+    if (!member) return apiError(c, 'not_found', 'Compte inconnu');
+    return c.json({ invitationSent: await sendInvite(c, tenantId(c), member.email) });
   });
 
   app.patch('/staff/:id', async (c) => {

@@ -26,6 +26,7 @@ import {
 import { Hono } from 'hono';
 import { createHmac, randomUUID } from 'node:crypto';
 import { createSupabaseVerifier } from './admin/auth';
+import { createSupabaseInviter } from './admin/invite';
 import { createApp } from './app';
 import { createBanGeoProvider } from './geo';
 import { jsonLog } from './http/logging';
@@ -96,6 +97,15 @@ const notifier = createNotificationSender({
 const pos = createDemoPosGateway((m) => jsonLog('info', m));
 const geo = createBanGeoProvider(env('GEOCODER_URL') ?? 'https://data.geopf.fr/geocodage/search');
 
+const adminUrl = env('ADMIN_URL') ?? 'http://localhost:3000';
+// Invitations du back-office : Supabase Auth du même projet, clé de service fournie par le runtime.
+const inviter = createSupabaseInviter({
+  url: supabaseUrl,
+  serviceKey: required('SUPABASE_SERVICE_ROLE_KEY'),
+  redirectTo: `${adminUrl.replace(/\/+$/, '')}/mot-de-passe/`,
+  log,
+});
+
 function build() {
   const sql = createSql(databaseUrl, { max: 3, idleTimeout: 10 });
   const payments = createPostgresPaymentStore(sql);
@@ -117,7 +127,8 @@ function build() {
     loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
     loyaltyDemoLogin: env('LOYALTY_DEMO_LOGIN') !== '0',
     geo,
-    adminUrl: env('ADMIN_URL') ?? 'http://localhost:3000',
+    adminUrl,
+    inviter,
     corsOrigins: '*',
     log: true,
     trustProxy: true,

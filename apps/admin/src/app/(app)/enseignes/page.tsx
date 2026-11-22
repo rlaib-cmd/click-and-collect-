@@ -1,6 +1,6 @@
 'use client';
 
-import { createTenantSchema, tenantSummarySchema } from '@splash360/contracts';
+import { createTenantSchema, invitationSchema, tenantSummarySchema } from '@splash360/contracts';
 import { messages } from '@splash360/i18n';
 import { useState, type FormEvent } from 'react';
 import { z } from 'zod';
@@ -16,13 +16,22 @@ export default function TenantsPage() {
   const tenants = useApi('/tenants', z.object({ tenants: z.array(tenantSummarySchema) }));
   const [form, setForm] = useState({ name: '', subdomain: '', splash360Id: '', adminEmail: '' });
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   if (me.role !== 'super_admin') return <p>{messages.admin.common.forbidden}</p>;
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
     if (!createTenantSchema.safeParse(form).success) return setError(messages.admin.common.error);
     try {
-      await api(auth, '/tenants', z.object({ tenantId: z.uuid() }), { method: 'POST', body: form });
+      const created = await api(
+        auth,
+        '/tenants',
+        z.object({ tenantId: z.uuid() }).extend(invitationSchema.shape),
+        { method: 'POST', body: form },
+      );
+      setNotice(
+        created.invitationSent ? t.created(form.adminEmail) : t.createdNoInvite(form.adminEmail),
+      );
       setForm({ name: '', subdomain: '', splash360Id: '', adminEmail: '' });
       setError(null);
       await tenants.reload();
@@ -59,6 +68,11 @@ export default function TenantsPage() {
   return (
     <div className="stack">
       <h1>{messages.admin.nav.tenants}</h1>
+      {notice ? (
+        <p className="card" role="status">
+          {notice}
+        </p>
+      ) : null}
       {error ? (
         <p className="banner danger" role="alert">
           {error}

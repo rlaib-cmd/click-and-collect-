@@ -15,6 +15,7 @@ import {
   createSql,
 } from '@splash360/db';
 import { createSupabaseVerifier } from './admin/auth';
+import { createSupabaseInviter } from './admin/invite';
 import { createApp } from './app';
 import { loadEnv } from './env';
 import { jsonLog } from './http/logging';
@@ -83,6 +84,15 @@ const app = createApp({
     issuer: env.SUPABASE_JWT_ISSUER,
   }),
   adminUrl: env.ADMIN_URL,
+  inviter:
+    env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
+      ? createSupabaseInviter({
+          url: env.SUPABASE_URL,
+          serviceKey: env.SUPABASE_SERVICE_ROLE_KEY,
+          redirectTo: `${env.ADMIN_URL.replace(/\/+$/, '')}/mot-de-passe/`,
+          log,
+        })
+      : null,
   gateway,
   tokenSecret: env.ORDER_TOKEN_SECRET,
   ...(env.LOYALTY === 'demo'

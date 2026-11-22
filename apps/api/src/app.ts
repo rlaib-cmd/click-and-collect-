@@ -1,4 +1,5 @@
 import type { LoyaltyProvider } from '@splash360/api-loyalty';
+import type { AuthInviter } from './admin/invite';
 import type { MenuCache } from '@splash360/api-menu';
 import type {
   AdminStore,
@@ -48,6 +49,8 @@ export interface AppDeps {
   readonly verifier: TokenVerifier;
   /** URL publique du back-office. */
   readonly adminUrl?: string;
+  /** Invitations des comptes du back-office (Supabase Auth) ; absent = aucun e-mail. */
+  readonly inviter?: AuthInviter | null;
   /** Secret partagé avec la caisse Splash360 pour les retours de statut ; null = désactivé. */
   readonly posWebhookSecret?: string | null;
   /** Appelé en plus après un paiement confirmé (tests). */
@@ -176,6 +179,7 @@ export function createApp(deps: AppDeps) {
       menus: deps.menus,
       loyalty: deps.loyalty,
       adminUrl: deps.adminUrl ?? 'http://localhost:3000',
+      inviter: deps.inviter ?? null,
     }),
   );
   const hiddenItems = async (tenantId: string, restaurantId: string) => {

@@ -17,6 +17,7 @@ import {
   STAFF_IDS,
   testSetup,
 } from '../test-fixtures';
+import { createFakeInviter } from '../admin/invite';
 
 const json = { 'Content-Type': 'application/json' };
 
@@ -395,6 +396,70 @@ describe('clients, équipe et enseignes', () => {
         })
       ).status,
     ).toBe(409);
+  });
+});
+
+describe('invitations du back-office (lot 9)', () => {
+  it('envoie l’invitation à la création d’enseigne et d’équipier, et la renvoie', async () => {
+    const fake = createFakeInviter(['echec@bella.test']);
+    const setup = testSetup({ inviter: fake.inviter });
+    const tenant = await setup.app.request('/v1/admin/tenants', {
+      method: 'POST',
+      headers: await as('admin@splash360.test'),
+      body: JSON.stringify({
+        name: 'Le Bistrot',
+        subdomain: 'lebistrot',
+        splash360Id: 'S360-BISTROT',
+        adminEmail: 'patron@bistrot.test',
+      }),
+    });
+    expect(await tenant.json()).toMatchObject({ invitationSent: true });
+    const headers = await as('gerant@bella.test');
+    const invite = (email: string) =>
+      setup.app.request('/v1/admin/staff', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ email, name: null, role: 'tenant_admin', restaurantId: null }),
+      });
+    const created = (await (await invite('associe@bella.test')).json()) as {
+      id: string;
+      invitationSent: boolean;
+    };
+    expect(created.invitationSent).toBe(true);
+    // Échec d'envoi : le compte est créé quand même, l'échec est signalé et journalisé.
+    const failed = await invite('echec@bella.test');
+    expect(failed.status).toBe(201);
+    expect(await failed.json()).toMatchObject({ invitationSent: false });
+    expect(setup.admin.audit.at(-1)?.action).toBe('staff.invite_failed');
+    const resend = await setup.app.request(`/v1/admin/staff/${created.id}/invite`, {
+      method: 'POST',
+      headers,
+    });
+    expect(await resend.json()).toEqual({ invitationSent: true });
+    expect(fake.sent).toEqual(['patron@bistrot.test', 'associe@bella.test', 'associe@bella.test']);
+    expect(
+      (
+        await setup.app.request(`/v1/admin/staff/${STAFF_IDS.greenAdmin}/invite`, {
+          method: 'POST',
+          headers,
+        })
+      ).status,
+    ).toBe(404);
+  });
+
+  it('sans configuration Supabase : compte créé, aucune invitation', async () => {
+    const setup = testSetup();
+    const res = await setup.app.request('/v1/admin/staff', {
+      method: 'POST',
+      headers: await as('gerant@bella.test'),
+      body: JSON.stringify({
+        email: 'seul@bella.test',
+        name: null,
+        role: 'tenant_admin',
+        restaurantId: null,
+      }),
+    });
+    expect(await res.json()).toMatchObject({ invitationSent: false });
   });
 });
 

@@ -175,6 +175,9 @@ export const staffMemberSchema = z.object({
   restaurantId: z.uuid().nullable(),
 });
 
+/** Réponse d'une invitation : false si l'e-mail n'a pas pu partir (compte créé quand même). */
+export const invitationSchema = z.object({ invitationSent: z.boolean() });
+
 export const inviteSchema = z
   .object({
     email: z.email().max(200),

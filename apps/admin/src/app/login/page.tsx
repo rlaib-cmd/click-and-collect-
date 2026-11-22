@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const sb = supabase();
 
   const submit = async (e: FormEvent) => {
@@ -36,6 +37,20 @@ export default function LoginPage() {
     if (!res.ok) return setError(t.error);
     storeDevToken(((await res.json()) as { token: string }).token);
     router.replace('/commandes');
+  };
+
+  // Lien de réinitialisation : il ouvre la page « Choisir mon mot de passe » de ce back-office.
+  const forgot = async () => {
+    if (!sb) return;
+    setError(null);
+    if (!email.trim()) return setError(t.forgotNeedEmail);
+    setBusy(true);
+    await sb.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/mot-de-passe/`,
+    });
+    setBusy(false);
+    // Même message que le compte existe ou non : ne révèle pas les e-mails enregistrés.
+    setNotice(t.forgotSent);
   };
 
   return (
@@ -75,6 +90,12 @@ export default function LoginPage() {
         <button type="submit" className="primary" disabled={busy || (!sb && !devLoginEnabled)}>
           {t.submit}
         </button>
+        {sb ? (
+          <button type="button" className="link" disabled={busy} onClick={() => void forgot()}>
+            {t.forgot}
+          </button>
+        ) : null}
+        {notice ? <p role="status">{notice}</p> : null}
       </form>
     </main>
   );
