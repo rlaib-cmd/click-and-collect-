@@ -65,6 +65,8 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
       totalCents: cents(2900),
     },
     idempotencyKey: `test-${run}-${key}`,
+    applicationFeeCents: 0,
+    accessTokenHash: 'empreinte',
     maxOrdersPerSlot: max,
   });
 

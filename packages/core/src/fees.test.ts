@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeTotals, type FeeSettings } from './fees';
+import { computeApplicationFee, computeTotals, type FeeSettings } from './fees';
 import { cents } from './money';
 
 const settings: FeeSettings = {
@@ -64,5 +64,24 @@ describe('frais et minimum', () => {
     expect(() =>
       computeTotals({ mode: 'delivery', subtotalCents: cents(2000), settings }),
     ).toThrow();
+  });
+});
+
+describe('commission Splash360', () => {
+  it('applique pourcentage et montant fixe, arrondis au centime', () => {
+    expect(computeApplicationFee(cents(2290), { bps: 250, fixedCents: cents(0) })).toBe(57); // 2,5 % de 22,90 €
+    expect(computeApplicationFee(cents(2290), { bps: 0, fixedCents: cents(30) })).toBe(30);
+    expect(computeApplicationFee(cents(2290), { bps: 100, fixedCents: cents(20) })).toBe(43);
+  });
+
+  it('vaut 0 par défaut et ne dépasse jamais le total', () => {
+    expect(computeApplicationFee(cents(2290), { bps: 0, fixedCents: cents(0) })).toBe(0);
+    expect(computeApplicationFee(cents(20), { bps: 0, fixedCents: cents(50) })).toBe(20);
+  });
+
+  it('refuse un taux invalide', () => {
+    expect(() => computeApplicationFee(cents(100), { bps: -1, fixedCents: cents(0) })).toThrow(
+      RangeError,
+    );
   });
 });

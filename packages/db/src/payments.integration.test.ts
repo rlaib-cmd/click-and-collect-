@@ -1,0 +1,134 @@
+import { cents } from '@splash360/core';
+import { afterAll, describe, expect, it } from 'vitest';
+import { createSql } from './client';
+import { createPostgresOrderingStore } from './ordering';
+import { createPostgresPaymentStore } from './payments';
+import { createPostgresRestaurantStore } from './restaurants';
+
+/** Nécessite DATABASE_URL sur une base migrée et chargée avec supabase/seed.sql. */
+const url = process.env.DATABASE_URL;
+const BELLA = '00000000-0000-4000-8000-000000000001';
+const GREEN = '00000000-0000-4000-8000-000000000002';
+
+describe.skipIf(!url)('PaymentStore Postgres', () => {
+  const sql = createSql(url ?? '', { max: 4 });
+  const ordering = createPostgresOrderingStore(sql);
+  const payments = createPostgresPaymentStore(sql);
+  const restaurants = createPostgresRestaurantStore(sql);
+  const run = `${Date.now()}`;
+  afterAll(async () => {
+    await sql`delete from public.orders where idempotency_key like ${`pay-${run}-%`}`;
+    await sql.end();
+  });
+
+  async function newOrder(key: string) {
+    const [r] = await restaurants.listByTenant(BELLA);
+    const result = await ordering.createOrder({
+      tenantId: BELLA,
+      restaurantId: r?.id ?? '',
+      customer: {
+        name: 'Test',
+        email: `pay-${run}@example.fr`,
+        phone: '0600000000',
+        marketingConsent: false,
+      },
+      mode: 'pickup',
+      requestedSlot: null,
+      estimatedAt: new Date().toISOString(),
+      deliveryAddress: null,
+      deliveryZoneId: null,
+      lines: [
+        {
+          productId: 'p-tiramisu',
+          name: 'Tiramisu',
+          quantity: 2,
+          basePriceCents: cents(650),
+          options: [],
+          unitPriceCents: cents(650),
+          totalCents: cents(1300),
+          note: null,
+        },
+      ],
+      totals: {
+        subtotalCents: cents(1300),
+        deliveryFeeCents: cents(0),
+        serviceFeeCents: cents(0),
+        totalCents: cents(1300),
+      },
+      idempotencyKey: `pay-${run}-${key}`,
+      applicationFeeCents: 33,
+      accessTokenHash: 'empreinte',
+      maxOrdersPerSlot: null,
+    });
+    if (!result.ok) throw new Error('création impossible');
+    return result.order.id;
+  }
+
+  it('passe une commande à « payée » une seule fois, montant vérifié', async () => {
+    const id = await newOrder('a');
+    expect(await payments.getOrder(GREEN, id)).toBeNull();
+    expect(await payments.attachPaymentIntent(BELLA, id, `pi_${run}_a`)).toBe(true);
+    expect(await payments.markPaid(`pi_${run}_a`, 1299, 'eur')).toEqual({
+      ok: false,
+      error: 'amount_mismatch',
+    });
+    expect(await payments.markPaid(`pi_${run}_a`, 1300, 'eur')).toMatchObject({
+      ok: true,
+      changed: true,
+    });
+    expect(await payments.markPaid(`pi_${run}_a`, 1300, 'eur')).toMatchObject({
+      ok: true,
+      changed: false,
+    });
+    expect(await payments.getOrder(BELLA, id)).toMatchObject({
+      status: 'paid',
+      applicationFeeCents: 33,
+    });
+    expect(await payments.markPaid('pi_inconnu', 1300, 'eur')).toEqual({
+      ok: false,
+      error: 'unknown_payment',
+    });
+  });
+
+  it('rembourse partiellement puis totalement, sans dépasser le total', async () => {
+    const id = await newOrder('b');
+    expect(await payments.recordRefund(BELLA, id, 500, 'admin')).toEqual({
+      ok: false,
+      error: 'not_refundable',
+    });
+    await payments.attachPaymentIntent(BELLA, id, `pi_${run}_b`);
+    await payments.markPaid(`pi_${run}_b`, 1300, 'eur');
+    expect(await payments.recordRefund(BELLA, id, 500, 'admin')).toEqual({
+      ok: true,
+      refundedCents: 500,
+      fullyRefunded: false,
+    });
+    expect(await payments.recordRefund(BELLA, id, 900, 'admin')).toEqual({
+      ok: false,
+      error: 'amount_too_high',
+    });
+    expect(await payments.recordRefund(BELLA, id, 800, 'admin')).toEqual({
+      ok: true,
+      refundedCents: 1300,
+      fullyRefunded: true,
+    });
+    expect((await payments.getOrder(BELLA, id))?.status).toBe('refunded');
+  });
+
+  it('annule les commandes non payées à temps et note l’échec de paiement', async () => {
+    const id = await newOrder('c');
+    await payments.attachPaymentIntent(BELLA, id, `pi_${run}_c`);
+    expect(await payments.markPaymentFailed(`pi_${run}_c`)).toMatchObject({
+      ok: true,
+      changed: true,
+    });
+    const expired = await payments.expirePending(new Date(Date.now() + 1000));
+    expect(expired.map((e) => e.orderId)).toContain(id);
+    expect((await payments.getOrder(BELLA, id))?.status).toBe('cancelled');
+    // Un paiement qui aboutit malgré tout rattrape la commande.
+    expect(await payments.markPaid(`pi_${run}_c`, 1300, 'eur')).toMatchObject({
+      ok: true,
+      changed: true,
+    });
+  });
+});

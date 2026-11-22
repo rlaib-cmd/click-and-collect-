@@ -65,3 +65,19 @@ export function computeTotals(input: {
     },
   };
 }
+
+/** Commission Splash360 : pourcentage (points de base) et/ou montant fixe, plafonnée au total. */
+export interface ApplicationFeeSettings {
+  /** 100 = 1 %. */
+  readonly bps: number;
+  readonly fixedCents: Cents;
+}
+
+export function computeApplicationFee(totalCents: Cents, settings: ApplicationFeeSettings): Cents {
+  if (!Number.isSafeInteger(settings.bps) || settings.bps < 0) {
+    throw new RangeError(`Commission invalide : ${settings.bps} points de base`);
+  }
+  // Arrondi au centime le plus proche, jamais au-delà du montant payé.
+  const fee = Math.round((totalCents * settings.bps) / 10_000) + settings.fixedCents;
+  return cents(Math.min(fee, totalCents));
+}

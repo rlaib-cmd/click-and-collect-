@@ -49,6 +49,10 @@ export interface NewOrder {
   readonly lines: readonly PricedLine[];
   readonly totals: Totals;
   readonly idempotencyKey: string;
+  /** Commission Splash360 calculée sur le total. */
+  readonly applicationFeeCents: number;
+  /** Empreinte SHA-256 du jeton de suivi remis au client. */
+  readonly accessTokenHash: string;
   /** Capacité du créneau, revérifiée sous verrou ; null = illimitée. */
   readonly maxOrdersPerSlot: number | null;
 }
@@ -234,12 +238,12 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
         >`
           insert into public.orders (tenant_id, restaurant_id, customer_id, number, mode, requested_slot, estimated_at,
             delivery_address, delivery_zone_id, subtotal_cents, delivery_fee_cents, service_fee_cents, total_cents,
-            idempotency_key)
+            idempotency_key, application_fee_cents, access_token_hash)
           values (${o.tenantId}, ${o.restaurantId}, ${customer?.id ?? null}, ${counter?.n ?? 0}, ${o.mode},
             ${o.requestedSlot}, ${o.estimatedAt},
             ${o.deliveryAddress ? tx.json(o.deliveryAddress as unknown as Parameters<typeof tx.json>[0]) : null},
             ${o.deliveryZoneId}, ${o.totals.subtotalCents}, ${o.totals.deliveryFeeCents}, ${o.totals.serviceFeeCents},
-            ${o.totals.totalCents}, ${o.idempotencyKey})
+            ${o.totals.totalCents}, ${o.idempotencyKey}, ${o.applicationFeeCents}, ${o.accessTokenHash})
           returning id, number, status, total_cents, created_at`;
         if (!order) throw new Error('Insertion de commande sans retour');
 

@@ -13,6 +13,8 @@ export interface Restaurant {
   readonly latitude: number | null;
   readonly longitude: number | null;
   readonly stripeAccountId: string | null;
+  /** Le compte Stripe connecté peut encaisser (webhook account.updated). */
+  readonly stripeChargesEnabled: boolean;
   readonly status: RestaurantStatus;
 }
 
@@ -33,6 +35,7 @@ interface Row {
   latitude: number | null;
   longitude: number | null;
   stripe_account_id: string | null;
+  stripe_charges_enabled: boolean;
   status: RestaurantStatus;
 }
 
@@ -48,6 +51,7 @@ function toRestaurant(r: Row): Restaurant {
     latitude: r.latitude,
     longitude: r.longitude,
     stripeAccountId: r.stripe_account_id,
+    stripeChargesEnabled: r.stripe_charges_enabled,
     status: r.status,
   };
 }
