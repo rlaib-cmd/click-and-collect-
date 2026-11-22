@@ -23,11 +23,23 @@ l'enseigne, le design, les réglages, l'équipe et les clients.
   opérations seront des appels à Splash360 (endpoints demandés dans `questions-en-attente.md`).
 - Chaque action est journalisée (`tenant.delete`, `staff.delete`, `loyalty.adjust`, `loyalty.member.delete`).
 
+- **Autonomie des administrateurs d'enseigne** : à la création d'une enseigne (premier
+  administrateur) ou d'un compte d'équipe, l'API demande à Supabase Auth d'envoyer une invitation
+  (`POST /auth/v1/invite`, clé de service côté serveur uniquement, `redirect_to` vers
+  `/mot-de-passe/` du back-office). Si le compte Auth existe déjà, un lien de réinitialisation
+  (`/auth/v1/recover`) part à la place. L'échec d'envoi n'annule pas le compte : il est signalé et
+  l'invitation peut être renvoyée depuis la page Équipe. Le back-office ne reçoit que la clé publiable.
+- **Couleur du club fidélité** : colonne `tenant_theme.loyalty_color` (null = couleur principale),
+  réglée dans Design ; `packages/theme` calcule le texte lisible dessus.
+
 ## Conséquences
 
 - La suppression d'une enseigne efface en cascade restaurants, thème, équipe, réglages, journal et
   membres de démonstration ; elle est irréversible.
 - Les clients qui commandent (table `customers`) gardent leur suppression RGPD existante (anonymisation).
+- Les e-mails d'invitation passent par l'expéditeur de Supabase Auth : limité en débit sur
+  l'expéditeur intégré, il faut un SMTP personnalisé (Brevo) en production, et l'URL
+  `…/mot-de-passe/` du back-office dans les URL de redirection autorisées.
 
 ## Statut
 

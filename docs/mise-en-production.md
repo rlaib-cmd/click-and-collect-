@@ -26,6 +26,7 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 | `TRUST_PROXY` | selon hébergeur | `1` derrière le proxy de l'hébergeur (limitation de débit par IP réelle) |
 | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` | pour encaisser | Compte plateforme Stripe Connect ; webhook Connect sur `/v1/webhooks/stripe` |
 | `SUPABASE_JWKS_URL` | pour le back-office | `https://<projet>.supabase.co/auth/v1/.well-known/jwks.json` |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | pour inviter | Invitations des comptes du back-office (lien « Choisir mon mot de passe ») ; clé de service côté serveur uniquement |
 | `POS_WEBHOOK_SECRET` | pour la caisse | Secret partagé avec Splash360 (retour des statuts) |
 | `GEOCODER_URL` | non | Géocodeur au format API Adresse (Géoplateforme par défaut) |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | recommandé | Remontée des erreurs |
@@ -45,20 +46,25 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 1. **Supabase** : projet `splash360-commande-prod` (région Paris `eu-west-3`, organisation Splash 360).
 2. **Fly.io** : `flyctl launch --no-deploy --copy-config` (application `splash360-commande-api`, région `cdg`, fichier `fly.toml`),
    puis `fly secrets set DATABASE_URL=… ORDER_TOKEN_SECRET=… SUPABASE_JWKS_URL=… ADMIN_URL=… CORS_ORIGINS=…`
-   (et plus tard `STRIPE_*`, `POS_WEBHOOK_SECRET`, `BREVO_API_KEY`, `EMAIL_SENDER`).
+   (et plus tard `STRIPE_*`, `POS_WEBHOOK_SECRET`, `BREVO_API_KEY`, `EMAIL_SENDER`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
 3. **GitHub** (Settings → Environments → `production`) : secrets `FLY_API_TOKEN`, `SUPABASE_ACCESS_TOKEN`,
    `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`. Déploiement : onglet Actions → « Déploiement production » → Run
    (migrations puis API, vérification `/ready`).
 4. **Brevo** : domaine d'envoi authentifié (SPF, DKIM), adresse d'expédition vérifiée, clé API transactionnelle
    (`BREVO_API_KEY`, `EMAIL_SENDER`, `EMAIL_SENDER_NAME`). Sans clé, les e-mails sont seulement journalisés.
-5. **Application** : profil `<enseigne>-production` (API `https://splash360-commande-api.fly.dev`), Google Play :
+5. **Invitations du back-office** (Supabase → Authentication) : l'expéditeur intégré de Supabase est
+   limité à quelques e-mails par heure ; brancher **Brevo en SMTP personnalisé** (Authentication → Emails →
+   SMTP Settings : `smtp-relay.brevo.com`, port 587, identifiant et clé SMTP Brevo, expéditeur vérifié).
+   Dans URL Configuration, ajouter l'URL `https://<back-office>/mot-de-passe/` aux redirections autorisées
+   et traduire les modèles « Invite user » et « Reset password » en français.
+6. **Application** : profil `<enseigne>-production` (API `https://splash360-commande-api.fly.dev`), Google Play :
    [`stores/google-play.md`](stores/google-play.md).
 
 ## Base de données
 
 1. Créer le projet Supabase (région UE), activer PITR en production.
 2. `supabase link --project-ref <ref>` puis `supabase db push` (migrations versionnées de `supabase/migrations/`). Jamais `seed.sql` en production.
-3. Créer le premier super-administrateur : `insert into staff_users (email, role) values ('...', 'super_admin');` puis l'inviter dans Supabase Auth.
+3. Créer le premier super-administrateur : `insert into staff_users (email, role) values ('...', 'super_admin');` puis l'inviter dans Supabase Auth (Authentication → Users → Invite). Les administrateurs d'enseigne sont ensuite invités automatiquement depuis le back-office.
 
 ## Stripe
 
