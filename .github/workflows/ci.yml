@@ -50,5 +50,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Démarrer Postgres Supabase et appliquer les migrations
         run: pnpm exec supabase db start
+      - name: Recharger les migrations et les données de démo
+        run: pnpm db:reset
       - name: Tests pgTAP
         run: pnpm db:test
+      - name: Tests d'intégration sur la base
+        run: pnpm test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
