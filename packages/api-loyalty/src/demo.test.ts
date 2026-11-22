@@ -99,4 +99,37 @@ describe('fidélité de démonstration', () => {
       }),
     ).toEqual({ ok: false, error: 'unknown_member' });
   });
+
+  it('administre les membres : recherche, ajustement sans solde négatif, suppression', async () => {
+    let n = 0;
+    const loyalty = createDemoLoyaltyProvider(
+      createMemoryDemoLoyaltyStore(),
+      () => `code${++n}-aaaa-bbbb-cccc`,
+    );
+    const a = (await loyalty.join(bills, { name: 'Alice', email: 'a@x.fr', phone: null })).member;
+    await loyalty.join(bills, { name: 'Bob', email: 'b@x.fr', phone: null });
+    await loyalty.join(other, { name: 'Alice', email: 'a@x.fr', phone: null });
+    expect((await loyalty.listMembers(bills, null, 10)).map((m) => m.name)).toEqual([
+      'Bob',
+      'Alice',
+    ]);
+    expect((await loyalty.listMembers(bills, ' ALI ', 10)).map((m) => m.id)).toEqual([a.id]);
+    expect(await loyalty.adjustPoints(bills, a.id, 50, 'Geste commercial')).toMatchObject({
+      ok: true,
+      member: { points: 150 },
+    });
+    expect(await loyalty.adjustPoints(bills, a.id, -151, 'Erreur')).toEqual({
+      ok: false,
+      error: 'insufficient_points',
+    });
+    expect(await loyalty.adjustPoints(other, a.id, 10, 'x')).toEqual({
+      ok: false,
+      error: 'unknown_member',
+    });
+    await expect(loyalty.adjustPoints(bills, a.id, 0, 'x')).rejects.toThrow();
+    expect((await loyalty.history(bills, a.id))[0]).toMatchObject({ kind: 'adjust', points: 50 });
+    expect(await loyalty.deleteMember(other, a.id)).toBe(false);
+    expect(await loyalty.deleteMember(bills, a.id)).toBe(true);
+    expect(await loyalty.getMember(bills, a.id)).toBeNull();
+  });
 });

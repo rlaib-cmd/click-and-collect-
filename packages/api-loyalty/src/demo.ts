@@ -1,5 +1,7 @@
 import type {
+  AdjustResult,
   LoyaltyMember,
+  LoyaltyMemberSummary,
   LoyaltyMovement,
   LoyaltyProgram,
   LoyaltyProvider,
@@ -55,6 +57,13 @@ export interface DemoLoyaltyStore {
   findByEmail(tenantId: string, email: string): Promise<LoyaltyMember | null>;
   getMember(tenantId: string, memberId: string): Promise<LoyaltyMember | null>;
   history(tenantId: string, memberId: string): Promise<LoyaltyMovement[]>;
+  listMembers(
+    tenantId: string,
+    search: string | null,
+    limit: number,
+  ): Promise<LoyaltyMemberSummary[]>;
+  adjust(tenantId: string, memberId: string, delta: number, label: string): Promise<AdjustResult>;
+  deleteMember(tenantId: string, memberId: string): Promise<boolean>;
   settle(
     tenantId: string,
     input: {
@@ -97,6 +106,13 @@ export function createDemoLoyaltyProvider(
     findByEmail: (tenant, email) => store.findByEmail(tenant.id, email.trim().toLowerCase()),
     getMember: (tenant, memberId) => store.getMember(tenant.id, memberId),
     history: (tenant, memberId) => store.history(tenant.id, memberId),
+    listMembers: (tenant, search, limit) =>
+      store.listMembers(tenant.id, search?.trim().toLowerCase() || null, limit),
+    async adjustPoints(tenant, memberId, delta, label) {
+      if (!Number.isInteger(delta) || delta === 0) throw new Error('Ajustement invalide');
+      return store.adjust(tenant.id, memberId, delta, label.trim());
+    },
+    deleteMember: (tenant, memberId) => store.deleteMember(tenant.id, memberId),
     settleOrder: (tenant, s) =>
       store.settle(tenant.id, {
         memberId: s.memberId,
@@ -115,6 +131,7 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
   interface Row extends Omit<LoyaltyMember, 'points'> {
     tenantId: string;
     points: number;
+    createdAt: string;
     movements: (LoyaltyMovement & { orderId: string | null })[];
   }
   const members: Row[] = [];
@@ -140,6 +157,7 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
         email: input.email,
         points: input.welcomePoints,
         cardCode: input.cardCode,
+        createdAt: now().toISOString(),
         movements: [],
       };
       if (input.welcomePoints > 0) {
@@ -203,6 +221,37 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
         });
       }
       return Promise.resolve({ ok: true });
+    },
+    listMembers(tenantId, search, limit) {
+      const match = (m: Row) =>
+        !search ||
+        [m.name.toLowerCase(), m.email, m.cardCode.toLowerCase()].some((v) => v.includes(search));
+      return Promise.resolve(
+        members
+          .filter((m) => m.tenantId === tenantId && match(m))
+          .reverse()
+          .slice(0, limit)
+          .map((m) => ({ ...pub(m), createdAt: m.createdAt })),
+      );
+    },
+    adjust(tenantId, memberId, delta, label) {
+      const r = find(tenantId, memberId);
+      if (!r) return Promise.resolve({ ok: false, error: 'unknown_member' });
+      if (r.points + delta < 0) return Promise.resolve({ ok: false, error: 'insufficient_points' });
+      r.points += delta;
+      r.movements.push({
+        kind: 'adjust',
+        points: delta,
+        label,
+        at: now().toISOString(),
+        orderId: null,
+      });
+      return Promise.resolve({ ok: true, member: pub(r) });
+    },
+    deleteMember(tenantId, memberId) {
+      const i = members.findIndex((m) => m.tenantId === tenantId && m.id === memberId);
+      if (i >= 0) members.splice(i, 1);
+      return Promise.resolve(i >= 0);
     },
   };
 }

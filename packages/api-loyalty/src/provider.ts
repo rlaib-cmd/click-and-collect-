@@ -23,8 +23,18 @@ export interface LoyaltyMember {
   readonly cardCode: string;
 }
 
+/** Membre vu depuis le back-office. */
+export interface LoyaltyMemberSummary extends LoyaltyMember {
+  readonly createdAt: string;
+}
+
+export type AdjustResult =
+  | { readonly ok: true; readonly member: LoyaltyMember }
+  | { readonly ok: false; readonly error: 'unknown_member' | 'insufficient_points' };
+
 export interface LoyaltyMovement {
-  readonly kind: 'welcome' | 'earn' | 'redeem';
+  /** adjust : correction manuelle depuis le back-office. */
+  readonly kind: 'welcome' | 'earn' | 'redeem' | 'adjust';
   /** Positif pour un gain, négatif pour une récompense. */
   readonly points: number;
   readonly label: string;
@@ -68,4 +78,21 @@ export interface LoyaltyProvider {
    * (un rejeu ne change rien).
    */
   settleOrder(tenant: LoyaltyTenant, settlement: OrderSettlement): Promise<SettleResult>;
+
+  // ——— Administration (back-office de l'enseigne) ———
+  /** Membres les plus récents d'abord ; `search` filtre sur le nom, l'e-mail ou le code de carte. */
+  listMembers(
+    tenant: LoyaltyTenant,
+    search: string | null,
+    limit: number,
+  ): Promise<readonly LoyaltyMemberSummary[]>;
+  /** Ajout (delta > 0) ou retrait (delta < 0) manuel ; le solde ne peut pas devenir négatif. */
+  adjustPoints(
+    tenant: LoyaltyTenant,
+    memberId: string,
+    delta: number,
+    label: string,
+  ): Promise<AdjustResult>;
+  /** Droit à l'effacement : le compte et son historique disparaissent. */
+  deleteMember(tenant: LoyaltyTenant, memberId: string): Promise<boolean>;
 }

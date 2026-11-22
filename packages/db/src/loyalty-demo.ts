@@ -13,7 +13,7 @@ export interface DemoMemberRecord {
 }
 
 export interface DemoMovementRecord {
-  readonly kind: 'welcome' | 'earn' | 'redeem';
+  readonly kind: 'welcome' | 'earn' | 'redeem' | 'adjust';
   readonly points: number;
   readonly label: string;
   readonly at: string;
@@ -145,6 +145,51 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
         }
         return { ok: true as const };
       });
+    },
+
+    async listMembers(tenantId: string, search: string | null, limit: number) {
+      const like = search ? `%${search.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%` : null;
+      const rows = await sql<(MemberRow & { created_at: Date })[]>`
+        select id, name, email, points, card_code, created_at from public.loyalty_demo_members
+        where tenant_id = ${tenantId}
+          and (${like}::text is null or lower(name) like ${like} or email like ${like} or lower(card_code) like ${like})
+        order by created_at desc, id desc limit ${limit}`;
+      return rows.map((r) => ({ ...toMember(r), createdAt: r.created_at.toISOString() }));
+    },
+
+    /** Correction manuelle du solde, sous verrou ; jamais en dessous de zéro. */
+    async adjust(
+      tenantId: string,
+      memberId: string,
+      delta: number,
+      label: string,
+    ): Promise<
+      | { readonly ok: true; readonly member: DemoMemberRecord }
+      | { readonly ok: false; readonly error: 'unknown_member' | 'insufficient_points' }
+    > {
+      if (!UUID.test(memberId)) return { ok: false, error: 'unknown_member' };
+      return sql.begin(async (tx) => {
+        const [m] = await tx<{ points: number }[]>`
+          select points from public.loyalty_demo_members
+          where tenant_id = ${tenantId} and id = ${memberId} for update`;
+        if (!m) return { ok: false as const, error: 'unknown_member' as const };
+        if (m.points + delta < 0)
+          return { ok: false as const, error: 'insufficient_points' as const };
+        await tx`insert into public.loyalty_demo_movements (tenant_id, member_id, kind, points, label)
+                 values (${tenantId}, ${memberId}, 'adjust', ${delta}, ${label})`;
+        const [r] = await tx<MemberRow[]>`
+          update public.loyalty_demo_members set points = points + ${delta} where id = ${memberId}
+          returning id, name, email, points, card_code`;
+        if (!r) throw new Error('Membre introuvable');
+        return { ok: true as const, member: toMember(r) };
+      });
+    },
+
+    async deleteMember(tenantId: string, memberId: string) {
+      if (!UUID.test(memberId)) return false;
+      const r = await sql`delete from public.loyalty_demo_members
+                          where tenant_id = ${tenantId} and id = ${memberId}`;
+      return r.count === 1;
     },
   };
 }

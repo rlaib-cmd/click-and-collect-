@@ -55,4 +55,32 @@ describe.skipIf(!url)('Fidélité de démonstration Postgres', () => {
     ).toEqual({ ok: false, error: 'insufficient_points' });
     expect(await store.getMember('00000000-0000-4000-8000-000000000001', member.id)).toBeNull();
   });
+
+  it('administre un membre : recherche, correction sans solde négatif, suppression', async () => {
+    const { member } = await store.createMember(BILLS, {
+      name: 'Admin Test',
+      email: `admin-${run}@example.fr`,
+      phone: null,
+      cardCode: `S360-A${run}`,
+      welcomePoints: 100,
+    });
+    expect((await store.listMembers(BILLS, `admin-${run}`, 10)).map((m) => m.id)).toEqual([
+      member.id,
+    ]);
+    expect(await store.listMembers(BILLS, '%', 10)).toEqual([]);
+    expect(await store.adjust(BILLS, member.id, -30, 'Correction')).toMatchObject({
+      ok: true,
+      member: { points: 70 },
+    });
+    expect(await store.adjust(BILLS, member.id, -71, 'Trop')).toEqual({
+      ok: false,
+      error: 'insufficient_points',
+    });
+    expect((await store.history(BILLS, member.id))[0]).toMatchObject({
+      kind: 'adjust',
+      points: -30,
+    });
+    expect(await store.deleteMember(BILLS, member.id)).toBe(true);
+    expect(await store.getMember(BILLS, member.id)).toBeNull();
+  });
 });

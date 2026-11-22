@@ -36,7 +36,7 @@ export const loyaltyJoinRequestSchema = z.object({
 export const loyaltyLoginRequestSchema = z.object({ email: z.email().max(200) });
 
 export const loyaltyMovementSchema = z.object({
-  kind: z.enum(['welcome', 'earn', 'redeem']),
+  kind: z.enum(['welcome', 'earn', 'redeem', 'adjust']),
   points: z.number().int(),
   label: z.string(),
   at: z.iso.datetime(),

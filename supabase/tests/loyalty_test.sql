@@ -1,6 +1,6 @@
 -- Lot 8 : fidélité (données de test) et récompense sur la commande.
 begin;
-select plan(4);
+select plan(7);
 
 insert into public.tenants (id, name, subdomain, splash360_id) values
   ('10000000-0000-4000-8000-000000000001', 'Fidèle A', 'fidele-a', 'S360-FA'),
@@ -38,6 +38,26 @@ select throws_ok(
      values ('10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'earn', 181, 'Commande',
              '30000000-0000-4000-8000-000000000001') $$,
   '23505'
+);
+
+-- 5 et 6 (lot 9). Une correction manuelle est admise, sans commande ; un type inconnu est refusé.
+select lives_ok(
+  $$ insert into public.loyalty_demo_movements (tenant_id, member_id, kind, points, label)
+     values ('10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'adjust', -50, 'Correction') $$,
+  'correction manuelle acceptée'
+);
+select throws_ok(
+  $$ insert into public.loyalty_demo_movements (tenant_id, member_id, kind, points, label, order_id)
+     values ('10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'adjust', 10, 'X',
+             '30000000-0000-4000-8000-000000000002') $$,
+  '23514'
+);
+
+-- 7. Supprimer un membre efface son historique.
+delete from public.loyalty_demo_members where id = '20000000-0000-4000-8000-000000000001';
+select is_empty(
+  $$ select 1 from public.loyalty_demo_movements where member_id = '20000000-0000-4000-8000-000000000001' $$,
+  'historique effacé avec le membre'
 );
 
 select * from finish();

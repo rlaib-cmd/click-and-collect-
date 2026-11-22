@@ -256,7 +256,7 @@ export const fr = {
     willEarn: (n: number) => `Cette commande te rapporte +${n} pts.`,
     joinToEarn: (n: number) => `Rejoins le club : cette commande te rapporterait ${n} pts.`,
     discount: 'Récompense',
-    movement: { welcome: 'Bienvenue', earn: 'Gagnés', redeem: 'Utilisés' },
+    movement: { welcome: 'Bienvenue', earn: 'Gagnés', redeem: 'Utilisés', adjust: 'Correction' },
   },
   admin: adminFr,
 } as const;
