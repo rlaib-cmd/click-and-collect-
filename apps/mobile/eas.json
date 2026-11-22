@@ -11,7 +11,10 @@
     },
     "preview": {
       "distribution": "internal",
-      "environment": "preview"
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://yfrvtrebukdbxnuqhlfy.supabase.co/functions/v1/api"
+      }
     },
     "production": {
       "autoIncrement": true,

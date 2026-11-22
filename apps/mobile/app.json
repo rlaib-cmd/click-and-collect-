@@ -40,6 +40,9 @@
         {
           "ios": {
             "useFrameworks": "dynamic"
+          },
+          "android": {
+            "extraProguardRules": "# Stripe : le provisionnement de cartes (Issuing) n'est pas utilis\u00e9 et ses classes ne sont pas publiques.\n-dontwarn com.stripe.android.pushProvisioning.**"
           }
         }
       ],
