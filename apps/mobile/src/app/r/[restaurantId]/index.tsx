@@ -172,7 +172,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700' },
   summary: { paddingHorizontal: 16, paddingTop: 12 },
   notice: { padding: 12, marginHorizontal: 16, marginTop: 12, borderRadius: 8 },
-  tabsBar: { flexGrow: 0 },
+  // Ne jamais se tasser : la liste en dessous prend la place restante.
+  tabsBar: { flexGrow: 0, flexShrink: 0 },
   tabs: { gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
   tab: {
     minHeight: 44,

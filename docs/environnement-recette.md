@@ -39,6 +39,16 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_S6sTwCD5rcnrtR5gk-SInQ_2KwqX64e
 2. Dans le SQL Editor : `insert into public.staff_users (email, role) values ('<votre e-mail en minuscules>', 'super_admin');`
 3. Connexion au back-office avec cet e-mail : le compte est rattaché automatiquement.
 
+## Enseignes de démonstration
+
+| Enseigne | Sous-domaine | Restaurant | Particularités |
+|---|---|---|---|
+| Pizzeria Bella | `bella` | Bella Bastille | Retrait + livraison, fermé le lundi |
+| Green Bowl | `greenbowl` | Green Bowl Opéra | Retrait seul, frais de service 0,50 € |
+| **Chicken Street** (exemple) | `chickenstreet` | Chicken Street (démo) — adresse fictive | Tous les jours 11:00–23:00, livraison 1,90/2,90 €, minimum 12 €, offerte dès 30 € ; carte fictive (menus, burgers, tenders, sauces) en attendant la carte Splash360 réelle |
+
+![Chicken Street](chicken-street-demo.png)
+
 ## Stripe (mode test)
 
 - Compte plateforme `acct_1DaN…` (France). Clé secrète de test enregistrée comme secret réseau de l'environnement cloud `click-and-collect` (jamais dans le dépôt).
