@@ -188,7 +188,7 @@ export function createMemoryAdminStore(input: {
         {
           id: string;
           name: string;
-          email: string;
+          email: string | null;
           phone: string;
           marketingConsent: boolean;
           orders: number;
@@ -197,7 +197,8 @@ export function createMemoryAdminStore(input: {
         }
       >();
       for (const o of input.orders().filter((x) => x.tenantId === tenantId)) {
-        const c = seen.get(o.customer.email) ?? {
+        const key = o.customer.email ?? o.customer.phone;
+        const c = seen.get(key) ?? {
           id: randomUUID(),
           ...o.customer,
           orders: 0,
@@ -207,7 +208,7 @@ export function createMemoryAdminStore(input: {
         c.orders += 1;
         c.spentCents += o.totals.totalCents;
         c.lastOrderAt = o.createdAt;
-        seen.set(o.customer.email, c);
+        seen.set(key, c);
       }
       return Promise.resolve([...seen.values()]);
     },

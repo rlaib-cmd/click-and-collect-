@@ -1,4 +1,5 @@
-import type { LoyaltyProvider, LoyaltyTenant } from '@splash360/api-loyalty';
+import type { LoyaltyMember, LoyaltyProvider, LoyaltyTenant } from '@splash360/api-loyalty';
+import { reservedRewardPoints } from '@splash360/core';
 import {
   loyaltyJoinRequestSchema,
   loyaltyLoginRequestSchema,
@@ -8,7 +9,7 @@ import {
   type LoyaltySession,
   type OtpStartResponse,
 } from '@splash360/contracts';
-import type { TenantWithTheme } from '@splash360/db';
+import type { OrderingStore, TenantWithTheme } from '@splash360/db';
 import type { Context, Hono } from 'hono';
 import { apiError } from '../errors';
 import { consumeOtp, startOtp, verifyOtp, type OtpDeps } from '../loyalty/otp';
@@ -23,6 +24,12 @@ export interface LoyaltyRoutesDeps {
   readonly otp?: OtpDeps | undefined;
 }
 
+/** Commandes en cours avec cadeau : leurs points sont réservés (ADR 0013). */
+type ReservationDeps = Partial<{
+  readonly ordering: Pick<OrderingStore, 'rewardHolds'>;
+  readonly now: () => Date;
+}>;
+
 type Env = { Variables: { tenant: TenantWithTheme } };
 
 const asLoyaltyTenant = (t: TenantWithTheme): LoyaltyTenant => ({
@@ -35,12 +42,31 @@ const bearerMember = (c: Context) =>
   /^Bearer ([0-9a-f-]{36}_[A-Za-z0-9_-]{20,100})$/i.exec(c.req.header('Authorization') ?? '')?.[1];
 
 /** Club fidélité de l'enseigne (lot 8), monté sous /v1/tenants/:subdomain. */
-export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps) {
+export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & ReservationDeps) {
   async function context(c: Context<Env>) {
     if (!deps.loyalty) return null;
     const tenant = asLoyaltyTenant(c.get('tenant'));
     const program = await deps.loyalty.getProgram(tenant);
     return program ? { provider: deps.loyalty, tenant, program } : null;
+  }
+
+  async function reserved(tenantId: string, memberId: string): Promise<number> {
+    if (!deps.ordering) return 0;
+    const holds = await deps.ordering.rewardHolds(tenantId, memberId, null);
+    return reservedRewardPoints(holds, deps.now?.() ?? new Date());
+  }
+
+  async function view(
+    ctx: NonNullable<Awaited<ReturnType<typeof context>>>,
+    member: LoyaltyMember,
+  ) {
+    return memberView(
+      ctx.provider,
+      ctx.tenant,
+      ctx.program,
+      member,
+      await reserved(ctx.tenant.id, member.id),
+    );
   }
 
   async function session(c: Context<Env>, memberId: string, created: boolean) {
@@ -50,7 +76,7 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps) {
     if (!member) return apiError(c, 'not_found', 'Compte fidélité introuvable');
     const body: LoyaltySession = {
       memberToken: memberToken(deps.tokenSecret, ctx.tenant.id, member.id),
-      member: await memberView(ctx.provider, ctx.tenant, ctx.program, member),
+      member: await view(ctx, member),
     };
     c.header('Cache-Control', 'no-store');
     return c.json(body, created ? 201 : 200);
@@ -181,6 +207,6 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps) {
     const member = await ctx.provider.getMember(ctx.tenant, memberId);
     if (!member) return apiError(c, 'unauthorized', 'Session fidélité invalide');
     c.header('Cache-Control', 'no-store');
-    return c.json(await memberView(ctx.provider, ctx.tenant, ctx.program, member));
+    return c.json(await view(ctx, member));
   });
 }

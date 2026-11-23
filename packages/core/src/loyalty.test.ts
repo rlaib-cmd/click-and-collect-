@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { computeTotals } from './fees';
-import { applyReward, pointsForAmount, type LoyaltyReward } from './loyalty';
+import {
+  applyReward,
+  availablePoints,
+  PENDING_PAYMENT_HOLD_MS,
+  pointsForAmount,
+  reservedRewardPoints,
+  type LoyaltyReward,
+} from './loyalty';
 import { cents } from './money';
 import type { PricedLine } from './pricing';
 
@@ -107,5 +114,49 @@ describe('récompense « produit offert »', () => {
       applyReward({ totals: totalsFor(withExtra), lines: withExtra, reward: fries, balance: 1000 })
         .ok,
     ).toBe(true);
+  });
+});
+
+describe('points réservés par les commandes en cours', () => {
+  const now = new Date('2026-11-23T12:00:00Z');
+  const ago = (ms: number) => new Date(now.getTime() - ms);
+
+  it('une commande sur place confirmée réserve les points de son cadeau', () => {
+    expect(
+      reservedRewardPoints([{ status: 'confirmed', points: 400, createdAt: ago(0) }], now),
+    ).toBe(400);
+  });
+
+  it('additionne les commandes en cours, payées ou en préparation', () => {
+    const holds = [
+      { status: 'paid', points: 400, createdAt: ago(0) },
+      { status: 'preparing', points: 500, createdAt: ago(0) },
+      { status: 'out_for_delivery', points: 100, createdAt: ago(0) },
+    ] as const;
+    expect(reservedRewardPoints(holds, now)).toBe(1000);
+  });
+
+  it('ne réserve plus rien pour une commande terminée, annulée, remboursée ou en échec', () => {
+    const holds = (['completed', 'cancelled', 'refunded', 'payment_failed'] as const).map(
+      (status) => ({ status, points: 400, createdAt: ago(0) }),
+    );
+    expect(reservedRewardPoints(holds, now)).toBe(0);
+  });
+
+  it('une commande impayée ne réserve que pendant le délai de paiement', () => {
+    expect(
+      reservedRewardPoints(
+        [
+          { status: 'pending_payment', points: 400, createdAt: ago(PENDING_PAYMENT_HOLD_MS - 1) },
+          { status: 'pending_payment', points: 500, createdAt: ago(PENDING_PAYMENT_HOLD_MS) },
+        ],
+        now,
+      ),
+    ).toBe(400);
+  });
+
+  it('les points disponibles ne descendent jamais sous zéro', () => {
+    expect(availablePoints(450, 400)).toBe(50);
+    expect(availablePoints(300, 400)).toBe(0);
   });
 });

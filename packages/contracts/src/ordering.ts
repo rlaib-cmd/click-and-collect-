@@ -115,7 +115,12 @@ export const quoteSchema = z.object({
 
 export const customerSchema = z.object({
   name: z.string().trim().min(2).max(100),
-  email: z.email().max(200),
+  /** Facultatif : le client est identifié par son téléphone (ADR 0013). Vide = pas d'e-mail. */
+  email: z
+    .union([z.email().max(200), z.literal('')])
+    .nullable()
+    .default(null)
+    .transform((v) => (v ? v : null)),
   phone: z
     .string()
     .trim()

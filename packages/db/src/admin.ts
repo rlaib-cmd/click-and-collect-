@@ -75,7 +75,7 @@ export interface DashboardStats {
 export interface CustomerRow {
   readonly id: string;
   readonly name: string;
-  readonly email: string;
+  readonly email: string | null;
   readonly phone: string;
   readonly marketingConsent: boolean;
   readonly orders: number;
@@ -560,7 +560,7 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
         {
           id: string;
           name: string;
-          email: string;
+          email: string | null;
           phone: string;
           marketing_consent: boolean;
           orders: number;
@@ -591,8 +591,8 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
     async anonymizeCustomer(tenantId, customerId) {
       return sql.begin(async (tx) => {
         const r = await tx`
-          update public.customers set name = 'Client supprimé', email = ${`supprime-${customerId}@invalid.local`},
-            phone = '', marketing_consent = false
+          update public.customers set name = 'Client supprimé', email = null,
+            phone = '', marketing_consent = false, contact_key = ${`supprime:${customerId}`}
           where tenant_id = ${tenantId} and id = ${customerId}`;
         if (r.count !== 1) return false;
         await tx`update public.orders set delivery_address = case when delivery_address is null then null

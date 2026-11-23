@@ -138,7 +138,14 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
     const tenant = c.get('tenant');
     const ctx = await load(c, request.restaurantId);
     if (!ctx) return apiError(c, 'not_found', 'Restaurant inconnu');
-    const result = await quote(deps, ctx.restaurant, ctx.config, request, c.get('tenant'));
+    const result = await quote(
+      deps,
+      ctx.restaurant,
+      ctx.config,
+      request,
+      c.get('tenant'),
+      request.idempotencyKey,
+    );
     if (!result.ok) return orderInvalid(c, result.issues);
     // Sur place : option du restaurant, réservée aux membres du club (ADR 0010). En ligne, la
     // capacité d'encaisser du restaurant est contrôlée à la création du paiement.

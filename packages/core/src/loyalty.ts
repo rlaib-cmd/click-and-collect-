@@ -1,6 +1,7 @@
 import type { Totals } from './fees';
 import { cents, type Cents } from './money';
 import type { PricedLine } from './pricing';
+import type { OrderStatus } from './status';
 
 /** Programme de fidélité d'une enseigne (règles tenues par Splash360). */
 export interface LoyaltyRules {
@@ -64,4 +65,45 @@ export function applyReward(input: {
     discountCents,
     totals: { ...totals, discountCents, totalCents: cents(before - discountCents) },
   };
+}
+
+/** Commande avec récompense dont les points n'ont pas encore été débités chez Splash360. */
+export interface RewardHold {
+  readonly status: OrderStatus;
+  readonly points: number;
+  readonly createdAt: Date;
+}
+
+/** Une commande en attente de paiement garde ses points réservés le temps de payer. */
+export const PENDING_PAYMENT_HOLD_MS = 30 * 60 * 1000;
+
+/** Statuts d'une commande encore en cours, dont la récompense réserve les points. */
+const HOLDING: readonly OrderStatus[] = [
+  'paid',
+  'confirmed',
+  'accepted',
+  'preparing',
+  'ready',
+  'out_for_delivery',
+];
+
+/**
+ * Points réservés par les commandes en cours (ADR 0013). Les points d'un cadeau ne sont débités
+ * qu'à la validation (paiement en ligne, ou retrait pour le paiement sur place), mais ils ne
+ * peuvent pas resservir entre-temps. Une commande terminée, annulée, remboursée ou en échec de
+ * paiement ne réserve plus rien ; une commande impayée, seulement pendant `PENDING_PAYMENT_HOLD_MS`.
+ */
+export function reservedRewardPoints(holds: readonly RewardHold[], now: Date): number {
+  return holds.reduce((sum, h) => {
+    const holding =
+      HOLDING.includes(h.status) ||
+      (h.status === 'pending_payment' &&
+        now.getTime() - h.createdAt.getTime() < PENDING_PAYMENT_HOLD_MS);
+    return holding ? sum + Math.max(0, h.points) : sum;
+  }, 0);
+}
+
+/** Points utilisables pour une nouvelle récompense : solde moins les réservations. */
+export function availablePoints(balance: number, reserved: number): number {
+  return Math.max(0, balance - reserved);
 }

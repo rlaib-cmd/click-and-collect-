@@ -4,6 +4,8 @@ import type { LoyaltyTenant } from '@splash360/api-loyalty';
 import {
   applyReward,
   asapAvailability,
+  availablePoints,
+  reservedRewardPoints,
   pointsForAmount,
   bookableDates,
   checkRequestedTime,
@@ -136,6 +138,8 @@ export async function quote(
   config: OrderingConfig,
   request: QuoteRequest,
   tenant?: LoyaltyTenant,
+  /** Commande en cours de création : sa propre réservation de points ne compte pas (rejeu). */
+  idempotencyKey: string | null = null,
 ): Promise<QuoteResult> {
   const issues: OrderIssue[] = [];
 
@@ -225,11 +229,13 @@ export async function quote(
         const chosen = program.rewards.find((r) => r.id === request.loyalty?.rewardId);
         if (!chosen) issues.push({ code: 'unknown_reward' });
         else if (totals && priced.ok) {
+          // Les points d'un cadeau déjà choisi dans une commande en cours sont réservés (ADR 0013).
+          const holds = await deps.ordering.rewardHolds(tenant.id, member.id, idempotencyKey);
           const applied = applyReward({
             totals,
             lines: priced.lines,
             reward: chosen,
-            balance: member.points,
+            balance: availablePoints(member.points, reservedRewardPoints(holds, now)),
           });
           if (applied.ok) {
             totals = applied.totals;

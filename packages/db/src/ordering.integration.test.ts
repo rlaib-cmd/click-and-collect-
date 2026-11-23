@@ -149,4 +149,52 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
     expect(results.filter((r) => r.ok)).toHaveLength(2);
     expect(results.filter((r) => !r.ok)).toHaveLength(4);
   });
+
+  it('réservations de points : commandes avec cadeau non réglées, hors rejeu de la même clé', async () => {
+    const restaurantId = await bellaId();
+    const slot = '2030-01-16T11:00:00.000Z';
+    const memberId = `membre-${run}`;
+    const withReward = (key: string): NewOrder => {
+      const base = newOrder(restaurantId, key, slot, null);
+      return {
+        ...base,
+        totals: { ...base.totals, discountCents: cents(1050), totalCents: cents(1850) },
+        paymentMethod: 'on_site',
+        loyalty: { memberId, reward: { id: 'rw-pizza', costPoints: 900 } },
+      };
+    };
+    const a = await store.createOrder(withReward('cadeau-a'));
+    if (!a.ok) throw new Error('commande refusée');
+    expect(await store.rewardHolds(BELLA, memberId, null)).toEqual([
+      { status: 'confirmed', points: 900, createdAt: expect.any(Date) as Date },
+    ]);
+    // La même commande rejouée ne se réserve pas elle-même.
+    expect(await store.rewardHolds(BELLA, memberId, `test-${run}-cadeau-a`)).toEqual([]);
+    // Réglée chez Splash360 : plus de réservation.
+    await sql`update public.orders set loyalty_settled_at = now() where id = ${a.order.id}`;
+    expect(await store.rewardHolds(BELLA, memberId, null)).toEqual([]);
+    // Une autre enseigne ne voit rien.
+    expect(await store.rewardHolds(GREEN, memberId, null)).toEqual([]);
+  });
+
+  it('client sans e-mail : reconnu par son téléphone, sans doublon', async () => {
+    const restaurantId = await bellaId();
+    const slot = '2030-01-17T11:00:00.000Z';
+    const phone = `06 ${run.slice(-8).replace(/(\d\d)(?=\d)/g, '$1 ')}`;
+    const noEmail = (key: string): NewOrder => {
+      const base = newOrder(restaurantId, key, slot, null);
+      return { ...base, customer: { ...base.customer, email: null, phone } };
+    };
+    const first = await store.createOrder(noEmail('sans-mail-1'));
+    const second = await store.createOrder(noEmail('sans-mail-2'));
+    if (!first.ok || !second.ok) throw new Error('commande refusée');
+    const rows = await sql<{ customer_id: string; email: string | null; contact_key: string }[]>`
+      select o.customer_id, c.email, c.contact_key from public.orders o
+      join public.customers c on c.id = o.customer_id
+      where o.id in ${sql([first.order.id, second.order.id])}`;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.customer_id).toBe(rows[1]?.customer_id);
+    expect(rows[0]?.email).toBeNull();
+    expect(rows[0]?.contact_key).toMatch(/^tel:\+336\d{8}$/);
+  });
 });

@@ -62,6 +62,23 @@ export function createMemoryOrderBackend(
   const ordering: OrderingStore = {
     getConfig: (_tenantId, restaurantId) => Promise.resolve(configs[restaurantId] ?? null),
     slotLoad: (restaurantId, from, to) => Promise.resolve(load(restaurantId, from, to)),
+    rewardHolds: (tenantId, memberId, exceptIdempotencyKey) =>
+      Promise.resolve(
+        orders
+          .filter(
+            (o) =>
+              o.tenantId === tenantId &&
+              o.loyalty?.memberId === memberId &&
+              o.loyalty.reward !== null &&
+              !o.loyaltySettled &&
+              o.idempotencyKey !== exceptIdempotencyKey,
+          )
+          .map((o) => ({
+            status: o.status as OrderStatus,
+            points: o.loyalty?.reward?.costPoints ?? 0,
+            createdAt: new Date(o.createdAt),
+          })),
+      ),
     createOrder(o): Promise<CreateOrderResult> {
       const summary = (x: StoredOrder) => ({
         id: x.id,

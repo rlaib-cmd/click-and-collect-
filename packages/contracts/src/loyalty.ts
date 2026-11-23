@@ -84,9 +84,11 @@ export const loyaltyMemberSchema = z.object({
   /** Mobile au format international (+33…). */
   phone: z.string().nullable(),
   points: z.number().int().nonnegative(),
+  /** Points réservés par les cadeaux des commandes en cours, pas encore débités (ADR 0013). */
+  reservedPoints: z.number().int().nonnegative().default(0),
   /** Contenu du QR code à présenter en caisse. */
   cardCode: z.string(),
-  /** Prochaine récompense pas encore atteinte ; null si toutes le sont. */
+  /** Prochaine récompense pas encore atteinte avec les points disponibles ; null si toutes le sont. */
   nextReward: z
     .object({ name: z.string(), costPoints: z.number().int(), missingPoints: z.number().int() })
     .nullable(),

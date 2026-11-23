@@ -6,6 +6,7 @@ import type {
   LoyaltyTenant,
 } from '@splash360/api-loyalty';
 import type { LoyaltyMemberDto } from '@splash360/contracts';
+import { availablePoints } from '@splash360/core';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export interface LoyaltyDeps {
@@ -49,21 +50,25 @@ export async function memberView(
   tenant: LoyaltyTenant,
   program: LoyaltyProgram,
   member: LoyaltyMember,
+  /** Points réservés par les commandes en cours (ADR 0013). */
+  reservedPoints = 0,
 ): Promise<LoyaltyMemberDto> {
+  const usable = availablePoints(member.points, reservedPoints);
   const next = [...program.rewards]
     .sort((a, b) => a.costPoints - b.costPoints)
-    .find((r) => r.costPoints > member.points);
+    .find((r) => r.costPoints > usable);
   return {
     name: member.name,
     email: member.email,
     phone: member.phone,
     points: member.points,
+    reservedPoints,
     cardCode: member.cardCode,
     nextReward: next
       ? {
           name: next.name,
           costPoints: next.costPoints,
-          missingPoints: next.costPoints - member.points,
+          missingPoints: next.costPoints - usable,
         }
       : null,
     history: [...(await provider.history(tenant, member.id))],

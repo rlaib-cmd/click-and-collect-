@@ -324,3 +324,100 @@ describe('paiement sur place (ADR 0010)', () => {
     expect(await points()).toBe(270);
   });
 });
+
+describe('points du cadeau réservés tant que la commande est en cours (ADR 0013)', () => {
+  function onSiteSetup() {
+    const s = setup();
+    const base = s.backend.ordering.getConfig.bind(s.backend.ordering);
+    s.backend.ordering.getConfig = async (tenantId, restaurantId) => {
+      const config = await base(tenantId, restaurantId);
+      return config ? { ...config, payOnSiteEnabled: true } : null;
+    };
+    return s;
+  }
+  const withReward = (memberToken: string, key: string): PlaceOrderRequest => ({
+    ...order(memberToken, 'rw-tiramisu', key),
+    paymentMethod: 'on_site',
+  });
+  const me = async (s: ReturnType<typeof setup>, memberToken: string) =>
+    loyaltyMemberSchema.parse(
+      await (
+        await s.app.request(`${base}/loyalty/me`, {
+          headers: { Authorization: `Bearer ${memberToken}` },
+        })
+      ).json(),
+    );
+  const firstIssue = async (res: Response) =>
+    ((await res.json()) as { error: { issues: { code: string }[] } }).error.issues[0]?.code;
+
+  it('réserve les points sans les débiter, et refuse de réutiliser le même cadeau', async () => {
+    const s = onSiteSetup();
+    const { memberToken } = await join(s);
+    const first = await post(s, '/orders', withReward(memberToken, 'cle-reserve-0000000001'));
+    expect(first.status).toBe(201);
+    // Points débités seulement à la validation : le solde ne bouge pas, 100 points sont réservés.
+    expect(await me(s, memberToken)).toMatchObject({ points: 100, reservedPoints: 100 });
+    // Une deuxième commande ne peut pas reprendre le même cadeau.
+    const second = await post(s, '/orders', withReward(memberToken, 'cle-reserve-0000000002'));
+    expect(second.status).toBe(422);
+    expect(await firstIssue(second)).toBe('insufficient_points');
+    // Une nouvelle tentative de la même commande (même clé) reste acceptée.
+    const replay = await post(s, '/orders', withReward(memberToken, 'cle-reserve-0000000001'));
+    expect(replay.status).toBeLessThan(300);
+  });
+
+  it('libère les points quand la commande est annulée', async () => {
+    const s = onSiteSetup();
+    const { memberToken } = await join(s);
+    const placed = placedOrderSchema.parse(
+      await (await post(s, '/orders', withReward(memberToken, 'cle-reserve-0000000003'))).json(),
+    );
+    await s.app.request(`/v1/admin/orders/${placed.orderId}/status`, {
+      method: 'POST',
+      headers: { ...json, Authorization: `Bearer ${await sessionToken('gerant@bella.test')}` },
+      body: JSON.stringify({ status: 'cancelled' }),
+    });
+    expect(await me(s, memberToken)).toMatchObject({ points: 100, reservedPoints: 0 });
+    const again = await post(s, '/orders', withReward(memberToken, 'cle-reserve-0000000004'));
+    expect(again.status).toBe(201);
+  });
+
+  it('débite le cadeau à la remise et ne réserve plus rien ensuite', async () => {
+    const s = onSiteSetup();
+    const { memberToken } = await join(s);
+    const placed = placedOrderSchema.parse(
+      await (await post(s, '/orders', withReward(memberToken, 'cle-reserve-0000000005'))).json(),
+    );
+    for (const status of ['accepted', 'ready', 'completed'] as const) {
+      await s.app.request(`/v1/admin/orders/${placed.orderId}/status`, {
+        method: 'POST',
+        headers: { ...json, Authorization: `Bearer ${await sessionToken('gerant@bella.test')}` },
+        body: JSON.stringify({ status }),
+      });
+    }
+    // 100 − 100 (tiramisu) + 125 (12,50 € payés) ; plus rien de réservé.
+    const after = await me(s, memberToken);
+    expect(after.reservedPoints).toBe(0);
+    expect(after.points).toBeGreaterThan(0);
+  });
+});
+
+describe('e-mail facultatif à la commande (ADR 0013)', () => {
+  it('accepte une commande sans e-mail et n’envoie pas de reçu par e-mail', async () => {
+    const s = setup();
+    const { memberToken } = await join(s);
+    const request: PlaceOrderRequest = {
+      ...order(memberToken, null, 'cle-sans-email-00000001'),
+      customer: { name: 'Camille', email: '', phone: '06 12 34 56 78', marketingConsent: false },
+      paymentMethod: 'on_site',
+    };
+    const base2 = s.backend.ordering.getConfig.bind(s.backend.ordering);
+    s.backend.ordering.getConfig = async (tenantId, restaurantId) => {
+      const config = await base2(tenantId, restaurantId);
+      return config ? { ...config, payOnSiteEnabled: true } : null;
+    };
+    const res = await post(s, '/orders', request);
+    expect(res.status).toBe(201);
+    expect(s.notifications.emails).toEqual([]);
+  });
+});

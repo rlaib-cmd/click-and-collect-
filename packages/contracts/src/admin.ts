@@ -51,7 +51,7 @@ export const adminOrderDetailSchema = z.object({
   scheduled: z.boolean(),
   totals: totalsSchema,
   refundedCents: cents,
-  customer: z.object({ name: z.string(), email: z.string(), phone: z.string() }),
+  customer: z.object({ name: z.string(), email: z.string().nullable(), phone: z.string() }),
   deliveryAddress: z
     .object({
       label: z.string(),
@@ -159,7 +159,7 @@ export const dashboardSchema = z.object({
 export const customerRowSchema = z.object({
   id: z.uuid(),
   name: z.string(),
-  email: z.string(),
+  email: z.string().nullable(),
   phone: z.string(),
   marketingConsent: z.boolean(),
   orders: z.number().int(),

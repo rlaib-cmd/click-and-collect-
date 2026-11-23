@@ -32,7 +32,8 @@ export async function notifyStatus(
     const message = statusNotification(status, order.number, name);
     const tokens = await deps.operations.listPushTokens(tenantId, orderId);
     if (message) await deps.notifier.push(tokens, { ...message, data: { orderId } });
-    if (status === 'paid' || status === 'confirmed') {
+    // Reçu par e-mail seulement si le client en a donné un (facultatif, ADR 0013).
+    if ((status === 'paid' || status === 'confirmed') && order.customer.email) {
       await deps.notifier.email(
         order.customer.email,
         receiptEmail({

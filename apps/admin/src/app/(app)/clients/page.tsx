@@ -58,7 +58,7 @@ export default function CustomersPage() {
           {data?.customers.map((c) => (
             <tr key={c.id}>
               <td>{c.name}</td>
-              <td>{c.email}</td>
+              <td>{c.email ?? '—'}</td>
               <td>{c.phone}</td>
               <td className="num">{c.orders}</td>
               <td className="num">{euros(c.spentCents)}</td>

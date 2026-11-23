@@ -248,7 +248,7 @@ function OrderDrawer({
       <p>
         {o.customer.name} · {o.customer.phone}
         <br />
-        <span className="muted">{o.customer.email}</span>
+        {o.customer.email ? <span className="muted">{o.customer.email}</span> : null}
         {o.deliveryAddress ? (
           <>
             <br />

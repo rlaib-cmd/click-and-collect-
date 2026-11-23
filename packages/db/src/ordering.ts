@@ -1,9 +1,12 @@
 import {
   cents,
+  customerContactKey,
   type DeliveryZone,
   type FeeSettings,
   type OrderMode,
+  type OrderStatus,
   type PricedLine,
+  type RewardHold,
   type ScheduleSettings,
   type SlotLoad,
   type SlotStep,
@@ -40,7 +43,8 @@ export interface NewOrder {
   readonly restaurantId: string;
   readonly customer: {
     readonly name: string;
-    readonly email: string;
+    /** Facultatif (ADR 0013) : sans e-mail, le client est reconnu par son téléphone. */
+    readonly email: string | null;
     readonly phone: string;
     readonly marketingConsent: boolean;
   };
@@ -87,6 +91,15 @@ export interface OrderingStore {
   /** Commandes actives par créneau, sur une période. */
   slotLoad(restaurantId: string, from: Date, to: Date): Promise<SlotLoad>;
   createOrder(order: NewOrder): Promise<CreateOrderResult>;
+  /**
+   * Commandes d'un membre dont la récompense n'est pas encore réglée chez Splash360 (ADR 0013),
+   * sauf celle de cette clé d'idempotence (une nouvelle tentative de la même commande).
+   */
+  rewardHolds(
+    tenantId: string,
+    memberId: string,
+    exceptIdempotencyKey: string | null,
+  ): Promise<RewardHold[]>;
 }
 
 /** Statuts qui occupent un créneau (une commande en attente de paiement le réserve). */
@@ -121,6 +134,16 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
   }
 
   return {
+    async rewardHolds(tenantId, memberId, exceptIdempotencyKey) {
+      const rows = await sql<{ status: OrderStatus; points: number; created_at: Date }[]>`
+        select status, loyalty_reward_points as points, created_at from public.orders
+        where tenant_id = ${tenantId} and loyalty_member_id = ${memberId}
+          and loyalty_reward_id is not null and loyalty_settled_at is null
+          and loyalty_reward_points is not null
+          and idempotency_key is distinct from ${exceptIdempotencyKey}`;
+      return rows.map((r) => ({ status: r.status, points: r.points, createdAt: r.created_at }));
+    },
+
     async getConfig(tenantId, restaurantId) {
       const [s] = await sql<
         {
@@ -237,11 +260,15 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
             return { ok: false as const, error: 'slot_full' as const };
         }
 
+        const email = o.customer.email?.trim().toLowerCase() || null;
+        const contactKey = customerContactKey({ email, phone: o.customer.phone });
+        if (!contactKey) throw new Error('Client sans e-mail ni téléphone');
         const [customer] = await tx<{ id: string }[]>`
-          insert into public.customers (tenant_id, name, email, phone, marketing_consent)
-          values (${o.tenantId}, ${o.customer.name}, ${o.customer.email.toLowerCase()}, ${o.customer.phone}, ${o.customer.marketingConsent})
-          on conflict (tenant_id, email) do update
+          insert into public.customers (tenant_id, name, email, phone, marketing_consent, contact_key)
+          values (${o.tenantId}, ${o.customer.name}, ${email}, ${o.customer.phone}, ${o.customer.marketingConsent}, ${contactKey})
+          on conflict (tenant_id, contact_key) do update
             set name = excluded.name, phone = excluded.phone,
+                email = coalesce(excluded.email, public.customers.email),
                 marketing_consent = public.customers.marketing_consent or excluded.marketing_consent
           returning id`;
 
@@ -320,7 +347,11 @@ export interface OrderDetail {
   readonly createdAt: string;
   readonly totals: Totals;
   readonly refundedCents: number;
-  readonly customer: { readonly name: string; readonly email: string; readonly phone: string };
+  readonly customer: {
+    readonly name: string;
+    readonly email: string | null;
+    readonly phone: string;
+  };
   readonly deliveryAddress: DeliveryAddressRecord | null;
   readonly lines: readonly {
     readonly name: string;
@@ -380,7 +411,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           delivery_address: DeliveryAddressRecord | null;
           access_token_hash: string | null;
           customer_name: string;
-          customer_email: string;
+          customer_email: string | null;
           customer_phone: string;
         }[]
       >`
