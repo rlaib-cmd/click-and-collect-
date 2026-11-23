@@ -181,6 +181,8 @@ export default function CheckoutScreen() {
             cart: JSON.stringify(cart),
             summary: q.lines.map((l) => `${l.quantity} × ${l.name}`).join(', '),
           }).catch(() => undefined);
+          // Points réservés par le cadeau : le solde affiché doit suivre tout de suite.
+          loyalty.refresh();
           router.replace({ pathname: '/order/[orderId]', params: { orderId: order.orderId } });
         },
       },
