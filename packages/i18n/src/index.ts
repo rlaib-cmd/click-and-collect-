@@ -16,6 +16,8 @@ export const fr = {
     notFound: 'Cette enseigne est introuvable.',
     suspended: 'La commande en ligne de cette enseigne est momentanément indisponible.',
     missing: "Aucune enseigne n'est configurée pour cette application.",
+    previewBanner: 'Aperçu du brouillon — non publié',
+    previewClose: 'Fermer l’aperçu',
   },
   menu: {
     title: 'Carte',

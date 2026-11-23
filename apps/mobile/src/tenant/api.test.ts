@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fetchTenantConfig } from './api';
+import { fetchTenantConfig, previewFromSearch } from './api';
 
 const config = {
   tenant: { id: '00000000-0000-4000-8000-000000000001', name: 'Bella', subdomain: 'bella' },
@@ -59,5 +59,24 @@ describe('chargement de la configuration', () => {
       ok: false,
       error: 'network',
     });
+  });
+});
+
+describe('aperçu du brouillon de design (lot 12)', () => {
+  it('transmet le jeton d’aperçu au serveur', async () => {
+    let url = '';
+    const spy: typeof fetch = (input) => {
+      url = String(input);
+      return Promise.resolve(new Response(JSON.stringify({ ...config, preview: true })));
+    };
+    const res = await fetchTenantConfig('http://api', 'bella', spy, '123.abc_DEF-ghi');
+    expect(url).toBe('http://api/v1/tenants/bella/config?preview=123.abc_DEF-ghi');
+    expect(res).toEqual({ ok: true, config: { ...config, preview: true } });
+  });
+
+  it('lit le jeton dans l’adresse et ignore un jeton suspect', () => {
+    expect(previewFromSearch('?enseigne=bella&preview=1795.abc-_')).toBe('1795.abc-_');
+    expect(previewFromSearch('?preview=<script>')).toBeNull();
+    expect(previewFromSearch('')).toBeNull();
   });
 });

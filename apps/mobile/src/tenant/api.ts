@@ -11,10 +11,13 @@ export async function fetchTenantConfig(
   apiUrl: string,
   subdomain: string,
   fetchImpl: typeof fetch = fetch,
+  /** Jeton d'aperçu du brouillon de design (lien du back-office, lot 12). */
+  previewToken: string | null = null,
 ): Promise<TenantLoadResult> {
   let res: Response;
+  const query = previewToken ? `?preview=${encodeURIComponent(previewToken)}` : '';
   try {
-    res = await fetchImpl(`${apiUrl}/v1/tenants/${encodeURIComponent(subdomain)}/config`);
+    res = await fetchImpl(`${apiUrl}/v1/tenants/${encodeURIComponent(subdomain)}/config${query}`);
   } catch {
     return { ok: false, error: 'network' };
   }
@@ -31,4 +34,10 @@ export async function fetchTenantConfig(
     return { ok: false, error: 'suspended' };
   if (res.status === 404 || res.status === 400) return { ok: false, error: 'not_found' };
   return { ok: false, error: 'network' };
+}
+
+/** Jeton d'aperçu présent dans l'adresse (`?preview=`), borné en taille ; null sinon. */
+export function previewFromSearch(search: string | undefined): string | null {
+  const token = search ? new URLSearchParams(search).get('preview') : null;
+  return token && /^[0-9A-Za-z._-]{1,200}$/.test(token) ? token : null;
 }
