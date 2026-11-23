@@ -35,6 +35,7 @@ export function useMenu(restaurantId: string) {
     queryKey: ['menu', sub, restaurantId],
     queryFn: () => apiGet(`/v1/tenants/${sub}/restaurants/${restaurantId}/menu`, menuSchema),
     staleTime: 60_000,
+    enabled: restaurantId.length > 0,
   });
 }
 

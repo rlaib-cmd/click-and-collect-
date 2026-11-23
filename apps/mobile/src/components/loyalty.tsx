@@ -1,34 +1,98 @@
-import type { LoyaltyMemberDto } from '@splash360/contracts';
+import type { LoyaltyMemberDto, LoyaltyRewardDto } from '@splash360/contracts';
+import { nextReward } from '@splash360/core';
 import { messages } from '@splash360/i18n';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCart } from '@/cart/CartProvider';
 import { usablePoints } from '@/loyalty/points';
+import { tierProducts, useRewardCatalog } from '@/loyalty/rewards';
 import { useTenant } from '@/tenant/TenantProvider';
 import { titleStyle } from './brand';
 import { Icon } from './icons';
 
 const t = messages.loyalty;
 
-/** Solde de points et progression vers la prochaine récompense ; ouvre la carte à scanner. */
-export function PointsCard({ member }: { member: LoyaltyMemberDto }) {
+/**
+ * « Ma fidélité » (lot 11) : solde, prochain cadeau avec sa photo, points manquants,
+ * jauge et raccourci vers la commande ; ouvre la carte à scanner.
+ */
+export function FidelityCard({
+  member,
+  rewards,
+  pointsPerEuro,
+}: {
+  member: LoyaltyMemberDto;
+  rewards: readonly LoyaltyRewardDto[];
+  pointsPerEuro: number;
+}) {
   const { palette, radii, style } = useTenant();
-  const next = member.nextReward;
-  const progress = next ? Math.min(1, usablePoints(member) / next.costPoints) : 1;
+  const { cart } = useCart();
+  const { products } = useRewardCatalog(cart);
+  const usable = usablePoints(member);
+  const next = nextReward(rewards, usable);
+  const tier = next?.reward ?? null;
+  const image = tier
+    ? (tierProducts(tier, products).find((p) => p.imageUrl)?.imageUrl ?? null)
+    : null;
+  const progress = tier ? Math.min(1, usable / tier.costPoints) : 1;
   return (
-    <View style={[styles.card, { backgroundColor: palette.text, borderRadius: radii.card + 6 }]}>
-      <View style={styles.cardText}>
-        <Text style={[styles.points, titleStyle(style), { color: palette.background }]}>
-          {t.points(member.points)}
-        </Text>
-        <Text style={{ color: palette.background, fontWeight: '600', fontSize: 13 }}>
-          {next ? t.nextReward(next.missingPoints, next.name) : t.allRewards}
-        </Text>
-        {member.reservedPoints > 0 ? (
-          <Text style={{ color: palette.background, opacity: 0.8, fontSize: 12 }}>
-            {t.reserved(member.reservedPoints)}
+    <View
+      style={[
+        styles.fidelity,
+        {
+          backgroundColor: palette.background,
+          borderColor: palette.border,
+          borderRadius: radii.card + 8,
+        },
+      ]}
+    >
+      <View style={styles.fidelityHead}>
+        <View style={styles.flex}>
+          <Text style={[styles.fidelityTitle, titleStyle(style), { color: palette.text }]}>
+            {t.myLoyalty}
           </Text>
-        ) : null}
-        <View style={[styles.track, { backgroundColor: palette.textMuted }]}>
+          <Text style={{ color: palette.textMuted, fontSize: 13 }}>{t.perEuro(pointsPerEuro)}</Text>
+        </View>
+        <View style={[styles.pill, { backgroundColor: palette.surface }]}>
+          <View style={[styles.star, { backgroundColor: palette.loyalty }]}>
+            <Icon name="star" color={palette.onLoyalty} size={16} />
+          </View>
+          <Text style={[styles.pillText, { color: palette.text }]}>{member.points}</Text>
+          <Text style={{ color: palette.textMuted, fontWeight: '700' }}>pts</Text>
+        </View>
+      </View>
+      <View
+        style={[styles.nextBox, { backgroundColor: palette.surface, borderRadius: radii.card }]}
+      >
+        <View style={styles.nextRow}>
+          {image ? (
+            <Image
+              source={{ uri: image }}
+              style={styles.nextImage}
+              contentFit="contain"
+              accessibilityIgnoresInvertColors
+            />
+          ) : null}
+          <View style={styles.flex}>
+            {tier && next ? (
+              <>
+                <Text style={{ color: palette.loyalty, fontWeight: '800', fontSize: 12 }}>
+                  {t.points(tier.costPoints)}
+                </Text>
+                <Text style={{ color: palette.text, fontSize: 15 }}>
+                  {t.unlockPrefix(next.missingPoints)}{' '}
+                  <Text style={{ fontWeight: '800' }}>{tier.name}</Text> !
+                </Text>
+              </>
+            ) : (
+              <Text style={{ color: palette.text, fontSize: 15, fontWeight: '800' }}>
+                {t.allUnlocked}
+              </Text>
+            )}
+          </View>
+        </View>
+        <View style={[styles.track, { backgroundColor: palette.border }]}>
           <View
             style={[
               styles.fill,
@@ -36,14 +100,29 @@ export function PointsCard({ member }: { member: LoyaltyMemberDto }) {
             ]}
           />
         </View>
+        {member.reservedPoints > 0 ? (
+          <Text style={{ color: palette.textMuted, fontSize: 12 }}>
+            {t.reserved(member.reservedPoints)}
+          </Text>
+        ) : null}
+        <Pressable
+          accessibilityRole="link"
+          onPress={() => router.navigate(tier ? '/commander' : '/avantages')}
+          style={styles.linkRow}
+        >
+          <Text style={{ color: palette.loyalty, fontWeight: '800' }}>
+            {tier ? t.keepShopping : t.chooseGift} ›
+          </Text>
+        </Pressable>
       </View>
       <Pressable
-        accessibilityRole="button"
+        accessibilityRole="link"
         accessibilityLabel={t.showCard}
         onPress={() => router.navigate('/carte')}
-        style={[styles.qr, { backgroundColor: palette.loyalty, borderRadius: radii.card }]}
+        style={styles.cardLink}
       >
-        <Icon name="qr" color={palette.onLoyalty} size={30} />
+        <Icon name="qr" color={palette.loyalty} size={20} />
+        <Text style={{ color: palette.loyalty, fontWeight: '800' }}>{t.seeCard} ›</Text>
       </Pressable>
     </View>
   );
@@ -76,6 +155,41 @@ export function JoinCard({ welcomePoints }: { welcomePoints: number }) {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  fidelity: {
+    padding: 16,
+    gap: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  fidelityHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  fidelityTitle: { fontSize: 22, fontWeight: '900' },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingLeft: 6,
+    paddingRight: 12,
+    borderRadius: 999,
+  },
+  star: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  pillText: { fontSize: 20, fontWeight: '900' },
+  nextBox: { padding: 14, gap: 10 },
+  nextRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  nextImage: { width: 64, height: 64 },
+  linkRow: { minHeight: 32, justifyContent: 'center' },
+  cardLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-end',
+    minHeight: 32,
+  },
   card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 18 },
   cardText: { flex: 1, gap: 6 },
   points: { fontSize: 40, fontWeight: '900', lineHeight: 44 },

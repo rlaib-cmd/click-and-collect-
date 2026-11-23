@@ -3,12 +3,13 @@ import { customerSchema, type QuoteRequest } from '@splash360/contracts';
 import { messages } from '@splash360/i18n';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiRequestError } from '@/api/client';
-import { useAvailability, useMenu, usePlaceOrder, useQuote } from '@/api/hooks';
+import { useAvailability, usePlaceOrder, useQuote } from '@/api/hooks';
 import { useCart } from '@/cart/CartProvider';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { Chip } from '@/components/Chip';
@@ -20,6 +21,7 @@ import { saveOrder } from '@/orders/storage';
 import { titleStyle } from '@/components/brand';
 import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { usablePoints } from '@/loyalty/points';
+import { takeReward, tierProducts, useRewardCatalog } from '@/loyalty/rewards';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const CONTACT_KEY = 'contact';
@@ -27,7 +29,7 @@ type Contact = { name: string; phone: string; email: string };
 
 /** Récapitulatif : montants recalculés par le serveur, coordonnées, conditions de vente. */
 export default function CheckoutScreen() {
-  const { cart } = useCart();
+  const { cart, dispatch } = useCart();
   const { palette, config, style: brand } = useTenant();
   const insets = useSafeAreaInsets();
   const [contact, setContact] = useState<Contact>({ name: '', phone: '', email: '' });
@@ -37,7 +39,8 @@ export default function CheckoutScreen() {
   const [idempotencyKey] = useState(() => Crypto.randomUUID());
   const place = usePlaceOrder();
   const loyalty = useLoyalty();
-  const [rewardId, setRewardId] = useState<string | null>(null);
+  // Cadeau choisi (palier + produit), retenu dans le panier : il peut venir de l'écran Avantages.
+  const reward = cart.reward;
   // Moyen de paiement (ADR 0010) : en ligne par défaut, sur place si le restaurant n'encaisse pas en ligne.
   const availability = useAvailability(cart.restaurantId);
   const [chosenMethod, setChosenMethod] = useState<'online' | 'on_site' | null>(null);
@@ -75,18 +78,25 @@ export default function CheckoutScreen() {
               optionIds: [...l.optionIds],
               note: l.note,
             })),
-            loyalty: loyalty.memberToken ? { memberToken: loyalty.memberToken, rewardId } : null,
+            loyalty: loyalty.memberToken
+              ? {
+                  memberToken: loyalty.memberToken,
+                  rewardId: reward?.rewardId ?? null,
+                  rewardProductId: reward?.productId ?? null,
+                }
+              : null,
           },
-    [cart, loyalty.memberToken, rewardId],
+    [cart, loyalty.memberToken, reward],
   );
   const quote = useQuote(cart.restaurantId, request);
   // Récompense refusée par le serveur (points, produit retiré) : on la retire et on recalcule.
   const refusal =
-    rewardId !== null && quote.error instanceof ApiRequestError
+    reward !== null && quote.error instanceof ApiRequestError
       ? quote.error.issues.find((i) =>
           [
             'insufficient_points',
             'reward_product_missing',
+            'reward_product_not_eligible',
             'unknown_reward',
             'reward_needs_paid_items',
           ].includes(i.code),
@@ -95,11 +105,11 @@ export default function CheckoutScreen() {
   const [rewardNotice, setRewardNotice] = useState<string | null>(null);
   useEffect(() => {
     if (!refusal) return;
-    setRewardId(null);
+    dispatch({ type: 'setReward', reward: null });
     setRewardNotice(
       (messages.checkout.issue as Record<string, string>)[refusal] ?? messages.checkout.issue.other,
     );
-  }, [refusal]);
+  }, [refusal, dispatch]);
 
   if (!request || !cart.restaurantId)
     return <ErrorState message={messages.cart.empty} onRetry={() => router.replace('/')} />;
@@ -214,11 +224,7 @@ export default function CheckoutScreen() {
         </View>
 
         <Rewards
-          selected={rewardId}
-          onSelect={(id) => {
-            setRewardNotice(null);
-            setRewardId(id);
-          }}
+          onChange={() => setRewardNotice(null)}
           notice={rewardNotice}
           pointsEarned={q.loyalty?.pointsEarned ?? null}
           totalCents={q.totals.totalCents}
@@ -325,16 +331,18 @@ export default function CheckoutScreen() {
   );
 }
 
-/** Récompenses utilisables : produit présent dans le panier et solde suffisant (recontrôlé par le serveur). */
+/**
+ * Cadeaux au récapitulatif (lot 11) : chaque palier débloqué propose ses produits ; une touche
+ * ajoute le produit offert au panier (ou ouvre sa fiche s'il a des choix). Points recontrôlés
+ * par le serveur.
+ */
 function Rewards({
-  selected,
-  onSelect,
+  onChange,
   notice,
   pointsEarned,
   totalCents,
 }: {
-  selected: string | null;
-  onSelect: (id: string | null) => void;
+  onChange: () => void;
   notice: string | null;
   pointsEarned: number | null;
   totalCents: number;
@@ -342,7 +350,7 @@ function Rewards({
   const { palette, radii, style: brand } = useTenant();
   const { program, member } = useLoyalty();
   const { cart, dispatch } = useCart();
-  const menu = useMenu(cart.restaurantId ?? '');
+  const catalog = useRewardCatalog(cart);
   if (!program?.enabled) return null;
   if (!member) {
     const estimate = Math.floor((totalCents * program.pointsPerEuro) / 100);
@@ -363,29 +371,8 @@ function Rewards({
       </Pressable>
     );
   }
-  const inCart = new Set(cart.lines.map((l) => l.productId));
-  const products = new Map(
-    (menu.data?.categories ?? []).flatMap((c) => c.products.map((p) => [p.id, p] as const)),
-  );
-  /** Cadeau débloqué absent du panier : on l'ajoute d'un geste (ou on ouvre le produit s'il a des choix). */
-  const take = (rewardId: string, productId: string) => {
-    const product = products.get(productId);
-    if (!cart.restaurantId) return;
-    const needsChoice = product?.optionGroups.some((g) => g.required || g.min > 0) ?? true;
-    if (!product || needsChoice) {
-      router.navigate(`/r/${cart.restaurantId}/p/${productId}`);
-      return;
-    }
-    dispatch({
-      type: 'add',
-      restaurantId: cart.restaurantId,
-      productId,
-      quantity: 1,
-      optionIds: [],
-      note: null,
-    });
-    onSelect(rewardId);
-  };
+  const usable = usablePoints(member);
+  const selected = cart.reward;
   return (
     <View
       style={[
@@ -407,50 +394,96 @@ function Rewards({
           {messages.loyalty.reserved(member.reservedPoints)}
         </Text>
       ) : null}
-      {program.rewards.map((r) => {
-        const missing = Math.max(0, r.costPoints - usablePoints(member));
-        const unlocked = missing === 0;
-        const present = inCart.has(r.productId);
-        const on = selected === r.id;
-        // Débloqué : couleur du club ; appliqué : plein ; pas encore atteint : grisé.
-        const bg = on ? palette.loyalty : unlocked ? palette.background : 'transparent';
-        const fg = on ? palette.onLoyalty : palette.text;
-        return (
-          <Pressable
-            key={r.id}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: on, disabled: !unlocked }}
-            disabled={!unlocked}
-            onPress={() =>
-              on ? onSelect(null) : present ? onSelect(r.id) : take(r.id, r.productId)
-            }
-            style={[
-              styles.reward,
-              {
-                borderRadius: radii.button,
-                borderColor: unlocked ? palette.loyalty : palette.border,
-                borderWidth: unlocked ? 2 : 1,
-                backgroundColor: bg,
-                opacity: unlocked ? 1 : 0.5,
-              },
-            ]}
-          >
-            <Text style={{ color: fg, fontWeight: '700' }}>
-              {r.name} · {messages.loyalty.points(r.costPoints)}
-              {on ? ` ✓ ${messages.loyalty.rewardApplied}` : ''}
-            </Text>
-            {on ? null : unlocked ? (
-              <Text style={{ color: palette.loyalty, fontSize: 12, fontWeight: '800' }}>
-                {present ? messages.loyalty.rewardTap : messages.loyalty.rewardTapAdd(r.name)}
+      {[...program.rewards]
+        .sort((x, y) => x.costPoints - y.costPoints)
+        .map((r) => {
+          const missing = Math.max(0, r.costPoints - usable);
+          const unlocked = missing === 0;
+          const tierOn = selected?.rewardId === r.id;
+          return (
+            <View
+              key={r.id}
+              style={[
+                styles.reward,
+                {
+                  borderRadius: radii.card,
+                  borderColor: unlocked ? palette.loyalty : palette.border,
+                  borderWidth: unlocked ? 2 : 1,
+                  backgroundColor: unlocked ? palette.background : 'transparent',
+                  opacity: unlocked ? 1 : 0.5,
+                },
+              ]}
+            >
+              <Text style={{ color: palette.text, fontWeight: '800' }}>
+                {messages.loyalty.tierTitle(r.costPoints)} · {r.name}
               </Text>
-            ) : (
-              <Text style={{ color: palette.textMuted, fontSize: 12 }}>
-                {messages.loyalty.rewardTooExpensive(missing)}
-              </Text>
-            )}
-          </Pressable>
-        );
-      })}
+              {unlocked ? (
+                <>
+                  <Text style={{ color: palette.loyalty, fontSize: 12, fontWeight: '700' }}>
+                    {messages.loyalty.giftPick}
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={styles.giftRow}>
+                      {tierProducts(r, catalog.products).map((p) => {
+                        const on = tierOn && selected?.productId === p.id;
+                        return (
+                          <Pressable
+                            key={p.id}
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: on }}
+                            accessibilityLabel={`${p.name}${on ? `, ${messages.loyalty.giftOffered}` : ''}`}
+                            onPress={() => {
+                              onChange();
+                              if (on) dispatch({ type: 'setReward', reward: null });
+                              else
+                                takeReward({
+                                  rewardId: r.id,
+                                  product: p,
+                                  restaurantId: cart.restaurantId ?? catalog.restaurantId,
+                                  cart,
+                                  dispatch,
+                                });
+                            }}
+                            style={[
+                              styles.gift,
+                              {
+                                borderRadius: radii.button,
+                                borderColor: palette.loyalty,
+                                backgroundColor: on ? palette.loyalty : palette.background,
+                              },
+                            ]}
+                          >
+                            {p.imageUrl ? (
+                              <Image
+                                source={{ uri: p.imageUrl }}
+                                style={styles.giftImage}
+                                contentFit="contain"
+                                accessibilityIgnoresInvertColors
+                              />
+                            ) : null}
+                            <Text
+                              style={{
+                                color: on ? palette.onLoyalty : palette.text,
+                                fontWeight: '700',
+                              }}
+                            >
+                              {p.name}
+                              {on ? ` ✓ ${messages.loyalty.giftOffered}` : ''}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
+                </>
+              ) : (
+                <Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                  {messages.loyalty.rewardTooExpensive(missing)}
+                </Text>
+              )}
+            </View>
+          );
+        })}
       {notice ? (
         <Text style={{ color: palette.accent, fontWeight: '600' }} accessibilityRole="alert">
           {notice}
@@ -567,7 +600,18 @@ const styles = StyleSheet.create({
   methods: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   rewardsBox: { padding: 14, gap: 10 },
   rewardsHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  reward: { borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, gap: 2 },
+  reward: { paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, gap: 6 },
+  giftRow: { flexDirection: 'row', gap: 8 },
+  gift: {
+    borderWidth: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+  },
+  giftImage: { width: 36, height: 36 },
   content: { padding: 16, gap: 12, paddingBottom: 32 },
   title: { fontSize: 26, fontWeight: '700' },
   section: { gap: 8 },

@@ -26,10 +26,17 @@ export interface CartLine {
   readonly note: string | null;
 }
 
+/** Cadeau choisi : palier et produit offert (lot 11) ; les points sont recontrôlés par le serveur. */
+export interface CartReward {
+  readonly rewardId: string;
+  readonly productId: string;
+}
+
 export interface CartState {
   readonly restaurantId: string | null;
   readonly lines: readonly CartLine[];
   readonly setup: OrderSetup;
+  readonly reward: CartReward | null;
 }
 
 export type CartAction =
@@ -45,9 +52,15 @@ export type CartAction =
   | { readonly type: 'remove'; readonly key: string }
   | { readonly type: 'clear' }
   | { readonly type: 'setup'; readonly restaurantId: string; readonly setup: Partial<OrderSetup> }
+  | { readonly type: 'setReward'; readonly reward: CartReward | null }
   | { readonly type: 'restore'; readonly state: CartState };
 
-export const EMPTY_CART: CartState = { restaurantId: null, lines: [], setup: DEFAULT_SETUP };
+export const EMPTY_CART: CartState = {
+  restaurantId: null,
+  lines: [],
+  setup: DEFAULT_SETUP,
+  reward: null,
+};
 export const MAX_LINE_QUANTITY = 99;
 
 export function lineKey(
@@ -89,6 +102,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         restaurantId: action.restaurantId,
         lines: sameRestaurant ? state.lines : [],
         setup: { ...state.setup, ...action.setup },
+        reward: sameRestaurant ? state.reward : null,
       };
     }
     case 'setQuantity': {
@@ -97,15 +111,24 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         quantity === 0
           ? state.lines.filter((l) => l.key !== action.key)
           : state.lines.map((l) => (l.key === action.key ? { ...l, quantity } : l));
-      return { ...state, lines };
+      return { ...state, lines, reward: keepReward(state.reward, lines) };
     }
-    case 'remove':
-      return { ...state, lines: state.lines.filter((l) => l.key !== action.key) };
+    case 'remove': {
+      const lines = state.lines.filter((l) => l.key !== action.key);
+      return { ...state, lines, reward: keepReward(state.reward, lines) };
+    }
+    case 'setReward':
+      return { ...state, reward: action.reward };
     case 'clear':
       return { ...EMPTY_CART, setup: state.setup };
     case 'restore':
       return action.state;
   }
+}
+
+/** Un cadeau dont le produit a quitté le panier n'est plus appliqué. */
+function keepReward(reward: CartReward | null, lines: readonly CartLine[]): CartReward | null {
+  return reward && lines.some((l) => l.productId === reward.productId) ? reward : null;
 }
 
 export function itemCount(state: CartState): number {
@@ -143,10 +166,19 @@ export function parseStoredCart(raw: string | null): CartState {
         // Un créneau planifié déjà passé retombe sur « dès que possible ».
         time: timeStillValid ? time.data : { kind: 'asap' },
       },
+      reward: parseReward((data as { reward?: unknown }).reward),
     };
   } catch {
     return EMPTY_CART;
   }
+}
+
+function parseReward(raw: unknown): CartReward | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const r = raw as Partial<CartReward>;
+  return typeof r.rewardId === 'string' && typeof r.productId === 'string'
+    ? { rewardId: r.rewardId, productId: r.productId }
+    : null;
 }
 
 /**
@@ -155,5 +187,6 @@ export function parseStoredCart(raw: string | null): CartState {
  */
 export function reorderCart(snapshot: CartState): CartState | null {
   if (!snapshot.restaurantId || snapshot.lines.length === 0) return null;
-  return { ...snapshot, setup: { ...snapshot.setup, time: { kind: 'asap' } } };
+  // Le cadeau n'est pas reconduit : il dépend des points du moment.
+  return { ...snapshot, reward: null, setup: { ...snapshot.setup, time: { kind: 'asap' } } };
 }

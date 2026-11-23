@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckerBand, titleStyle } from '@/components/brand';
 import { OrderShortcuts } from '@/components/CurrentOrder';
-import { JoinCard, PointsCard } from '@/components/loyalty';
+import { FidelityCard, JoinCard } from '@/components/loyalty';
 import { TenantLogo } from '@/components/TenantLogo';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { useTenant } from '@/tenant/TenantProvider';
@@ -99,7 +99,11 @@ export default function HomeScreen() {
 
         {club ? (
           member ? (
-            <PointsCard member={member} />
+            <FidelityCard
+              member={member}
+              rewards={club.rewards}
+              pointsPerEuro={club.pointsPerEuro}
+            />
           ) : (
             <JoinCard welcomePoints={club.welcomePoints} />
           )

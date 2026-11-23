@@ -29,9 +29,11 @@ function groupHint(g: OptionGroupDto): string {
 }
 
 export default function ProductScreen() {
-  const { restaurantId, productId } = useLocalSearchParams<{
+  const { restaurantId, productId, reward } = useLocalSearchParams<{
     restaurantId: string;
     productId: string;
+    /** Mode cadeau (lot 11) : palier dont ce produit est offert. */
+    reward?: string;
   }>();
   const { palette, style: brand } = useTenant();
   const { dispatch } = useCart();
@@ -64,6 +66,11 @@ export default function ProductScreen() {
       optionIds: selectedOptionIds(product, current),
       note: note.trim() || null,
     });
+    if (reward) {
+      dispatch({ type: 'setReward', reward: { rewardId: reward, productId: product.id } });
+      router.navigate('/cart');
+      return;
+    }
     router.back();
   };
 
@@ -102,6 +109,17 @@ export default function ProductScreen() {
         <Text style={[styles.base, { color: palette.text }]}>
           {formatPrice(product.priceCents)}
         </Text>
+        {reward ? (
+          <Text
+            style={[
+              styles.giftBanner,
+              { backgroundColor: palette.loyalty, color: palette.onLoyalty },
+            ]}
+            accessibilityRole="alert"
+          >
+            {messages.loyalty.giftBanner}
+          </Text>
+        ) : null}
 
         {product.optionGroups.map((group) => {
           const chosen = current[group.id] ?? [];
@@ -208,7 +226,9 @@ export default function ProductScreen() {
           label={
             missing[0]
               ? messages.product.missing(missing[0].name)
-              : messages.product.add(formatPrice(total))
+              : reward
+                ? messages.loyalty.addGift
+                : messages.product.add(formatPrice(total))
           }
           onPress={add}
         />
@@ -245,6 +265,7 @@ const styles = StyleSheet.create({
   closeText: { fontSize: 16, fontWeight: '600' },
   photoBox: { backgroundColor: '#FFFFFF', height: 260, padding: 12, overflow: 'hidden' },
   photo: { width: '100%', height: '100%' },
+  giftBanner: { padding: 12, borderRadius: 12, fontWeight: '800', overflow: 'hidden' },
   title: { fontSize: 26, fontWeight: '700', marginTop: 8 },
   base: { fontSize: 18, fontWeight: '600' },
   group: { marginTop: 20, gap: 6 },

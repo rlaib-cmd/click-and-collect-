@@ -75,6 +75,34 @@ describe('panier', () => {
   });
 });
 
+describe('cadeau choisi (lot 11)', () => {
+  it('garde le cadeau tant que son produit est au panier', () => {
+    let s = add(EMPTY_CART, 'frites');
+    s = cartReducer(s, { type: 'setReward', reward: { rewardId: 'rw-1', productId: 'frites' } });
+    s = add(s, 'burger');
+    expect(s.reward).toEqual({ rewardId: 'rw-1', productId: 'frites' });
+    const key = s.lines.find((l) => l.productId === 'frites')?.key ?? '';
+    s = cartReducer(s, { type: 'remove', key });
+    expect(s.reward).toBeNull();
+  });
+
+  it('relit le cadeau sauvegardé et ignore une valeur corrompue', () => {
+    let s = add(EMPTY_CART, 'frites');
+    s = cartReducer(s, { type: 'setReward', reward: { rewardId: 'rw-1', productId: 'frites' } });
+    expect(parseStoredCart(JSON.stringify(s)).reward).toEqual({
+      rewardId: 'rw-1',
+      productId: 'frites',
+    });
+    expect(parseStoredCart(JSON.stringify({ ...s, reward: { rewardId: 3 } })).reward).toBeNull();
+  });
+
+  it('ne reconduit pas le cadeau en recommandant', () => {
+    let s = add(EMPTY_CART, 'frites');
+    s = cartReducer(s, { type: 'setReward', reward: { rewardId: 'rw-1', productId: 'frites' } });
+    expect(reorderCart(s)?.reward).toBeNull();
+  });
+});
+
 describe('commander comme la dernière fois', () => {
   it('reprend les articles et repasse en « dès que possible »', () => {
     const snapshot = parseStoredCart(
@@ -92,6 +120,7 @@ describe('commander comme la dernière fois', () => {
       restaurantId: 'r1',
       lines: [{ key: 'k', productId: 'bb-original', quantity: 2, optionIds: ['o1'], note: null }],
       setup: { mode: 'pickup', address: null, time: { kind: 'asap' } },
+      reward: null,
     });
   });
 
