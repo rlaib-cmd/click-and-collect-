@@ -1,4 +1,4 @@
-/* global process, console, setTimeout, fetch, URL */
+/* global process, console, setTimeout, fetch, URL, window */
 // Tests de bout en bout « back-office ↔ application client » sur la recette (lot 13).
 // Les deux interfaces parlent à la vraie API de recette ; on vérifie qu'une action faite d'un
 // côté se voit de l'autre. Mode d'emploi : e2e/README.md. Aucun identifiant n'est écrit ici :
@@ -419,24 +419,73 @@ try {
     await shot(page, 'd2-backoffice-commande');
     await card.click();
     const drawer = page.getByRole('complementary', { name: `Commande n° ${number}` });
-    for (const action of ['Accepter', 'Prête', 'Remise']) {
+    // Le statut affiché en tête du suivi (en plus de l'étape de la frise) : deux fois le libellé.
+    const appShows = (label) =>
+      poll(
+        `l’app affiche « ${label} »`,
+        async () => {
+          await member.reload();
+          await member
+            .getByText(/Commande n° \d+/)
+            .first()
+            .waitFor({ timeout: 15_000 });
+          return (await member.getByText(label, { exact: true }).count()) >= 2;
+        },
+        90_000,
+        3_000,
+      );
+    const steps = [
+      ['Accepter', 'Acceptée par le restaurant', 'd3-app-acceptee'],
+      ['Prête', 'Prête', 'd4-app-prete'],
+      ['Remise', 'Remise', 'd5-app-remise'],
+    ];
+    for (const [action, label, name] of steps) {
       const b = drawer.getByRole('button', { name: action, exact: true });
       await b.waitFor({ timeout: 20_000 });
       await b.click();
-      await sleep(1500);
-      if (action === 'Prête') {
-        await member.reload();
-        await member.getByText('Prête').first().waitFor({ timeout: 30_000 });
-        await shot(member, 'd3-app-prete');
-      }
+      await (label === 'Acceptée par le restaurant'
+        ? poll(
+            'acceptée',
+            async () => {
+              await member.reload();
+              return member
+                .getByText(label)
+                .first()
+                .waitFor({ timeout: 10_000 })
+                .then(() => true);
+            },
+            90_000,
+            3_000,
+          )
+        : appShows(label));
+      await shot(member, name);
     }
-    await member.reload();
-    await member.getByText('Remise').first().waitFor({ timeout: 30_000 });
-    await shot(member, 'd4-app-remise');
+
+    // Points crédités à la remise (paiement sur place, ADR 0010), lus par l'API du membre.
+    const token = await member.evaluate(
+      (key) => window.localStorage.getItem(key),
+      `splash360:fidelite:${TENANT}`,
+    );
+    if (!token) throw new Error('jeton de membre introuvable');
+    await poll(
+      'points de la commande crédités',
+      async () => {
+        const res = await fetch(`${API}/v1/tenants/${TENANT}/loyalty/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        const me = await res.json();
+        return me.history.some(
+          (h) => h.kind === 'earn' && h.label.includes(`n° ${number}`) && h.points > 0,
+        );
+      },
+      60_000,
+      3_000,
+    );
     await member.getByRole('tab', { name: 'Avantages' }).click();
-    // Points crédités à la remise (paiement sur place, ADR 0010) : ligne d'historique de la commande.
-    await member.getByText(`Commande n° ${number}`).first().waitFor({ timeout: 30_000 });
-    await shot(member, 'd5-points-credites');
+    await member.getByText(`Commande n° ${number}`).last().waitFor({ timeout: 30_000 });
+    await sleep(1500);
+    await shot(member, 'd6-points-credites');
     await page.context().close();
   });
   if (member) await member.context().close();
