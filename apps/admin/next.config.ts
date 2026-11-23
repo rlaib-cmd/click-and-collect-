@@ -9,7 +9,12 @@ const staticExport = process.env.ADMIN_STATIC_EXPORT === '1';
 
 const nextConfig: NextConfig = {
   // Les paquets internes sont publiés en TypeScript source.
-  transpilePackages: ['@splash360/i18n', '@splash360/theme', '@splash360/contracts'],
+  transpilePackages: [
+    '@splash360/core',
+    '@splash360/i18n',
+    '@splash360/theme',
+    '@splash360/contracts',
+  ],
   ...(staticExport ? { output: 'export', pageExtensions: ['tsx'] } : {}),
 };
 

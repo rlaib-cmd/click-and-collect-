@@ -1,6 +1,7 @@
 'use client';
 
 import { adminMenuSchema, type AdminRestaurant } from '@splash360/contracts';
+import { can } from '@splash360/core';
 import { messages } from '@splash360/i18n';
 import { useCallback, useState } from 'react';
 import { z } from 'zod';
@@ -13,7 +14,7 @@ const t = messages.admin.menu;
 
 /** Carte en lecture seule : aperçu, actualisation, masquage. */
 export default function MenuPage() {
-  const { auth } = useSession();
+  const { auth, me } = useSession();
   const [restaurant, setRestaurant] = useState<AdminRestaurant | null>(null);
   const pick = useCallback((r: AdminRestaurant) => setRestaurant(r), []);
   const menu = useApi(restaurant ? `/restaurants/${restaurant.id}/menu` : null, adminMenuSchema);
@@ -44,9 +45,11 @@ export default function MenuPage() {
         <h1>{messages.admin.nav.menu}</h1>
         <div className="row">
           <RestaurantPicker value={restaurant?.id ?? null} onChange={pick} />
-          <button type="button" onClick={() => void refresh()}>
-            {t.refresh}
-          </button>
+          {can(me.role, 'menu.manage') ? (
+            <button type="button" onClick={() => void refresh()}>
+              {t.refresh}
+            </button>
+          ) : null}
         </div>
       </header>
       <p className="muted">{t.readOnly}</p>
@@ -57,9 +60,13 @@ export default function MenuPage() {
         </p>
       ) : null}
       {m?.categories.map((cat) => (
-        <section key={cat.id} className={`card ${isHidden('category', cat.id) ? 'muted' : ''}`}>
+        <section
+          key={cat.id}
+          className={`card stack ${isHidden('category', cat.id) ? 'muted' : ''}`}
+          style={{ gap: 8 }}
+        >
           <header className="row between">
-            <h2>{cat.name}</h2>
+            <h2 style={{ margin: 0 }}>{cat.name}</h2>
             <button type="button" className="link" onClick={() => void toggle('category', cat.id)}>
               {isHidden('category', cat.id) ? t.show : t.hide}
             </button>
@@ -67,10 +74,27 @@ export default function MenuPage() {
           <table>
             <tbody>
               {cat.products.map((p) => (
-                <tr key={p.id} className={isHidden('product', p.id) || !p.available ? 'muted' : ''}>
+                <tr
+                  key={p.id}
+                  data-testid={`product-${p.id}`}
+                  className={isHidden('product', p.id) || !p.available ? 'muted' : ''}
+                >
+                  <td style={{ width: 64 }}>
+                    {p.imageUrl ? (
+                      <img
+                        src={p.imageUrl}
+                        alt=""
+                        width={48}
+                        height={48}
+                        style={{ objectFit: 'contain', borderRadius: 10, background: '#fff' }}
+                      />
+                    ) : null}
+                  </td>
                   <td>
-                    {p.name}
-                    {isHidden('product', p.id) ? <span className="badge">{t.hidden}</span> : null}
+                    <strong>{p.name}</strong>
+                    {isHidden('product', p.id) ? (
+                      <span className="badge warn">{t.paused}</span>
+                    ) : null}
                     {!p.available ? (
                       <span className="badge">{messages.menu.unavailable}</span>
                     ) : null}
@@ -79,10 +103,10 @@ export default function MenuPage() {
                   <td className="num">
                     <button
                       type="button"
-                      className="link"
+                      aria-label={`${isHidden('product', p.id) ? t.resume : t.pause} : ${p.name}`}
                       onClick={() => void toggle('product', p.id)}
                     >
-                      {isHidden('product', p.id) ? t.show : t.hide}
+                      {isHidden('product', p.id) ? t.resume : t.pause}
                     </button>
                   </td>
                 </tr>

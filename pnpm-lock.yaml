@@ -26,6 +26,9 @@ importers:
       '@splash360/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@splash360/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@splash360/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
@@ -6745,7 +6748,7 @@ snapshots:
       obug: 3.0.0
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 5.1.1(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(@vitest/coverage-v8@5.1.1)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(terser@5.51.4)(tsx@4.23.15))
+      vitest: 5.1.1(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(@vitest/coverage-v8@5.1.1)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(terser@5.51.4)(tsx@4.23.15))
 
   '@vitest/istanbul-lib-coverage@2.1.1': {}
 

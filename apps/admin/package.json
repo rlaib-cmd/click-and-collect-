@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@splash360/contracts": "workspace:*",
+    "@splash360/core": "workspace:*",
     "@splash360/i18n": "workspace:*",
     "@splash360/theme": "workspace:*",
     "@supabase/supabase-js": "^2.119.2",

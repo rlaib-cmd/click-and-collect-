@@ -6,6 +6,7 @@ import {
   alertSchema,
   type AdminOrder,
 } from '@splash360/contracts';
+import { can } from '@splash360/core';
 import { messages } from '@splash360/i18n';
 import { useState } from 'react';
 import { z } from 'zod';
@@ -210,7 +211,7 @@ function OrderDrawer({
     (s) => o.mode === 'delivery' || s !== 'out_for_delivery',
   );
   const canRefund =
-    me.role !== 'staff' &&
+    can(me.role, 'orders.refund') &&
     o.refundedCents < o.totals.totalCents &&
     !['pending_payment', 'payment_failed', 'cancelled'].includes(o.status);
 
