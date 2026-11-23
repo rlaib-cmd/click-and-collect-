@@ -19,3 +19,4 @@ Format : Contexte, Décision, Conséquences, Statut.
 | [0012](0012-connexion-client-par-code.md) | Connexion du client par code SMS ou e-mail, téléphone identifiant principal | Acceptée |
 | [0013](0013-email-facultatif-et-reservation-des-points.md) | E-mail facultatif à la commande, points du cadeau réservés | Acceptée |
 | [0014](0014-paliers-de-cadeaux.md) | Cadeaux par paliers, produit offert au choix | Acceptée |
+| [0015](0015-codes-promo.md) | Codes promo gérés au back-office | Acceptée |

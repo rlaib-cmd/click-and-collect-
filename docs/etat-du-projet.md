@@ -17,6 +17,7 @@ Synthèse pour reprendre le projet. Détail par lot dans `docs/plan-lot-*.md`, d
 | 8. Fidélité, paiement sur place | 🟡 Terminé sur données de test | API fidélité Splash360 |
 | 9. Administration de la plateforme | ✅ Terminé (bloquer, supprimer, club fidélité, couleur du club, invitations et mot de passe des administrateurs d'enseigne) | Endpoints d'administration de la fidélité chez Splash360 |
 | 10. Connexion du client par code | ✅ Terminé (SMS ou e-mail, inscription avec prénom, téléphone identifiant principal ; Google prêt mais masqué) | Activation des SMS Brevo et clé API ; projet Google ; recherche par téléphone chez Splash360 |
+| 11. Commande façon borne, paliers, compte, codes promo | ✅ Terminé (carte en photos, « Ma fidélité », paliers de cadeaux au choix, Mon compte et historique, codes promo au back-office) | Cartes enregistrées avec Stripe ; modifier son prénom (API Splash360) ; paliers chez Splash360 |
 
 ## Aperçu en ligne (recette)
 
