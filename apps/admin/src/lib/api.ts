@@ -72,3 +72,36 @@ export const euros = (cents: number) =>
 export const toCents = (value: string) => Math.round(Number(value.replace(',', '.')) * 100);
 export const fromCents = (cents: number | null) =>
   cents === null ? '' : (cents / 100).toFixed(2).replace('.', ',');
+
+/** Envoi d'un fichier brut (logo du studio design) ; la réponse est validée par le contrat. */
+export async function upload<T extends z.ZodType>(
+  auth: Auth,
+  path: string,
+  file: Blob,
+  schema: T,
+): Promise<z.infer<T>> {
+  const res = await fetch(`${API_URL}/v1/admin${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${auth.token}`,
+      ...(auth.tenantId ? { 'X-Tenant-Id': auth.tenantId } : {}),
+      'Content-Type': file.type || 'application/octet-stream',
+    },
+    body: file,
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = apiErrorSchema.safeParse(await res.json().catch(() => null));
+    throw new ApiError(
+      res.status,
+      err.success ? err.data.error.code : 'internal_error',
+      err.success ? err.data.error.message : res.statusText,
+    );
+  }
+  return schema.parse(await res.json());
+}
+
+/** Adresse publique de l'application client (lien d'aperçu du brouillon). */
+export const CLIENT_APP_URL = (
+  process.env.NEXT_PUBLIC_CLIENT_APP_URL ?? 'http://localhost:8081'
+).replace(/\/+$/, '');
