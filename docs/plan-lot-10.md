@@ -14,6 +14,8 @@ son téléphone, Google plus tard (ADR 0012).
 | 4 | API : `POST /loyalty/otp/start` et `/loyalty/otp/verify`, SMS Brevo, aide au test en recette |
 | 5 | Application : écran numéro → code → prénom, renvoi minuté, code par e-mail, emplacement Google masqué |
 | 6 | Back-office : téléphone des membres dans « Club fidélité », recherche par numéro |
+| 7 | E-mail facultatif à la commande (clé client e-mail sinon téléphone), explication sous le bouton grisé (ADR 0013) |
+| 8 | Points du cadeau réservés tant que la commande est en cours, débités à la validation (ADR 0013) |
 
 ## Statut
 

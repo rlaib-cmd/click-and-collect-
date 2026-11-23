@@ -17,3 +17,4 @@ Format : Contexte, Décision, Conséquences, Statut.
 | [0010](0010-paiement-sur-place.md) | Paiement sur place : option par restaurant, membres du club, statut « confirmée » | Acceptée |
 | [0011](0011-administration-plateforme.md) | Administration de la plateforme : bloquer, supprimer, club fidélité | Acceptée |
 | [0012](0012-connexion-client-par-code.md) | Connexion du client par code SMS ou e-mail, téléphone identifiant principal | Acceptée |
+| [0013](0013-email-facultatif-et-reservation-des-points.md) | E-mail facultatif à la commande, points du cadeau réservés | Acceptée |
