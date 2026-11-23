@@ -1,16 +1,19 @@
-import type { OrderTracking, PaymentSession } from '@splash360/contracts';
+import type { OrderTracking, PaymentSession, PosReadiness } from '@splash360/contracts';
 import type { OperationsStore, OrderReader, PaymentStore, TenantWithTheme } from '@splash360/db';
 import { z } from 'zod';
 import type { Hono } from 'hono';
 import { apiError } from '../errors';
 import type { PaymentGateway } from '../payments/gateway';
 import { bearer, tokenMatches } from '../payments/tokens';
+import { checkReadiness, type HandshakeDeps } from '../pos/handshake';
 
 export interface PaymentRoutesDeps {
   readonly operations: OperationsStore;
   readonly payments: PaymentStore;
   readonly orders: OrderReader;
   readonly gateway: PaymentGateway | null;
+  /** Caisse Splash360 : le paiement attend que la caisse soit prête (ADR 0018). */
+  readonly handshake: HandshakeDeps;
 }
 
 type Env = { Variables: { tenant: TenantWithTheme } };
@@ -70,6 +73,29 @@ export function registerPaymentRoutes(app: Hono<Env>, deps: PaymentRoutesDeps) {
     return c.body(null, 204);
   });
 
+  /** L'application interroge cette route (~1 fois par seconde) avant d'ouvrir le paiement. */
+  app.get('/:subdomain/orders/:orderId/pos-readiness', async (c) => {
+    const tenant = c.get('tenant');
+    const detail = await deps.orders.getOrderDetail(tenant.id, c.req.param('orderId'));
+    if (!detail || !tokenMatches(bearer(c.req.header('Authorization')), detail.accessTokenHash)) {
+      return apiError(c, 'not_found', 'Commande inconnue');
+    }
+    const order = await deps.payments.getOrder(tenant.id, detail.id);
+    // Paiement en ligne impossible ici : inutile de déposer la commande en caisse,
+    // la création du paiement le dira au client.
+    const payable =
+      deps.gateway !== null && order?.stripeAccountId != null && order.stripeChargesEnabled;
+    const state =
+      detail.status === 'cancelled'
+        ? 'unavailable'
+        : payable
+          ? await checkReadiness(deps.handshake, tenant.id, detail.id)
+          : 'ready';
+    const body: PosReadiness = { state };
+    c.header('Cache-Control', 'no-store');
+    return c.json(body);
+  });
+
   app.post('/:subdomain/orders/:orderId/payment', async (c) => {
     const order = await deps.payments.getOrder(c.get('tenant').id, c.req.param('orderId'));
     if (!order || !tokenMatches(bearer(c.req.header('Authorization')), order.accessTokenHash)) {
@@ -84,6 +110,14 @@ export function registerPaymentRoutes(app: Hono<Env>, deps: PaymentRoutesDeps) {
     }
     if (!['pending_payment', 'payment_failed'].includes(order.status)) {
       return apiError(c, 'order_not_payable', 'Cette commande ne peut plus être payée');
+    }
+    // Jamais de débit avant que la caisse ait déclaré pouvoir accepter la commande.
+    const readiness = await checkReadiness(deps.handshake, order.tenantId, order.id);
+    if (readiness === 'unavailable') {
+      return apiError(c, 'order_not_payable', 'Le restaurant n’a pas pu accepter cette commande');
+    }
+    if (readiness === 'waiting') {
+      return apiError(c, 'pos_not_ready', 'Le restaurant n’a pas encore accepté la commande');
     }
     const intent = await deps.gateway.createPaymentIntent({
       orderId: order.id,

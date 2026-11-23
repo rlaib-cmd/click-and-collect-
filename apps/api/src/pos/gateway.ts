@@ -4,13 +4,36 @@ import type { OrderDetail, Restaurant } from '@splash360/db';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
- * Caisse Splash360 : dépôt des commandes payées et retour des statuts (section 7).
- * Le format réel dépend de la documentation Splash360 (en attente) ; le contrat proposé
- * est décrit dans docs/api-splash360/contrat-commande-en-ligne.md.
+ * Caisse Splash360 (lot 14, ADR 0018). Parcours imposé par Splash360 :
+ * 1. dépôt de la commande « en attente » → ticket ;
+ * 2. la caisse passe le ticket à « ready » : elle peut accepter la commande, le client peut payer ;
+ * 3. notification du paiement (vide pour un paiement sur place) ;
+ * 4. la caisse passe le ticket à « confirmed » : commande intégrée.
+ * Les phases sont suivies sur la commande (`PosTicketStore`), le séquencement est dans `handshake.ts`.
  */
+export type PosTicketState = 'pending' | 'ready' | 'confirmed' | 'failed';
+
+export type PosPayment =
+  | {
+      readonly method: 'card';
+      readonly amountCents: number;
+      /** Identifiant du paiement Stripe, transmis à la caisse comme détail du règlement. */
+      readonly reference: string;
+    }
+  | { readonly method: 'on_site' };
+
+export interface PosTicketRef {
+  readonly ticketId: string;
+  readonly restaurant: Restaurant;
+}
+
 export interface PosGateway {
-  /** Dépose une commande payée ; renvoie la référence de la caisse. Doit être idempotent par `orderId`. */
-  submitOrder(order: OrderDetail, restaurant: Restaurant): Promise<{ reference: string }>;
+  /** Dépose la commande en attente ; renvoie le ticket de la caisse. */
+  openTicket(order: OrderDetail, restaurant: Restaurant): Promise<{ ticketId: string }>;
+  ticketStatus(
+    ticket: PosTicketRef & { readonly openedAt: Date; readonly paymentSentAt: Date | null },
+  ): Promise<{ state: PosTicketState; raw: string | null }>;
+  submitPayment(ticket: PosTicketRef, payment: PosPayment): Promise<void>;
 }
 
 export class PosRejectedError extends Error {
@@ -23,43 +46,63 @@ export class PosRejectedError extends Error {
   }
 }
 
-/** Charge utile envoyée à la caisse (proposition de contrat). */
-export function toPosPayload(order: OrderDetail, restaurant: Restaurant) {
+export interface DemoPosOptions {
+  readonly log?: (m: string) => void;
+  readonly now?: () => Date;
+  /** Délai simulé avant que la caisse soit prête (défaut 2 s). */
+  readonly readyAfterMs?: number;
+  /** Délai simulé avant la confirmation après paiement (défaut 1,5 s). */
+  readonly confirmAfterMs?: number;
+}
+
+/**
+ * Caisse de démonstration : même parcours que Splash360 (en attente → prête → confirmée),
+ * calculé d'après l'heure du dépôt et du paiement, donc sans état (plusieurs instances possibles).
+ */
+export function createDemoPosGateway(
+  options: DemoPosOptions = {},
+): PosGateway & { submitted: string[]; payments: PosPayment[] } {
+  const submitted: string[] = [];
+  const payments: PosPayment[] = [];
+  const now = options.now ?? (() => new Date());
+  const readyAfter = options.readyAfterMs ?? 2000;
+  const confirmAfter = options.confirmAfterMs ?? 1500;
+  const log = options.log ?? (() => undefined);
   return {
-    externalId: order.id,
-    channel: 'online_ordering',
-    restaurantId: restaurant.splash360Id,
-    number: order.number,
-    mode: order.mode,
-    requestedAt: order.requestedSlot,
-    estimatedAt: order.estimatedAt,
-    paid: true,
-    customer: order.customer,
-    deliveryAddress: order.deliveryAddress,
-    lines: order.lines.map((l) => ({
-      name: l.name,
-      quantity: l.quantity,
-      unitPriceCents: l.unitPriceCents,
-      totalCents: l.totalCents,
-      note: l.note,
-      options: l.options,
-    })),
-    totals: order.totals,
+    submitted,
+    payments,
+    openTicket(order) {
+      submitted.push(order.id);
+      log(`[caisse de démonstration] commande n° ${order.number} déposée`);
+      return Promise.resolve({ ticketId: `DEMO-${order.number}-${order.id.slice(0, 8)}` });
+    },
+    ticketStatus({ openedAt, paymentSentAt }) {
+      const t = now().getTime();
+      if (paymentSentAt && t - paymentSentAt.getTime() >= confirmAfter)
+        return Promise.resolve({ state: 'confirmed', raw: 'confirmed' });
+      if (paymentSentAt || t - openedAt.getTime() >= readyAfter)
+        return Promise.resolve({ state: 'ready', raw: 'ready' });
+      return Promise.resolve({ state: 'pending', raw: 'pending' });
+    },
+    submitPayment({ ticketId }, payment) {
+      payments.push(payment);
+      log(`[caisse de démonstration] paiement reçu pour ${ticketId}`);
+      return Promise.resolve();
+    },
   };
 }
 
-/** Implémentation de démonstration : accepte tout et renvoie une référence locale. */
-export function createDemoPosGateway(
-  log: (m: string) => void = () => undefined,
-): PosGateway & { submitted: string[] } {
-  const submitted: string[] = [];
+/** Restaurant branché (et identifiants posés) : vraie caisse ; sinon démonstration. */
+export function createRoutingPosGateway(input: {
+  readonly demo: PosGateway;
+  readonly live: PosGateway | null;
+}): PosGateway {
+  const pick = (restaurant: Restaurant) =>
+    restaurant.splash360Live && input.live ? input.live : input.demo;
   return {
-    submitted,
-    submitOrder(order) {
-      submitted.push(order.id);
-      log(`[caisse de démonstration] commande n° ${order.number} reçue`);
-      return Promise.resolve({ reference: `DEMO-${order.number}-${order.id.slice(0, 8)}` });
-    },
+    openTicket: (order, restaurant) => pick(restaurant).openTicket(order, restaurant),
+    ticketStatus: (ticket) => pick(ticket.restaurant).ticketStatus(ticket),
+    submitPayment: (ticket, payment) => pick(ticket.restaurant).submitPayment(ticket, payment),
   };
 }
 

@@ -36,6 +36,7 @@ const restaurant = (
   longitude: 2.34,
   stripeAccountId: null,
   stripeChargesEnabled: false,
+  splash360Live: false,
   status: 'active',
   ...r,
 });
@@ -96,6 +97,7 @@ export const restaurants: Restaurant[] = [
     longitude: 2.3747,
     stripeAccountId: 'acct_bella',
     stripeChargesEnabled: true,
+    splash360Live: false,
   }),
   restaurant({
     id: GREEN_RESTO,
@@ -128,7 +130,8 @@ export async function sessionToken(email: string, secret = JWT_SECRET, expiresIn
 export function testSetup(overrides: Partial<AppDeps> = {}) {
   const backend = createMemoryOrderBackend({ [BELLA_RESTO]: bellaConfig }, () => restaurants);
   const stripe = createFakeGateway();
-  const pos = createDemoPosGateway();
+  // Caisse de démonstration instantanée : prête et confirmée sans délai.
+  const pos = createDemoPosGateway({ now: () => NOW, readyAfterMs: 0, confirmAfterMs: 0 });
   const notifications = createFakeNotificationSender();
   const tenants: TenantWithTheme[] = [
     {
@@ -227,6 +230,8 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
     tokenSecret: TOKEN_SECRET,
     operations: backend.operations,
     pos,
+    tickets: backend.tickets,
+    posInlineWaitMs: 0,
     notifier: notifications.sender,
     posWebhookSecret: POS_SECRET,
     geo: createDemoGeoProvider(),

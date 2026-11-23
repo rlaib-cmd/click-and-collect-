@@ -1,3 +1,4 @@
+import type { PosPhase } from './pos';
 import type { StaffRole, TenantRole } from '@splash360/core';
 import type { Queryable, Sql } from './client';
 import { toThemeStyle, type ThemeStyle, type ThemeStyleRow } from './tenants';
@@ -39,6 +40,8 @@ export interface OrderListItem {
   readonly createdAt: string;
   readonly itemCount: number;
   readonly paymentMethod: 'online' | 'on_site';
+  /** Avancement en caisse Splash360 (ADR 0018) ; null si pas encore déposée. */
+  readonly posPhase: PosPhase | null;
 }
 
 export interface RestaurantSettingsRecord {
@@ -347,9 +350,11 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
           created_at: Date;
           item_count: number;
           payment_method: 'online' | 'on_site';
+          pos_phase: PosPhase | null;
         }[]
       >`
-        select o.id, o.number, o.restaurant_id, o.status, o.mode, o.payment_method, c.name as customer_name, o.total_cents,
+        select o.id, o.number, o.restaurant_id, o.status, o.mode, o.payment_method, o.pos_phase,
+               c.name as customer_name, o.total_cents,
                o.estimated_at, o.created_at,
                (select coalesce(sum(quantity), 0)::int from public.order_items i where i.order_id = o.id) as item_count
         from public.orders o join public.customers c on c.id = o.customer_id
@@ -371,6 +376,7 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
         createdAt: r.created_at.toISOString(),
         itemCount: r.item_count,
         paymentMethod: r.payment_method,
+        posPhase: r.pos_phase,
       }));
     },
 

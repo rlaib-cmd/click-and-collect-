@@ -7,11 +7,18 @@ import { createDemoLoyaltyProvider } from '@splash360/api-loyalty';
  * (SUPABASE_DB_URL) et la clé de service ; aucun secret n'est saisi à la main pour l'aperçu.
  *
  * Différences avec le serveur Node (production, ADR 0001) :
- * - pas de tâches de fond : l'expiration des commandes non payées est faite à la volée,
- *   l'envoi à la caisse reste immédiat après paiement ;
+ * - pas de tâches de fond : l'expiration des commandes non payées et la suite des envois en
+ *   caisse (attente de confirmation, nouveaux essais) sont faites au fil des requêtes ;
  * - le paiement Stripe est désactivé tant que les clés ne sont pas posées en secrets de fonction.
  */
-import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
+import {
+  createDemoMenuProvider,
+  createMenuCache,
+  createRoutingMenuProvider,
+  createSplash360Client,
+  createSplash360MenuProvider,
+  splash360CredentialsFrom,
+} from '@splash360/api-menu';
 import {
   createPostgresAdminStore,
   createPostgresPromoStore,
@@ -20,6 +27,7 @@ import {
   createPostgresOrderingStore,
   createPostgresOrderReader,
   createPostgresPaymentStore,
+  createPostgresPosTicketStore,
   createPostgresRestaurantStore,
   createPostgresTenantStore,
   createSql,
@@ -37,7 +45,8 @@ import { createOtpDeps, createSmsSender } from './loyalty/otp';
 import { createNotificationSender } from './notifications/sender';
 import { createStripeGateway } from './payments/gateway';
 import { expireUnpaidOrders } from './payments/service';
-import { createDemoPosGateway } from './pos/gateway';
+import { createDemoPosGateway, createRoutingPosGateway } from './pos/gateway';
+import { createSplash360PosGateway, splash360Probe } from './pos/splash360';
 
 declare const Deno: {
   env: { get(name: string): string | undefined };
@@ -76,10 +85,19 @@ const gateway =
 
 const log = (m: string, d?: Record<string, unknown>) => jsonLog('warn', m, d);
 // Partagés entre les générations de connexions : cache de carte et clés publiques Supabase Auth.
-const menus = createMenuCache(createDemoMenuProvider(), {
-  ttlMs: 180_000,
-  maxStaleMs: 3_600_000,
-});
+// Splash360 (ADR 0018) : identifiants en secrets de fonction ; sans eux, démonstration.
+const splash360 = splash360CredentialsFrom(env);
+const splash360Client = splash360 ? createSplash360Client(splash360) : null;
+const menus = createMenuCache(
+  createRoutingMenuProvider({
+    demo: createDemoMenuProvider(),
+    live:
+      splash360Client && splash360
+        ? createSplash360MenuProvider(splash360Client, splash360.baseUrl)
+        : null,
+  }),
+  { ttlMs: 180_000, maxStaleMs: 3_600_000 },
+);
 const verifier = createSupabaseVerifier({
   jwksUrl: `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
   issuer: `${supabaseUrl}/auth/v1`,
@@ -98,7 +116,22 @@ const notifier = createNotificationSender({
       : undefined,
   log,
 });
-const pos = createDemoPosGateway((m) => jsonLog('info', m));
+const pos = createRoutingPosGateway({
+  demo: createDemoPosGateway({ log: (m) => jsonLog('info', m) }),
+  live: splash360Client
+    ? createSplash360PosGateway(splash360Client, {
+        feeVatRate: Number(env('SPLASH360_FEE_VAT_RATE') ?? '0.2'),
+      })
+    : null,
+});
+const seconds = (name: string, fallback: number) => {
+  const v = Number(env(name));
+  return Number.isFinite(v) && v > 0 ? v * 1000 : fallback * 1000;
+};
+const posTiming = {
+  readyTimeoutMs: seconds('POS_READY_TIMEOUT_SECONDS', 60),
+  confirmTimeoutMs: seconds('POS_CONFIRM_TIMEOUT_SECONDS', 300),
+};
 const geo = createBanGeoProvider(env('GEOCODER_URL') ?? 'https://data.geopf.fr/geocodage/search');
 
 const adminUrl = env('ADMIN_URL') ?? 'http://localhost:3000';
@@ -126,6 +159,12 @@ function build() {
     payments,
     operations: createPostgresOperationsStore(sql),
     pos,
+    tickets: createPostgresPosTicketStore(sql),
+    splash360:
+      splash360Client && splash360 ? splash360Probe(splash360Client, splash360.baseUrl) : null,
+    posTiming,
+    // Le webhook Stripe attend la réponse : attente courte, la suite se fait au fil des requêtes.
+    posInlineWaitMs: 5000,
     notifier,
     admin: createPostgresAdminStore(sql),
     promos: createPostgresPromoStore(sql),
@@ -179,8 +218,10 @@ const IDLE_RESET_MS = 3_000;
 let current = build();
 let lastActivity = Date.now();
 let inFlight = 0;
-// Pas de tâche de fond : les commandes non payées depuis 15 min sont annulées au fil des requêtes.
+// Pas de tâche de fond : les commandes non payées depuis 15 min sont annulées au fil des requêtes,
+// et les envois en caisse en attente (confirmation, nouveaux essais) avancent de la même façon.
 let lastExpiry = 0;
+let lastDispatch = 0;
 
 const root = new Hono();
 root.use('*', async (_c, next) => {
@@ -195,6 +236,10 @@ root.use('*', async (_c, next) => {
     void expireUnpaidOrders({ payments: current.payments, gateway, log }, new Date()).catch(
       () => undefined,
     );
+  }
+  if (now - lastDispatch > 10_000) {
+    lastDispatch = now;
+    void current.app.runDispatches().catch(() => undefined);
   }
   inFlight += 1;
   try {

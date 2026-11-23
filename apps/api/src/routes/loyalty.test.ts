@@ -316,6 +316,9 @@ describe('paiement sur place (ADR 0010)', () => {
     expect(placed).toMatchObject({ status: 'confirmed', paymentMethod: 'on_site' });
     // Envoyée en caisse sans paiement Stripe.
     expect(s.pos.submitted).toEqual([placed.orderId]);
+    // Caisse prête puis paiement notifié « sur place » (règlements vides), commande intégrée.
+    expect(s.pos.payments).toEqual([{ method: 'on_site' }]);
+    expect(s.backend.orders[0]?.pos).toMatchObject({ phase: 'confirmed' });
     const tracking = orderTrackingSchema.parse(
       await (
         await s.app.request(`${base}/orders/${placed.orderId}`, {

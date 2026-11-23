@@ -8,6 +8,7 @@ import type {
   OrderingStore,
   OrderReader,
   PaymentStore,
+  PosTicketStore,
   RestaurantStore,
   TenantStore,
 } from '@splash360/db';
@@ -16,9 +17,10 @@ import { notifyStatus, tenantNameResolver } from './notifications/service';
 import type { PaymentGateway } from './payments/gateway';
 import { processDispatches } from './pos/dispatcher';
 import type { PosGateway } from './pos/gateway';
+import type { PosTiming } from './pos/handshake';
 import { posRoutes } from './routes/pos';
 import type { TokenVerifier } from './admin/auth';
-import { adminRoutes } from './routes/admin';
+import { adminRoutes, type Splash360Probe } from './routes/admin';
 import { MAX_LOGO_BYTES, type AssetStorage } from './admin/logo';
 import type { GeoProvider } from './geo';
 import { createHmac } from 'node:crypto';
@@ -47,6 +49,11 @@ export interface AppDeps {
   readonly tokenSecret: string;
   readonly operations: OperationsStore;
   readonly pos: PosGateway;
+  /** Poignée de main avec la caisse, suivie sur la commande (ADR 0018). */
+  readonly tickets: PosTicketStore;
+  readonly posTiming?: Partial<PosTiming>;
+  /** Attente sur place de la caisse dans l'envoi (défaut 8 s ; 0 en test). */
+  readonly posInlineWaitMs?: number;
   readonly notifier: NotificationSender;
   readonly admin: AdminStore;
   /** Codes promo gérés au back-office (lot 11). */
@@ -80,6 +87,8 @@ export interface AppDeps {
   readonly otp?: OtpDeps;
   /** Stockage des logos téléversés au back-office (lot 12) ; absent = URL seulement. */
   readonly assets?: AssetStorage | null;
+  /** Test de connexion à l'API Splash360 réelle ; absent : identifiants non posés. */
+  readonly splash360?: Splash360Probe | null;
 }
 
 /**
@@ -157,7 +166,16 @@ export function createApp(deps: AppDeps) {
     orders: deps.orders,
     restaurants: deps.restaurants,
     pos: deps.pos,
+    tickets: deps.tickets,
+    payments: deps.payments,
+    gateway: deps.gateway,
+    timing: deps.posTiming,
+    inlineWaitMs: deps.posInlineWaitMs,
+    now: deps.now,
     log: warn,
+    // Caisse absente ou refus : le client est prévenu (annulée, remboursé le cas échéant).
+    onCompensated: (order: { orderId: string; tenantId: string }) =>
+      notifyStatus(notify, order.tenantId, order.orderId, 'cancelled'),
   };
 
   // Paiement confirmé : reçu au client, puis envoi immédiat à la caisse (la tâche périodique rattrape les échecs).
@@ -203,6 +221,7 @@ export function createApp(deps: AppDeps) {
       inviter: deps.inviter ?? null,
       previewSecret,
       assets: deps.assets ?? null,
+      splash360: deps.splash360 ?? null,
       now: deps.now,
     }),
   );
@@ -228,6 +247,15 @@ export function createApp(deps: AppDeps) {
       ...deps,
       hiddenItems,
       onConfirmed,
+      handshake: {
+        orders: deps.orders,
+        restaurants: deps.restaurants,
+        tickets: deps.tickets,
+        pos: deps.pos,
+        now: deps.now,
+        timing: deps.posTiming,
+        log: warn,
+      },
       previewSecret,
       now: deps.now ?? (() => new Date()),
     }),
@@ -240,5 +268,6 @@ export function createApp(deps: AppDeps) {
     return apiError(c, 'internal_error', 'Erreur interne');
   });
 
-  return app;
+  // Tâche périodique (serveur Node) ou au fil des requêtes (Edge) : suite des envois en caisse.
+  return Object.assign(app, { runDispatches: () => processDispatches(dispatch) });
 }

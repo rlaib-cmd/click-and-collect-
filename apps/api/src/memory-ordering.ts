@@ -16,6 +16,8 @@ import {
   type OrderingStore,
   type OrderReader,
   type PaymentStore,
+  type PosTicket,
+  type PosTicketStore,
   type PromoAdminStore,
   type PromoRecord,
   type Restaurant,
@@ -31,6 +33,8 @@ export interface StoredOrder extends NewOrder {
   events: { status: string; actor: string; at: string }[];
   posReference?: string;
   loyaltySettled?: boolean;
+  /** Poignée de main avec la caisse (ADR 0018), comme les colonnes pos_* de Postgres. */
+  pos?: { -readonly [K in keyof PosTicket]: PosTicket[K] };
 }
 
 const PAID = ['paid', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'completed'];
@@ -298,12 +302,18 @@ export function createMemoryOrderBackend(
         customer: o.customer,
         deliveryAddress: o.deliveryAddress,
         lines: o.lines.map((l) => ({
+          productId: l.productId,
           name: l.name,
           quantity: l.quantity,
           unitPriceCents: l.unitPriceCents,
           totalCents: l.totalCents,
           note: l.note,
-          options: l.options.map((x) => ({ name: x.name, priceCents: x.priceCents })),
+          options: l.options.map((x) => ({
+            groupId: x.groupId,
+            optionId: x.optionId,
+            name: x.name,
+            priceCents: x.priceCents,
+          })),
         })),
         events: o.events,
         accessTokenHash: o.accessTokenHash,
@@ -412,6 +422,71 @@ export function createMemoryOrderBackend(
     },
   };
 
+  const find = (tenantId: string, orderId: string) =>
+    orders.find((x) => x.tenantId === tenantId && x.id === orderId);
+  const tickets: PosTicketStore = {
+    getTicket(tenantId, orderId) {
+      const pos = find(tenantId, orderId)?.pos;
+      return Promise.resolve(pos ? { ...pos } : null);
+    },
+    openTicket(tenantId, orderId, ticketId, at) {
+      const o = find(tenantId, orderId);
+      if (!o || o.pos) return Promise.resolve(false);
+      o.pos = {
+        ticketId,
+        phase: 'waiting',
+        openedAt: at,
+        readyAt: null,
+        paymentSentAt: null,
+        confirmedAt: null,
+        checkedAt: null,
+        lastStatus: null,
+        error: null,
+      };
+      return Promise.resolve(true);
+    },
+    setPhase(tenantId, orderId, phase, at, detail = {}) {
+      const pos = find(tenantId, orderId)?.pos;
+      if (pos) {
+        pos.phase = phase;
+        if (phase === 'ready') pos.readyAt = at;
+        if (phase === 'payment_sent') pos.paymentSentAt = at;
+        if (phase === 'confirmed') pos.confirmedAt = at;
+        pos.checkedAt = at;
+        pos.lastStatus = detail.lastStatus ?? pos.lastStatus;
+        pos.error = detail.error ?? null;
+      }
+      return Promise.resolve();
+    },
+    recordCheck(tenantId, orderId, at, lastStatus) {
+      const pos = find(tenantId, orderId)?.pos;
+      if (pos) {
+        pos.checkedAt = at;
+        pos.lastStatus = lastStatus ?? pos.lastStatus;
+      }
+      return Promise.resolve();
+    },
+    cancelForPos(tenantId, orderId, reason) {
+      const o = find(tenantId, orderId);
+      if (!o || !['pending_payment', 'payment_failed', 'confirmed'].includes(o.status))
+        return Promise.resolve(false);
+      o.status = 'cancelled';
+      event(o, 'cancelled', 'pos');
+      void reason;
+      return Promise.resolve(true);
+    },
+    deferDispatch(orderId, retryAt) {
+      const d = dispatches.get(orderId);
+      if (d)
+        Object.assign(d, {
+          status: 'pending',
+          nextAt: retryAt.getTime(),
+          attempts: Math.max(d.attempts - 1, 0),
+        });
+      return Promise.resolve();
+    },
+  };
+
   /** Codes promo au back-office (ADR 0015), sur les mêmes données que les commandes. */
   const promoAdmin: PromoAdminStore = {
     listPromos: (tenantId) =>
@@ -439,5 +514,15 @@ export function createMemoryOrderBackend(
     },
   };
 
-  return { orders, promos, promoAdmin, ordering, payments, reader, operations, dispatches };
+  return {
+    orders,
+    promos,
+    promoAdmin,
+    ordering,
+    payments,
+    reader,
+    operations,
+    dispatches,
+    tickets,
+  };
 }

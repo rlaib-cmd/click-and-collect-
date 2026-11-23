@@ -2,7 +2,14 @@ import { createDemoLoyaltyProvider } from '@splash360/api-loyalty';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { serve } from '@hono/node-server';
 import * as Sentry from '@sentry/node';
-import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
+import {
+  createDemoMenuProvider,
+  createMenuCache,
+  createRoutingMenuProvider,
+  createSplash360Client,
+  createSplash360MenuProvider,
+  splash360CredentialsFrom,
+} from '@splash360/api-menu';
 import {
   createPostgresAdminStore,
   createPostgresPromoStore,
@@ -11,6 +18,7 @@ import {
   createPostgresOrderingStore,
   createPostgresOrderReader,
   createPostgresPaymentStore,
+  createPostgresPosTicketStore,
   createPostgresRestaurantStore,
   createPostgresTenantStore,
   createSql,
@@ -26,8 +34,8 @@ import { createOtpDeps, createSmsSender } from './loyalty/otp';
 import { createBanGeoProvider, createDemoGeoProvider } from './geo';
 import { createNotificationSender } from './notifications/sender';
 import { createStripeGateway } from './payments/gateway';
-import { processDispatches } from './pos/dispatcher';
-import { createDemoPosGateway } from './pos/gateway';
+import { createDemoPosGateway, createRoutingPosGateway } from './pos/gateway';
+import { createSplash360PosGateway, splash360Probe } from './pos/splash360';
 import { expireUnpaidOrders } from './payments/service';
 
 const env = loadEnv();
@@ -35,11 +43,25 @@ if (env.SENTRY_DSN) Sentry.init({ dsn: env.SENTRY_DSN, environment: env.SENTRY_E
 const sql = createSql(env.DATABASE_URL);
 const origins = env.CORS_ORIGINS === '*' ? '*' : env.CORS_ORIGINS.split(',').map((o) => o.trim());
 
-// En attendant la documentation de l'API menu Splash360 : cartes de démonstration.
-const menus = createMenuCache(createDemoMenuProvider(), {
-  ttlMs: env.MENU_CACHE_TTL_SECONDS * 1000,
-  maxStaleMs: env.MENU_MAX_STALE_MINUTES * 60_000,
-});
+// Splash360 (ADR 0018) : carte et caisse réelles pour les restaurants branchés, si les
+// identifiants sont posés ; démonstration sinon.
+const splash360 = splash360CredentialsFrom((name) => process.env[name]);
+const splash360Client = splash360 ? createSplash360Client(splash360) : null;
+if (!splash360Client)
+  jsonLog('warn', 'Identifiants Splash360 absents : carte et caisse de démonstration');
+const menus = createMenuCache(
+  createRoutingMenuProvider({
+    demo: createDemoMenuProvider(),
+    live:
+      splash360Client && splash360
+        ? createSplash360MenuProvider(splash360Client, splash360.baseUrl)
+        : null,
+  }),
+  {
+    ttlMs: env.MENU_CACHE_TTL_SECONDS * 1000,
+    maxStaleMs: env.MENU_MAX_STALE_MINUTES * 60_000,
+  },
+);
 
 const gateway =
   env.STRIPE_SECRET_KEY && env.STRIPE_PUBLISHABLE_KEY && env.STRIPE_WEBHOOK_SECRET
@@ -56,8 +78,12 @@ const operations = createPostgresOperationsStore(sql);
 const orders = createPostgresOrderReader(sql);
 const restaurants = createPostgresRestaurantStore(sql);
 const log = (m: string, d?: Record<string, unknown>) => jsonLog('warn', m, d);
-// En attendant la documentation de la caisse Splash360 : caisse de démonstration.
-const pos = createDemoPosGateway((m) => jsonLog('info', m));
+const pos = createRoutingPosGateway({
+  demo: createDemoPosGateway({ log: (m) => jsonLog('info', m) }),
+  live: splash360Client
+    ? createSplash360PosGateway(splash360Client, { feeVatRate: env.SPLASH360_FEE_VAT_RATE })
+    : null,
+});
 
 const notifier = createNotificationSender({
   expoAccessToken: env.EXPO_ACCESS_TOKEN,
@@ -81,6 +107,13 @@ const app = createApp({
   payments,
   operations,
   pos,
+  tickets: createPostgresPosTicketStore(sql),
+  splash360:
+    splash360Client && splash360 ? splash360Probe(splash360Client, splash360.baseUrl) : null,
+  posTiming: {
+    readyTimeoutMs: env.POS_READY_TIMEOUT_SECONDS * 1000,
+    confirmTimeoutMs: env.POS_CONFIRM_TIMEOUT_SECONDS * 1000,
+  },
   notifier,
   posWebhookSecret: env.POS_WEBHOOK_SECRET ?? null,
   admin: createPostgresAdminStore(sql),
@@ -159,11 +192,13 @@ const expiry = setInterval(() => {
     );
 }, 60_000);
 
-// Envois à la caisse en attente (nouveaux essais après échec).
+// Envois à la caisse en attente : attente de la caisse, nouveaux essais après échec.
 const dispatcher = setInterval(() => {
-  processDispatches({ operations, orders, restaurants, pos, log }).catch((error: unknown) =>
-    jsonLog('error', 'Envoi à la caisse en échec', { error: String(error) }),
-  );
+  app
+    .runDispatches()
+    .catch((error: unknown) =>
+      jsonLog('error', 'Envoi à la caisse en échec', { error: String(error) }),
+    );
 }, 15_000);
 
 function shutdown() {

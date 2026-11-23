@@ -4,9 +4,13 @@ import {
   type PlaceOrderRequest,
 } from '@splash360/contracts';
 import { describe, expect, it } from 'vitest';
-import { processDispatches } from '../pos/dispatcher';
-import { PosRejectedError, signPosPayload, type PosGateway } from '../pos/gateway';
-import { BELLA_ID, BELLA_RESTO, POS_SECRET, testSetup } from '../test-fixtures';
+import {
+  createDemoPosGateway,
+  PosRejectedError,
+  signPosPayload,
+  type PosGateway,
+} from '../pos/gateway';
+import { BELLA_ID, BELLA_RESTO, NOW, POS_SECRET, testSetup } from '../test-fixtures';
 
 const json = { 'Content-Type': 'application/json' };
 const request: PlaceOrderRequest = {
@@ -159,44 +163,46 @@ describe('retour des statuts de la caisse', () => {
   });
 });
 
+/** Caisse prête tout de suite, dont l'envoi du paiement échoue comme indiqué. */
+function payFails(error: () => Error): PosGateway & { calls: () => number } {
+  const demo = createDemoPosGateway({ now: () => NOW, readyAfterMs: 0, confirmAfterMs: 0 });
+  let calls = 0;
+  return {
+    calls: () => calls,
+    openTicket: (order, restaurant) => demo.openTicket(order, restaurant),
+    ticketStatus: (ticket) => demo.ticketStatus(ticket),
+    submitPayment() {
+      calls += 1;
+      return Promise.reject(error());
+    },
+  };
+}
+
 describe('nouveaux essais vers la caisse', () => {
   it('réessaie puis abandonne au 3e échec avec alerte, relance manuelle possible', async () => {
-    let calls = 0;
-    const down: PosGateway = {
-      submitOrder() {
-        calls += 1;
-        return Promise.reject(new Error('Caisse injoignable'));
-      },
-    };
+    const down = payFails(() => new Error('Caisse injoignable'));
     const { setup } = await paidOrder(testSetup({ pos: down }));
-    const deps = {
-      operations: setup.deps.operations,
-      orders: setup.deps.orders,
-      restaurants: setup.deps.restaurants,
-      pos: down,
-    };
     const dispatch = [...setup.backend.dispatches.values()][0];
     expect(dispatch).toMatchObject({ status: 'pending', attempts: 1 }); // 1er essai, juste après le paiement
 
     for (const attempt of [2, 3]) {
       if (dispatch) dispatch.nextAt = 0; // le délai est écoulé
-      await processDispatches(deps);
+      await setup.app.runDispatches();
       expect(dispatch?.attempts).toBe(attempt);
     }
-    expect(calls).toBe(3);
+    expect(down.calls()).toBe(3);
     expect(dispatch?.status).toBe('failed');
     const failed = await setup.deps.operations.listFailedDispatches(BELLA_ID);
     expect(failed[0]).toMatchObject({ number: 1001, attempts: 3, lastError: 'Caisse injoignable' });
     expect(await setup.deps.operations.retryDispatch(BELLA_ID, failed[0]?.orderId ?? '')).toBe(
       true,
     );
+    // Pas de remboursement automatique sur une panne : l'équipe décide au back-office.
+    expect(setup.backend.orders[0]?.status).toBe('paid');
   });
 
   it('abandonne tout de suite un refus définitif de la caisse', async () => {
-    const refuses: PosGateway = {
-      submitOrder: () =>
-        Promise.reject(new PosRejectedError('Restaurant inconnu de la caisse', false)),
-    };
+    const refuses = payFails(() => new PosRejectedError('Restaurant inconnu de la caisse', false));
     const { setup } = await paidOrder(testSetup({ pos: refuses }));
     expect([...setup.backend.dispatches.values()][0]).toMatchObject({
       status: 'failed',

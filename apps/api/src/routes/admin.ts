@@ -84,7 +84,14 @@ export interface AdminRoutesDeps extends NotifyDeps {
   readonly previewSecret?: string;
   /** Stockage des logos téléversés ; null : téléversement indisponible (URL seulement). */
   readonly assets?: AssetStorage | null;
+  /** API Splash360 réelle (ADR 0018) ; null : identifiants absents, démonstration seulement. */
+  readonly splash360?: Splash360Probe | null | undefined;
   readonly now?: (() => Date) | undefined;
+}
+
+/** Test de connexion à Splash360 depuis le back-office : jeton, puis lecture de la carte. */
+export interface Splash360Probe {
+  probe(): Promise<{ products: number; categories: number }>;
 }
 
 type C = Context<AdminEnv>;
@@ -232,8 +239,45 @@ export function adminRoutes(deps: AdminRoutesDeps) {
         status: r.status,
         stripeAccountId: r.stripeAccountId,
         stripeChargesEnabled: r.stripeChargesEnabled,
+        splash360Live: r.splash360Live,
       })),
+      splash360Configured: Boolean(deps.splash360),
     });
+  });
+
+  // ——— Caisse et carte Splash360 (lot 14, ADR 0018) ———
+  app.post('/restaurants/:id/splash360', async (c) => {
+    const denied = allow(c, 'payments');
+    if (denied) return denied;
+    const input = await body(c, z.object({ live: z.boolean() }));
+    const restaurant = await restaurantFor(c, c.req.param('id'));
+    if (!input || !restaurant) return apiError(c, 'not_found', 'Restaurant inconnu');
+    if (input.live && !deps.splash360) {
+      return apiError(c, 'conflict', 'Identifiants Splash360 absents du serveur');
+    }
+    await deps.restaurants.setSplash360Live(tenantId(c), restaurant.id, input.live);
+    deps.menus.invalidate(restaurant.id);
+    await audit(c, input.live ? 'splash360.connect' : 'splash360.disconnect', restaurant.id);
+    return c.body(null, 204);
+  });
+
+  app.post('/restaurants/:id/splash360/test', async (c) => {
+    const denied = allow(c, 'payments');
+    if (denied) return denied;
+    const restaurant = await restaurantFor(c, c.req.param('id'));
+    if (!restaurant) return apiError(c, 'not_found', 'Restaurant inconnu');
+    if (!deps.splash360) {
+      return c.json({ ok: false, message: 'Identifiants Splash360 absents du serveur' });
+    }
+    try {
+      const result = await deps.splash360.probe();
+      await audit(c, 'splash360.test', restaurant.id, { ok: true });
+      return c.json({ ok: true, ...result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await audit(c, 'splash360.test', restaurant.id, { ok: false });
+      return c.json({ ok: false, message });
+    }
   });
 
   app.post('/restaurants/:id/pause', async (c) => {
@@ -542,6 +586,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       const cached = await deps.menus.get({
         restaurantId: restaurant.id,
         splash360RestaurantId: restaurant.splash360Id,
+        live: restaurant.splash360Live,
       });
       const overrides = await deps.admin.listMenuOverrides(tenantId(c), restaurant.id);
       // Aperçu complet (rien de masqué) ; les réglages sont renvoyés à part.

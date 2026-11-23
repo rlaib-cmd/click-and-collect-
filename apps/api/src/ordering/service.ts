@@ -159,6 +159,7 @@ export async function quote(
   const { menu: full } = await deps.menus.get({
     restaurantId: restaurant.id,
     splash360RestaurantId: restaurant.splash360Id,
+    live: restaurant.splash360Live,
   });
   // Produits et catégories masqués au back-office : non commandables.
   const hidden = await deps.hiddenItems?.(restaurant.tenantId, restaurant.id);

@@ -175,6 +175,14 @@ export const orderStatusSchema = z.enum([
   'refunded',
 ]);
 
+/**
+ * Caisse prête à accepter la commande (ADR 0018) : le paiement n'est proposé qu'à « ready ».
+ * « unavailable » : la caisse n'a pas répondu à temps ou a refusé, la commande est annulée.
+ */
+export const posReadinessSchema = z.object({
+  state: z.enum(['waiting', 'ready', 'unavailable']),
+});
+
 /** Ce dont l'application a besoin pour afficher la feuille de paiement Stripe (paiement direct). */
 export const paymentSessionSchema = z.object({
   clientSecret: z.string(),
@@ -218,6 +226,7 @@ export type Quote = z.infer<typeof quoteSchema>;
 export type PlaceOrderRequest = z.input<typeof placeOrderRequestSchema>;
 export type PlacedOrder = z.infer<typeof placedOrderSchema>;
 export type PaymentSession = z.infer<typeof paymentSessionSchema>;
+export type PosReadiness = z.infer<typeof posReadinessSchema>;
 export type OrderTracking = z.infer<typeof orderTrackingSchema>;
 export type OrderStatus = z.infer<typeof orderStatusSchema>;
 export type PaymentMethodDto = z.infer<typeof paymentMethodSchema>;

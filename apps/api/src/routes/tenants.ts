@@ -111,6 +111,7 @@ export function tenantRoutes(deps: TenantRoutesDeps) {
       const cached = await deps.menus.get({
         restaurantId: restaurant.id,
         splash360RestaurantId: restaurant.splash360Id,
+        live: restaurant.splash360Live,
       });
       const overrides = await deps.admin.listMenuOverrides(c.get('tenant').id, restaurant.id);
       c.header('Cache-Control', 'public, max-age=30');

@@ -46,6 +46,19 @@ const envSchema = z.object({
   BREVO_API_KEY: z.string().min(10).optional(),
   EMAIL_SENDER: z.email().optional(),
   EMAIL_SENDER_NAME: z.string().default('Commande en ligne'),
+  /**
+   * API Click & Collect Splash360 (ADR 0018) : lues directement dans l'environnement par
+   * `splash360CredentialsFrom` (SPLASH360_API_URL, SPLASH360_CLIENT_ID, SPLASH360_CLIENT_SECRET).
+   * Sans identifiants : carte et caisse de démonstration.
+   */
+  SPLASH360_API_URL: z.url().optional(),
+  SPLASH360_CLIENT_ID: z.string().min(1).optional(),
+  SPLASH360_CLIENT_SECRET: z.string().min(1).optional(),
+  /** Taux de TVA des frais envoyés à la caisse (à confirmer avec Splash360). */
+  SPLASH360_FEE_VAT_RATE: z.coerce.number().min(0).max(1).default(0.2),
+  /** Attente maximale de la caisse avant paiement, puis après paiement. */
+  POS_READY_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(60),
+  POS_CONFIRM_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(300),
   MENU_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(180),
   /** Âge maximal de la carte servie si l'API menu tombe ; au-delà, commande bloquée. Valeur à fixer avec Splash360. */
   /** Géocodeur (API Adresse, format GeoJSON) ; `demo` = adresses de démonstration hors ligne. */
