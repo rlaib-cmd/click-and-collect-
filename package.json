@@ -16,7 +16,8 @@
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
-    "db:test": "supabase test db"
+    "db:test": "supabase test db",
+    "e2e:recette": "NODE_USE_ENV_PROXY=1 node e2e/recette.mjs"
   },
   "devDependencies": {
     "prettier": "3.10.1",

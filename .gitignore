@@ -21,3 +21,4 @@ playwright-report/
 
 # Clé de service Google Play (eas submit) : jamais commitée
 apps/mobile/google-play-service-account.json
+e2e/screenshots/
