@@ -1,3 +1,4 @@
+import { formatFrenchPhone } from '@splash360/core';
 import { customerSchema, type QuoteRequest } from '@splash360/contracts';
 import { messages } from '@splash360/i18n';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -48,7 +49,13 @@ export default function CheckoutScreen() {
   // Membre du club : nom et e-mail préremplis.
   useEffect(() => {
     const m = loyalty.member;
-    if (m) setContact((c) => ({ ...c, name: c.name || m.name, email: c.email || (m.email ?? '') }));
+    if (m)
+      setContact((c) => ({
+        ...c,
+        name: c.name || m.name,
+        email: c.email || (m.email ?? ''),
+        phone: c.phone || (m.phone ? formatFrenchPhone(m.phone) : ''),
+      }));
   }, [loyalty.member]);
 
   const request: QuoteRequest | null = useMemo(

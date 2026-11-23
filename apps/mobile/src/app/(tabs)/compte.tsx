@@ -1,3 +1,4 @@
+import { formatFrenchPhone } from '@splash360/core';
 import { messages } from '@splash360/i18n';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -32,7 +33,9 @@ export default function AccountScreen() {
           <Text style={{ color: palette.text, fontSize: 18, fontWeight: '700' }}>
             {member.name}
           </Text>
-          <Text style={{ color: palette.textMuted }}>{member.email}</Text>
+          <Text style={{ color: palette.textMuted }}>
+            {member.phone ? formatFrenchPhone(member.phone) : member.email}
+          </Text>
           <Text style={{ color: palette.text, fontWeight: '700' }}>
             {t.pointsLong(member.points)}
           </Text>

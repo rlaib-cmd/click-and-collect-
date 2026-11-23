@@ -3,7 +3,12 @@ import {
   loyaltyMemberSchema,
   loyaltyProgramSchema,
   loyaltySessionSchema,
+  otpStartResponseSchema,
+  otpVerifyResponseSchema,
   type LoyaltyJoinRequest,
+  type OtpChannel,
+  type OtpStartResponse,
+  type OtpVerifyRequest,
   type LoyaltyMemberDto,
   type LoyaltyProgramDto,
 } from '@splash360/contracts';
@@ -30,6 +35,10 @@ interface LoyaltyContextValue {
   readonly memberLoading: boolean;
   readonly join: (input: LoyaltyJoinRequest) => Promise<void>;
   readonly login: (email: string) => Promise<void>;
+  /** Connexion par code (lot 10) : envoi du code par SMS ou e-mail. */
+  readonly startCode: (channel: OtpChannel, identifier: string) => Promise<OtpStartResponse>;
+  /** Vérifie le code : session ouverte, ou prénom demandé pour créer le compte. */
+  readonly verifyCode: (input: OtpVerifyRequest) => Promise<'connected' | 'needsName'>;
   readonly logout: () => void;
   readonly refresh: () => void;
 }
@@ -115,10 +124,27 @@ export function LoyaltyProvider({ children }: { children: ReactNode }) {
       login: async (email) => {
         await sessionMutation.mutateAsync({ path: 'login', body: { email } });
       },
+      startCode: (channel, identifier) =>
+        apiPost(
+          `/v1/tenants/${sub}/loyalty/otp/start`,
+          { channel, identifier },
+          otpStartResponseSchema,
+        ),
+      verifyCode: async (input) => {
+        const r = await apiPost(
+          `/v1/tenants/${sub}/loyalty/otp/verify`,
+          input,
+          otpVerifyResponseSchema,
+        );
+        if ('needsName' in r) return 'needsName';
+        client.setQueryData(['loyalty-me', sub, r.memberToken], r.member);
+        store(r.memberToken);
+        return 'connected';
+      },
       logout: () => store(null),
       refresh: () => void member.refetch(),
     }),
-    [program.data, restored, memberToken, member, sessionMutation, store],
+    [program.data, restored, memberToken, member, sessionMutation, store, sub, client],
   );
 
   return <LoyaltyContext.Provider value={value}>{children}</LoyaltyContext.Provider>;

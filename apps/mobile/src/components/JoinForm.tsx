@@ -7,12 +7,27 @@ import { ApiRequestError } from '@/api/client';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { useTenant } from '@/tenant/TenantProvider';
 import { titleStyle } from './brand';
+import { OtpLogin } from './OtpLogin';
 import { PrimaryButton } from './ui';
 
 const t = messages.loyalty;
 
-/** Adhésion au club (ou connexion de démonstration par e-mail). */
+/**
+ * Connexion ou inscription au club : par code (SMS ou e-mail) quand l'API l'annonce (lot 10),
+ * sinon formulaire d'adhésion. En recette, la connexion de test par e-mail reste accessible.
+ */
 export function JoinForm() {
+  const { program } = useLoyalty();
+  const [legacy, setLegacy] = useState(false);
+  if (!program?.enabled) return null;
+  if (program.otp && !legacy) {
+    return <OtpLogin onDemoLogin={program.demo ? () => setLegacy(true) : undefined} />;
+  }
+  return <LegacyJoinForm onBack={program.otp ? () => setLegacy(false) : undefined} />;
+}
+
+/** Adhésion sans code (avant le lot 10) et connexion de démonstration par e-mail. */
+function LegacyJoinForm({ onBack }: { onBack?: (() => void) | undefined }) {
   const { palette, radii, style } = useTenant();
   const { program, join, login } = useLoyalty();
   const [mode, setMode] = useState<'join' | 'login'>('join');
@@ -145,6 +160,13 @@ export function JoinForm() {
       ) : null}
       {program.demo ? (
         <Text style={{ color: palette.textMuted, fontSize: 13 }}>{t.demoNotice}</Text>
+      ) : null}
+      {onBack ? (
+        <Pressable accessibilityRole="button" onPress={onBack} style={styles.switch}>
+          <Text style={{ color: palette.accent, fontWeight: '600' }}>
+            {messages.otp.backToCode}
+          </Text>
+        </Pressable>
       ) : null}
     </View>
   );
