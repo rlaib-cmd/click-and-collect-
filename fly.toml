@@ -13,6 +13,9 @@ primary_region = "cdg"
   # Fidélité de démonstration tant que l'API Splash360 n'est pas branchée ; connexion par e-mail coupée.
   LOYALTY = "demo"
   LOYALTY_DEMO_LOGIN = "0"
+  # Connexion du client par code SMS (Brevo) ou e-mail ; production = aucune aide de test (ADR 0012).
+  LOYALTY_OTP = "1"
+  APP_ENV = "production"
 
 [http_service]
   internal_port = 8787

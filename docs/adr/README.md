@@ -16,3 +16,4 @@ Format : Contexte, Décision, Conséquences, Statut.
 | [0009](0009-fidelite-splash360.md) | Fidélité Splash360 : `api-loyalty`, données de test, points au paiement | Acceptée |
 | [0010](0010-paiement-sur-place.md) | Paiement sur place : option par restaurant, membres du club, statut « confirmée » | Acceptée |
 | [0011](0011-administration-plateforme.md) | Administration de la plateforme : bloquer, supprimer, club fidélité | Acceptée |
+| [0012](0012-connexion-client-par-code.md) | Connexion du client par code SMS ou e-mail, téléphone identifiant principal | Acceptée |

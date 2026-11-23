@@ -32,6 +32,9 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | recommandé | Remontée des erreurs |
 | `EXPO_ACCESS_TOKEN` | non | Notifications push (sécurité renforcée Expo) |
 | `ADMIN_URL` | oui | URL du back-office (retours d'inscription Stripe) |
+| `LOYALTY_OTP` | oui | `1` : connexion du client par code SMS ou e-mail (ADR 0012) |
+| `APP_ENV` | oui en prod | `production` : aucune aide de test (code renvoyé, connexion par e-mail sans code) |
+| `OTP_DEBUG_ECHO` | recette seulement | `1` : code de connexion renvoyé à l'écran tant qu'aucun prestataire n'envoie |
 
 ### Back-office (`apps/admin`)
 
@@ -52,6 +55,10 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
    (migrations puis API, vérification `/ready`).
 4. **Brevo** : domaine d'envoi authentifié (SPF, DKIM), adresse d'expédition vérifiée, clé API transactionnelle
    (`BREVO_API_KEY`, `EMAIL_SENDER`, `EMAIL_SENDER_NAME`). Sans clé, les e-mails sont seulement journalisés.
+   **SMS de connexion** (ADR 0012) : activer les SMS transactionnels sur le compte Brevo et acheter des
+   crédits (la même clé API sert) ; l'expéditeur affiché est le nom de l'enseigne (11 caractères).
+   Prévoir une alerte de crédit bas dans Brevo : sans crédit, plus aucun client ne peut se connecter par SMS
+   (le code par e-mail reste possible).
 5. **Invitations du back-office** (Supabase → Authentication) : l'expéditeur intégré de Supabase est
    limité à quelques e-mails par heure ; brancher **Brevo en SMTP personnalisé** (Authentication → Emails →
    SMTP Settings : `smtp-relay.brevo.com`, port 587, identifiant et clé SMTP Brevo, expéditeur vérifié).
