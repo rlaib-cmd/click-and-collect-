@@ -122,6 +122,22 @@ export const settingsSchema = z
 
 export const themeUpdateSchema = tenantThemeSchema;
 
+/** Studio design (lot 12) : version publiée et brouillon en attente (null : aucun). */
+export const themeDraftStateSchema = z.object({
+  live: tenantThemeSchema,
+  draft: tenantThemeSchema.nullable(),
+  draftUpdatedAt: z.iso.datetime().nullable(),
+});
+export type ThemeDraftState = z.infer<typeof themeDraftStateSchema>;
+
+/** Lien d'aperçu du brouillon dans la vraie application (30 minutes). */
+export const themePreviewLinkSchema = z.object({
+  token: z.string(),
+  expiresAt: z.iso.datetime(),
+});
+
+export const logoUploadResultSchema = z.object({ logoUrl: z.url() });
+
 export const legalSchema = z.object({ text: z.string().max(50_000).nullable() });
 
 export const menuOverrideSchema = z.object({

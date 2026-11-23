@@ -17,6 +17,7 @@ import {
   createPostgresOtpStore,
 } from '@splash360/db';
 import { createSupabaseVerifier } from './admin/auth';
+import { createSupabaseAssetStorage } from './admin/logo';
 import { createSupabaseInviter } from './admin/invite';
 import { createApp } from './app';
 import { loadEnv } from './env';
@@ -97,6 +98,13 @@ const app = createApp({
           serviceKey: env.SUPABASE_SERVICE_ROLE_KEY,
           redirectTo: `${env.ADMIN_URL.replace(/\/+$/, '')}/mot-de-passe/`,
           log,
+        })
+      : null,
+  assets:
+    env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
+      ? createSupabaseAssetStorage({
+          url: env.SUPABASE_URL,
+          serviceKey: env.SUPABASE_SERVICE_ROLE_KEY,
         })
       : null,
   gateway,

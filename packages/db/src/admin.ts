@@ -1,4 +1,4 @@
-import type { Sql } from './client';
+import type { Queryable, Sql } from './client';
 import { toThemeStyle, type ThemeStyle, type ThemeStyleRow } from './tenants';
 
 export type StaffRole = 'super_admin' | 'tenant_admin' | 'staff';
@@ -180,6 +180,12 @@ export interface AdminStore {
 
   getTheme(tenantId: string): Promise<ThemeRecord | null>;
   updateTheme(tenantId: string, theme: ThemeRecord): Promise<void>;
+  /** Brouillon du design (lot 12) : contenu brut, validé par l'API ; null si rien en attente. */
+  getThemeDraft(tenantId: string): Promise<{ draft: unknown; updatedAt: string } | null>;
+  /** Enregistre le brouillon, ou l'efface (null). */
+  setThemeDraft(tenantId: string, draft: ThemeRecord | null): Promise<void>;
+  /** Publie le design donné et efface le brouillon, en une transaction. */
+  publishTheme(tenantId: string, theme: ThemeRecord): Promise<void>;
   getLegalText(tenantId: string): Promise<string | null>;
   setLegalText(tenantId: string, text: string | null): Promise<void>;
 
@@ -370,16 +376,30 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
     },
 
     async updateTheme(tenantId, t) {
-      await sql`insert into public.tenant_theme (tenant_id, primary_color, mode, logo_url, tagline,
-                  header_style, corner_style, uppercase_titles, pattern, loyalty_color)
-                values (${tenantId}, ${t.primaryColor}, ${t.mode}, ${t.logoUrl}, ${t.tagline},
-                  ${t.style.header}, ${t.style.corners}, ${t.style.uppercaseTitles}, ${t.style.pattern},
-                  ${t.loyaltyColor})
-                on conflict (tenant_id) do update set primary_color = excluded.primary_color, mode = excluded.mode,
-                  logo_url = excluded.logo_url, tagline = excluded.tagline,
-                  header_style = excluded.header_style, corner_style = excluded.corner_style,
-                  uppercase_titles = excluded.uppercase_titles, pattern = excluded.pattern,
-                  loyalty_color = excluded.loyalty_color`;
+      await upsertTheme(sql, tenantId, t);
+    },
+
+    async getThemeDraft(tenantId) {
+      const [r] = await sql<{ draft: unknown; draft_updated_at: Date | null }[]>`
+        select draft, draft_updated_at from public.tenant_theme where tenant_id = ${tenantId}`;
+      return r?.draft && r.draft_updated_at
+        ? { draft: r.draft, updatedAt: r.draft_updated_at.toISOString() }
+        : null;
+    },
+
+    async setThemeDraft(tenantId, draft) {
+      await sql`insert into public.tenant_theme (tenant_id, draft, draft_updated_at)
+                values (${tenantId}, ${draft ? sql.json(toJson(draft)) : null}, ${draft ? new Date() : null})
+                on conflict (tenant_id) do update set draft = excluded.draft,
+                  draft_updated_at = excluded.draft_updated_at`;
+    },
+
+    async publishTheme(tenantId, t) {
+      await sql.begin(async (tx) => {
+        await upsertTheme(tx, tenantId, t);
+        await tx`update public.tenant_theme set draft = null, draft_updated_at = null
+                 where tenant_id = ${tenantId}`;
+      });
     },
 
     async getLegalText(tenantId) {
@@ -666,5 +686,32 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
         return 'deleted' as const;
       });
     },
+  };
+}
+
+type SqlLike = Queryable;
+
+/** Version publiée du design (colonnes lues par l'application). */
+async function upsertTheme(sql: SqlLike, tenantId: string, t: ThemeRecord): Promise<void> {
+  await sql`insert into public.tenant_theme (tenant_id, primary_color, mode, logo_url, tagline,
+              header_style, corner_style, uppercase_titles, pattern, loyalty_color)
+            values (${tenantId}, ${t.primaryColor}, ${t.mode}, ${t.logoUrl}, ${t.tagline},
+              ${t.style.header}, ${t.style.corners}, ${t.style.uppercaseTitles}, ${t.style.pattern},
+              ${t.loyaltyColor})
+            on conflict (tenant_id) do update set primary_color = excluded.primary_color, mode = excluded.mode,
+              logo_url = excluded.logo_url, tagline = excluded.tagline,
+              header_style = excluded.header_style, corner_style = excluded.corner_style,
+              uppercase_titles = excluded.uppercase_titles, pattern = excluded.pattern,
+              loyalty_color = excluded.loyalty_color, updated_at = now()`;
+}
+
+function toJson(t: ThemeRecord) {
+  return {
+    primaryColor: t.primaryColor,
+    mode: t.mode,
+    logoUrl: t.logoUrl,
+    tagline: t.tagline,
+    style: { ...t.style },
+    loyaltyColor: t.loyaltyColor,
   };
 }

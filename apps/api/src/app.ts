@@ -19,7 +19,9 @@ import type { PosGateway } from './pos/gateway';
 import { posRoutes } from './routes/pos';
 import type { TokenVerifier } from './admin/auth';
 import { adminRoutes } from './routes/admin';
+import { MAX_LOGO_BYTES, type AssetStorage } from './admin/logo';
 import type { GeoProvider } from './geo';
+import { createHmac } from 'node:crypto';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { bodyLimit } from 'hono/body-limit';
@@ -76,6 +78,8 @@ export interface AppDeps {
   readonly loyaltyDemoLogin?: boolean;
   /** Connexion du client par code SMS ou e-mail (lot 10) ; absent = désactivée. */
   readonly otp?: OtpDeps;
+  /** Stockage des logos téléversés au back-office (lot 12) ; absent = URL seulement. */
+  readonly assets?: AssetStorage | null;
 }
 
 /**
@@ -89,13 +93,17 @@ export function createApp(deps: AppDeps) {
   if (deps.log) app.use(requestLogger(log));
   app.use(secureHeaders());
   // Corps de requête limité (le webhook Stripe et l'export restent largement en dessous).
-  app.use(
-    '/v1/*',
-    bodyLimit({
-      maxSize: 256 * 1024,
-      onError: (c) => apiError(c, 'payload_too_large', 'Requête trop volumineuse'),
-    }),
-  );
+  // Le logo du studio design (lot 12) a sa propre limite, plus haute (2 Mo, contrôlée par la route).
+  const LOGO_PATH = '/v1/admin/theme/logo';
+  const smallBodies = bodyLimit({
+    maxSize: 256 * 1024,
+    onError: (c) => apiError(c, 'payload_too_large', 'Requête trop volumineuse'),
+  });
+  const logoBodies = bodyLimit({
+    maxSize: MAX_LOGO_BYTES + 1024,
+    onError: (c) => apiError(c, 'payload_too_large', 'Logo trop lourd : 2 Mo maximum'),
+  });
+  app.use('/v1/*', (c, next) => (c.req.path === LOGO_PATH ? logoBodies : smallBodies)(c, next));
   const origins = deps.corsOrigins ?? '*';
   app.use(
     '/v1/*',
@@ -107,6 +115,10 @@ export function createApp(deps: AppDeps) {
   );
 
   const warn = (m: string, d?: Record<string, unknown>) => log('warn', m, d);
+  // Liens d'aperçu du brouillon de design (lot 12) : clé dérivée, distincte des jetons de commande.
+  const previewSecret = createHmac('sha256', deps.tokenSecret)
+    .update('splash360:theme-preview')
+    .digest('base64url');
 
   // Limitation de débit des routes publiques sensibles (par adresse IP).
   const limits = deps.rateLimits ?? { orders: 20, reads: 300 };
@@ -189,6 +201,9 @@ export function createApp(deps: AppDeps) {
       loyalty: deps.loyalty,
       adminUrl: deps.adminUrl ?? 'http://localhost:3000',
       inviter: deps.inviter ?? null,
+      previewSecret,
+      assets: deps.assets ?? null,
+      now: deps.now,
     }),
   );
   const hiddenItems = async (tenantId: string, restaurantId: string) => {
@@ -209,7 +224,13 @@ export function createApp(deps: AppDeps) {
   };
   app.route(
     '/v1/tenants',
-    tenantRoutes({ ...deps, hiddenItems, onConfirmed, now: deps.now ?? (() => new Date()) }),
+    tenantRoutes({
+      ...deps,
+      hiddenItems,
+      onConfirmed,
+      previewSecret,
+      now: deps.now ?? (() => new Date()),
+    }),
   );
 
   app.notFound((c) => apiError(c, 'not_found', 'Route inconnue'));

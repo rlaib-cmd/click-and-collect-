@@ -19,6 +19,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   internal_error: 500,
   otp_invalid: 400,
   otp_expired: 410,
+  storage_unavailable: 503,
 };
 
 export function apiError(

@@ -19,7 +19,9 @@ import {
   type ClubMemberDto,
   type Dashboard,
   type Me,
+  type ThemeDraftState,
 } from '@splash360/contracts';
+import { DEFAULT_THEME, themeChanges } from '@splash360/theme';
 import type {
   AdminStore,
   PromoAdminStore,
@@ -28,6 +30,7 @@ import type {
   PaymentStore,
   RestaurantStore,
   TenantStore,
+  ThemeRecord,
 } from '@splash360/db';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
@@ -44,6 +47,14 @@ import { toMenuDto } from '../menu-dto';
 import { notifyStatus, type NotifyDeps } from '../notifications/service';
 import type { PaymentGateway } from '../payments/gateway';
 import { refundOrder } from '../payments/service';
+import {
+  checkLogo,
+  LOGO_CONTENT_TYPES,
+  logoPath,
+  MAX_LOGO_BYTES,
+  type AssetStorage,
+} from '../admin/logo';
+import { createPreviewToken, PREVIEW_TTL_MS } from '../admin/theme-preview';
 
 export interface AdminRoutesDeps extends NotifyDeps {
   readonly verifier: TokenVerifier;
@@ -63,6 +74,11 @@ export interface AdminRoutesDeps extends NotifyDeps {
   readonly adminUrl: string;
   /** Envoi des invitations Supabase Auth ; null : non configuré (aucun e-mail envoyé). */
   readonly inviter?: AuthInviter | null;
+  /** Studio design (lot 12) : secret des liens d'aperçu du brouillon. */
+  readonly previewSecret?: string;
+  /** Stockage des logos téléversés ; null : téléversement indisponible (URL seulement). */
+  readonly assets?: AssetStorage | null;
+  readonly now?: (() => Date) | undefined;
 }
 
 type C = Context<AdminEnv>;
@@ -378,6 +394,95 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     await deps.admin.updateTheme(tenantId(c), input);
     await audit(c, 'theme.update', null, input);
     return c.body(null, 204);
+  });
+
+  // ——— Studio design (lot 12, ADR 0016) : brouillon, aperçu, publication ———
+  const liveTheme = async (c: C): Promise<ThemeRecord> =>
+    (await deps.admin.getTheme(tenantId(c))) ?? { ...DEFAULT_THEME, loyaltyColor: null };
+  /** Brouillon valide, ou null (absent, ou devenu invalide après une évolution du contrat). */
+  const draftTheme = async (c: C) => {
+    const stored = await deps.admin.getThemeDraft(tenantId(c));
+    const parsed = stored ? themeUpdateSchema.safeParse(stored.draft) : null;
+    return parsed?.success && stored ? { theme: parsed.data, updatedAt: stored.updatedAt } : null;
+  };
+
+  app.get('/theme/draft', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    const draft = await draftTheme(c);
+    const state: ThemeDraftState = {
+      live: await liveTheme(c),
+      draft: draft?.theme ?? null,
+      draftUpdatedAt: draft?.updatedAt ?? null,
+    };
+    return c.json(state);
+  });
+
+  app.put('/theme/draft', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    const input = await body(c, themeUpdateSchema);
+    if (!input) return apiError(c, 'invalid_request', 'Design invalide');
+    await deps.admin.setThemeDraft(tenantId(c), input);
+    return c.body(null, 204);
+  });
+
+  app.post('/theme/discard', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    await deps.admin.setThemeDraft(tenantId(c), null);
+    await audit(c, 'theme.discard', null);
+    return c.body(null, 204);
+  });
+
+  app.post('/theme/publish', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    const draft = await draftTheme(c);
+    if (!draft) return apiError(c, 'conflict', 'Aucun brouillon à publier');
+    const changes = themeChanges(await liveTheme(c), draft.theme);
+    await deps.admin.publishTheme(tenantId(c), draft.theme);
+    await audit(c, 'theme.publish', null, { changes });
+    return c.json({ changes });
+  });
+
+  app.post('/theme/preview-link', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    if (!deps.previewSecret) return apiError(c, 'not_found', 'Aperçu indisponible');
+    const now = deps.now?.() ?? new Date();
+    const token = createPreviewToken(deps.previewSecret, tenantId(c), now);
+    return c.json({ token, expiresAt: new Date(now.getTime() + PREVIEW_TTL_MS).toISOString() });
+  });
+
+  app.post('/theme/logo', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    if (!deps.assets) return apiError(c, 'storage_unavailable', 'Téléversement indisponible');
+    const declared = Number(c.req.header('Content-Length') ?? '0');
+    if (declared > MAX_LOGO_BYTES)
+      return apiError(c, 'payload_too_large', 'Logo trop lourd : 2 Mo maximum');
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    const check = checkLogo(bytes);
+    if (!check.ok) {
+      if (check.error === 'logo_too_large')
+        return apiError(c, 'payload_too_large', 'Logo trop lourd : 2 Mo maximum');
+      return apiError(c, 'invalid_request', 'Format non accepté : PNG, JPEG ou WebP');
+    }
+    let logoUrl: string;
+    try {
+      logoUrl = await deps.assets.put(
+        logoPath(tenantId(c), bytes, check.format),
+        bytes,
+        LOGO_CONTENT_TYPES[check.format],
+      );
+    } catch {
+      return apiError(c, 'storage_unavailable', 'Stockage du logo momentanément indisponible');
+    }
+    const base = (await draftTheme(c))?.theme ?? (await liveTheme(c));
+    await deps.admin.setThemeDraft(tenantId(c), { ...base, logoUrl });
+    await audit(c, 'theme.logo_upload', null, { logoUrl, bytes: bytes.length });
+    return c.json({ logoUrl }, 201);
   });
 
   app.get(

@@ -32,6 +32,7 @@ export function createMemoryAdminStore(input: {
     hidden: boolean;
     position: number | null;
   }[] = [];
+  const drafts = new Map<string, { draft: unknown; updatedAt: string }>();
   const themes = new Map(
     input.tenants.map((t) => [
       t.id,
@@ -137,6 +138,23 @@ export function createMemoryAdminStore(input: {
       themes.set(tenantId, t);
       const tenant = input.tenants.find((x) => x.id === tenantId);
       if (tenant) Object.assign(tenant, { theme: t });
+      return Promise.resolve();
+    },
+    getThemeDraft: (tenantId) => Promise.resolve(drafts.get(tenantId) ?? null),
+    setThemeDraft(tenantId, draft) {
+      if (draft)
+        drafts.set(tenantId, {
+          draft: structuredClone(draft),
+          updatedAt: new Date().toISOString(),
+        });
+      else drafts.delete(tenantId);
+      return Promise.resolve();
+    },
+    async publishTheme(tenantId, t) {
+      themes.set(tenantId, t);
+      const tenant = input.tenants.find((x) => x.id === tenantId);
+      if (tenant) Object.assign(tenant, { theme: t });
+      drafts.delete(tenantId);
       return Promise.resolve();
     },
     getLegalText: (tenantId) => Promise.resolve(legal.get(tenantId) ?? null),

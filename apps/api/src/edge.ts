@@ -28,6 +28,7 @@ import {
 import { Hono } from 'hono';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createSupabaseVerifier } from './admin/auth';
+import { createSupabaseAssetStorage } from './admin/logo';
 import { createSupabaseInviter } from './admin/invite';
 import { createApp } from './app';
 import { createBanGeoProvider } from './geo';
@@ -152,6 +153,11 @@ function build() {
     geo,
     adminUrl,
     inviter,
+    // Logos du studio design (lot 12) : Supabase Storage du même projet, clé de service.
+    assets: createSupabaseAssetStorage({
+      url: supabaseUrl,
+      serviceKey: required('SUPABASE_SERVICE_ROLE_KEY'),
+    }),
     corsOrigins: '*',
     log: true,
     trustProxy: true,

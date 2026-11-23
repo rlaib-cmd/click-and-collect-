@@ -146,6 +146,31 @@ describe.skipIf(!url)('AdminStore Postgres', () => {
     });
     const stored = await createPostgresTenantStore(sql).findById(tenantId);
     expect(stored?.theme?.style).toEqual(style);
+
+    // Studio design (lot 12) : brouillon séparé de la version publiée, puis publication.
+    expect(await admin.getThemeDraft(tenantId)).toBeNull();
+    const draft = {
+      primaryColor: '#1D4ED8',
+      mode: 'dark' as const,
+      logoUrl: 'https://exemple.fr/logo.png',
+      tagline: 'Brouillon',
+      style,
+      loyaltyColor: null,
+    };
+    await admin.setThemeDraft(tenantId, draft);
+    expect((await admin.getThemeDraft(tenantId))?.draft).toEqual(draft);
+    expect((await admin.getTheme(tenantId))?.primaryColor).toBe('#CF2028');
+    await admin.publishTheme(tenantId, draft);
+    expect(await admin.getThemeDraft(tenantId)).toBeNull();
+    expect(await admin.getTheme(tenantId)).toMatchObject({ primaryColor: '#1D4ED8', mode: 'dark' });
+    await admin.updateTheme(tenantId, {
+      ...draft,
+      primaryColor: '#CF2028',
+      mode: 'light',
+      loyaltyColor: '#111111',
+      logoUrl: null,
+      tagline: null,
+    });
     expect(stored?.theme?.loyaltyColor).toBe('#111111');
     expect((await admin.listStaff(tenantId))[0]).toMatchObject({
       role: 'tenant_admin',

@@ -18,6 +18,7 @@ export const apiErrorCodeSchema = z.enum([
   // Connexion du client par code (lot 10)
   'otp_invalid',
   'otp_expired',
+  'storage_unavailable',
 ]);
 
 /** Problème précis sur une commande, pour guider le client (retour au panier avec un message clair). */

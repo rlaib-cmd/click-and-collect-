@@ -42,6 +42,8 @@ export const tenantConfigSchema = z.object({
     subdomain: subdomainSchema,
   }),
   theme: tenantThemeSchema,
+  /** Vrai quand le thème est le brouillon (lien d'aperçu du back-office, lot 12). */
+  preview: z.boolean().optional(),
 });
 
 export type TenantConfig = z.infer<typeof tenantConfigSchema>;
