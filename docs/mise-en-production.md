@@ -38,7 +38,7 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 
 ### Back-office (`apps/admin`)
 
-`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_CLIENT_APP_URL` (adresse web de l'application client, pour le lien d'aperçu du studio design, lot 12). Ne **jamais** définir `ADMIN_DEV_LOGIN` hors développement (la route est de toute façon désactivée en production).
+`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_CLIENT_APP_URL` (adresse web de l'application client, pour le lien d'aperçu du studio design, lot 12). Ne **jamais** définir `ADMIN_DEV_LOGIN` hors développement (la route est de toute façon désactivée en production), ni `NEXT_PUBLIC_SHOW_TEST_ACCOUNTS` (panneau « Comptes de test » de la page de connexion, recette uniquement, lot 13).
 
 ### Application (`apps/mobile`)
 

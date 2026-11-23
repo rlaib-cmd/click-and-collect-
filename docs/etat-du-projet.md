@@ -19,12 +19,13 @@ Synthèse pour reprendre le projet. Détail par lot dans `docs/plan-lot-*.md`, d
 | 10. Connexion du client par code | ✅ Terminé (SMS ou e-mail, inscription avec prénom, téléphone identifiant principal ; Google prêt mais masqué) | Activation des SMS Brevo et clé API ; projet Google ; recherche par téléphone chez Splash360 |
 | 11. Commande façon borne, paliers, compte, codes promo | ✅ Terminé (carte en photos, « Ma fidélité », paliers de cadeaux au choix, Mon compte et historique, codes promo au back-office) | Cartes enregistrées avec Stripe ; modifier son prénom (API Splash360) ; paliers chez Splash360 |
 | 12. Studio design | ✅ Terminé (brouillon enregistré automatiquement, aperçu téléphone au back-office, lien et QR code d'aperçu dans la vraie application, logo téléversé, publication sans les stores) | Icône, nom et écran de démarrage : nouvelle version sur les stores |
+| 13. Studio enseigne et rôles | ✅ Terminé (maquette validée : connexion, accueil, apparence, équipe, console Splash360 ; rôle Gérant ; matrice de droits unique ; 5 parcours de bout en bout back-office ↔ application sur la recette) | Tests mabl à aligner sur les nouveaux écrans |
 
 ## Aperçu en ligne (recette)
 
 - Application web : https://claude-splash360.expo.app (enseigne Bills Burger ; `?enseigne=chickenstreet`, `?enseigne=bella` ou `?enseigne=greenbowl` pour les autres).
 - API : https://yfrvtrebukdbxnuqhlfy.supabase.co/functions/v1/api (fonction Supabase, ADR 0007 ; `pnpm --filter api build:edge`).
-- Back-office : https://claude-splash360--admin.expo.app (export statique, `pnpm --filter admin build:static` puis `eas deploy --export-dir ../admin/out --alias admin` depuis `apps/mobile`). Comptes de démo : `gerant@billsburger.test`, `gerant@chickenstreet.test`.
+- Back-office : https://claude-splash360--admin.expo.app (export statique, `pnpm --filter admin build:static` puis `eas deploy --export-dir ../admin/out --alias admin` depuis `apps/mobile`). Comptes de test (un par rôle, mot de passe de recette communiqué à part) : `admin@splash360.test`, `proprietaire@billsburger.test`, `gerant@billsburger.test`, `equipier@billsburger.test`, `proprietaire@chickenstreet.test`.
 - Android : build EAS `chickenstreet-preview` (distribution interne), APK sur la page du build.
 - Paiement désactivé tant que les clés Stripe de test ne sont pas posées en secrets de la fonction.
 
