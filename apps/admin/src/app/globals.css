@@ -897,7 +897,7 @@ code {
   align-items: start;
 }
 .column {
-  background: #ececf1;
+  background: #efede8;
   border-radius: 12px;
   padding: 12px;
   display: flex;
@@ -1363,4 +1363,22 @@ label.button:focus-within {
   font-size: 14px;
   box-shadow: 0 12px 30px rgb(0 0 0 / 25%);
   z-index: 50;
+}
+
+/* Tableaux posés directement sur la page : même carte que le reste du studio. */
+.content table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.content .table-box table,
+.content .card table,
+.content .pv table {
+  border: 0;
+  border-radius: 0;
+}
+.content tbody tr:last-child > * {
+  border-bottom: 0;
 }
