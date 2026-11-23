@@ -38,6 +38,10 @@ Le lot 8 tourne sur des données de test (ADR 0009). À obtenir de Splash360 :
    **création d'un compte avec le seul téléphone** (e-mail facultatif). Splash360 envoie-t-il déjà un code
    de vérification par SMS, ou les clients ont-ils un code PIN ? Si oui, on s'appuie dessus plutôt que Brevo.
 
+9. Paliers de cadeaux (lot 11, ADR 0014) : un palier propose **plusieurs produits au choix** ; l'API doit
+   donner, pour chaque palier, ses produits (identifiants de la carte), et la consommation d'un cadeau doit
+   indiquer le **produit choisi**.
+
 ## Paiement sur place (ADR 0010)
 
 1. Format du QR code que la caisse Splash360 sait lire pour retrouver une commande en ligne (provisoire : `S360-CMD-<numéro>-<8 caractères>`).

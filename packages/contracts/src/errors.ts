@@ -50,6 +50,7 @@ export const orderIssueSchema = z.object({
     'loyalty_session_invalid',
     'unknown_reward',
     'reward_product_missing',
+    'reward_product_not_eligible',
     'insufficient_points',
     'reward_needs_paid_items',
     // Paiement

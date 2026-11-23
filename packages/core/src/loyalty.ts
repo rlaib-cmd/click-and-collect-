@@ -9,13 +9,16 @@ export interface LoyaltyRules {
   readonly pointsPerEuro: number;
 }
 
-/** Récompense échangeable contre des points : un produit de la carte offert. */
+/**
+ * Palier de cadeaux échangeable contre des points (lot 11) : le client choisit
+ * un produit offert parmi ceux du palier (ex. 500 points : une boisson au choix).
+ */
 export interface LoyaltyReward {
   readonly id: string;
   readonly name: string;
   readonly costPoints: number;
-  /** Produit offert (identifiant de la carte Splash360). */
-  readonly productId: string;
+  /** Produits au choix (identifiants de la carte Splash360), au moins un. */
+  readonly productIds: readonly string[];
 }
 
 /**
@@ -34,26 +37,34 @@ export type RewardResult =
   | { readonly ok: true; readonly totals: Totals; readonly discountCents: Cents }
   | {
       readonly ok: false;
-      readonly error: 'reward_product_missing' | 'insufficient_points' | 'reward_needs_paid_items';
+      readonly error:
+        | 'reward_product_missing'
+        | 'reward_product_not_eligible'
+        | 'insufficient_points'
+        | 'reward_needs_paid_items';
     };
 
 /** Plus petit montant encaissable par carte (Stripe, en euros) : une commande ne peut pas être gratuite. */
 export const MIN_CHARGE_CENTS = cents(50);
 
 /**
- * Applique une récompense « produit offert » : le prix de base d'une unité du produit
- * (sans ses options) est déduit du total. Le produit doit être dans le panier et le
- * solde suffisant, et il doit rester au moins `MIN_CHARGE_CENTS` à payer.
+ * Applique une récompense « produit offert » : le prix de base d'une unité du produit choisi
+ * (sans ses options) est déduit du total. Le produit doit faire partie du palier et être dans
+ * le panier, le solde doit suffire, et il doit rester au moins `MIN_CHARGE_CENTS` à payer.
  */
 export function applyReward(input: {
   readonly totals: Totals;
   readonly lines: readonly PricedLine[];
   readonly reward: LoyaltyReward;
+  /** Produit choisi dans le palier. */
+  readonly productId: string;
   readonly balance: number;
 }): RewardResult {
-  const { totals, lines, reward, balance } = input;
+  const { totals, lines, reward, productId, balance } = input;
+  if (!reward.productIds.includes(productId))
+    return { ok: false, error: 'reward_product_not_eligible' };
   if (balance < reward.costPoints) return { ok: false, error: 'insufficient_points' };
-  const line = lines.find((l) => l.productId === reward.productId && l.quantity > 0);
+  const line = lines.find((l) => l.productId === productId && l.quantity > 0);
   if (!line) return { ok: false, error: 'reward_product_missing' };
   const before = totals.subtotalCents + totals.deliveryFeeCents + totals.serviceFeeCents;
   const discountCents = cents(Math.max(0, Math.min(line.basePriceCents, before)));
@@ -106,4 +117,15 @@ export function reservedRewardPoints(holds: readonly RewardHold[], now: Date): n
 /** Points utilisables pour une nouvelle récompense : solde moins les réservations. */
 export function availablePoints(balance: number, reserved: number): number {
   return Math.max(0, balance - reserved);
+}
+
+/** Prochain palier à débloquer : le moins cher au-dessus du solde disponible (null si tout est débloqué). */
+export function nextReward<T extends Pick<LoyaltyReward, 'costPoints'>>(
+  rewards: readonly T[],
+  available: number,
+): { readonly reward: T; readonly missingPoints: number } | null {
+  const next = [...rewards]
+    .filter((r) => r.costPoints > available)
+    .sort((a, b) => a.costPoints - b.costPoints)[0];
+  return next ? { reward: next, missingPoints: next.costPoints - available } : null;
 }

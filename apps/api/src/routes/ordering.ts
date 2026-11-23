@@ -126,7 +126,11 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
       totals: result.totals,
       at: result.at,
       loyalty: result.loyalty
-        ? { pointsEarned: result.loyalty.pointsEarned, rewardId: result.loyalty.reward?.id ?? null }
+        ? {
+            pointsEarned: result.loyalty.pointsEarned,
+            rewardId: result.loyalty.reward?.id ?? null,
+            rewardProductId: result.loyalty.reward?.productId ?? null,
+          }
         : null,
     };
     return c.json(body);

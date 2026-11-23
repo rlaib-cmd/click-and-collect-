@@ -23,8 +23,8 @@ const programs = new Map<string, LoyaltyProgram>([
       pointsPerEuro: 10,
       welcomePoints: 100,
       rewards: [
-        { id: 'rw-tiramisu', name: 'Tiramisu', costPoints: 100, productId: 'p-tiramisu' },
-        { id: 'rw-pizza', name: 'Pizza', costPoints: 900, productId: 'p-margherita' },
+        { id: 'rw-tiramisu', name: 'Tiramisu', costPoints: 100, productIds: ['p-tiramisu'] },
+        { id: 'rw-pizza', name: 'Pizza', costPoints: 900, productIds: ['p-margherita'] },
       ],
     },
   ],
@@ -162,10 +162,15 @@ describe('club fidélité', () => {
     const ok = quoteSchema.parse(await (await quote('rw-tiramisu')).json());
     // Margherita 10,50 + tiramisu 6,50 = 17,00 ; tiramisu offert → 10,50 € ; 105 points.
     expect(ok.totals).toMatchObject({ subtotalCents: 1700, discountCents: 650, totalCents: 1050 });
-    expect(ok.loyalty).toEqual({ pointsEarned: 105, rewardId: 'rw-tiramisu' });
+    expect(ok.loyalty).toEqual({
+      pointsEarned: 105,
+      rewardId: 'rw-tiramisu',
+      rewardProductId: 'p-tiramisu',
+    });
     expect(quoteSchema.parse(await (await quote(null)).json()).loyalty).toEqual({
       pointsEarned: 170,
       rewardId: null,
+      rewardProductId: null,
     });
 
     const issues = async (res: Response) =>
@@ -173,6 +178,24 @@ describe('club fidélité', () => {
         (i) => i.code,
       );
     expect(await issues(await quote('rw-pizza'))).toEqual(['insufficient_points']);
+    // Palier au choix (lot 11) : le produit doit appartenir au palier.
+    const tk = memberToken;
+    const {
+      restaurantId: _r2,
+      customer: _c2,
+      idempotencyKey: _k2,
+      acceptedTerms: _a2,
+      ...q2
+    } = order(tk, 'rw-tiramisu', 'y'.repeat(16));
+    const notEligible = await s.app.request(`${base}/restaurants/${BELLA_RESTO}/quote`, {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify({
+        ...q2,
+        loyalty: { memberToken: tk, rewardId: 'rw-tiramisu', rewardProductId: 'p-margherita' },
+      }),
+    });
+    expect(await issues(notEligible)).toEqual(['reward_product_not_eligible']);
     expect(await issues(await quote('rw-inconnue'))).toEqual(['unknown_reward']);
     expect(
       await issues(

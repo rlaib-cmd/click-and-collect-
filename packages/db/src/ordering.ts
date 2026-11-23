@@ -71,7 +71,12 @@ export interface NewOrder {
 
 export interface OrderLoyalty {
   readonly memberId: string;
-  readonly reward: { readonly id: string; readonly costPoints: number } | null;
+  readonly reward: {
+    readonly id: string;
+    readonly costPoints: number;
+    /** Produit offert, choisi dans le palier (lot 11). */
+    readonly productId: string;
+  } | null;
 }
 
 export interface OrderSummary {
@@ -283,14 +288,16 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
           insert into public.orders (id, tenant_id, restaurant_id, customer_id, number, mode, requested_slot, estimated_at,
             delivery_address, delivery_zone_id, subtotal_cents, delivery_fee_cents, service_fee_cents, discount_cents,
             total_cents, idempotency_key, application_fee_cents, access_token_hash,
-            loyalty_member_id, loyalty_reward_id, loyalty_reward_points, payment_method, status)
+            loyalty_member_id, loyalty_reward_id, loyalty_reward_points, loyalty_reward_product_id,
+            payment_method, status)
           values (${o.id}, ${o.tenantId}, ${o.restaurantId}, ${customer?.id ?? null}, ${counter?.n ?? 0}, ${o.mode},
             ${o.requestedSlot}, ${o.estimatedAt},
             ${o.deliveryAddress ? tx.json(o.deliveryAddress as unknown as Parameters<typeof tx.json>[0]) : null},
             ${o.deliveryZoneId}, ${o.totals.subtotalCents}, ${o.totals.deliveryFeeCents}, ${o.totals.serviceFeeCents},
             ${o.totals.discountCents}, ${o.totals.totalCents}, ${o.idempotencyKey}, ${o.applicationFeeCents},
             ${o.accessTokenHash}, ${o.loyalty?.memberId ?? null}, ${o.loyalty?.reward?.id ?? null},
-            ${o.loyalty?.reward?.costPoints ?? null}, ${onSite ? 'on_site' : 'online'},
+            ${o.loyalty?.reward?.costPoints ?? null}, ${o.loyalty?.reward?.productId ?? null},
+            ${onSite ? 'on_site' : 'online'},
             ${onSite ? 'confirmed' : 'pending_payment'})
           returning id, number, status, total_cents, created_at`;
         if (!order) throw new Error('Insertion de commande sans retour');

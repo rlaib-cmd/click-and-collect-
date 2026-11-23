@@ -77,6 +77,8 @@ export const quoteRequestSchema = z.object({
     .object({
       memberToken: z.string().min(20).max(300),
       rewardId: z.string().min(1).max(100).nullable(),
+      /** Produit choisi dans le palier (lot 11). */
+      rewardProductId: z.string().min(1).max(100).nullable().optional(),
     })
     .nullable()
     .optional(),
@@ -108,7 +110,11 @@ export const quoteSchema = z.object({
   at: z.iso.datetime(),
   /** Points que la commande rapportera et récompense appliquée ; null hors club. */
   loyalty: z
-    .object({ pointsEarned: z.number().int().nonnegative(), rewardId: z.string().nullable() })
+    .object({
+      pointsEarned: z.number().int().nonnegative(),
+      rewardId: z.string().nullable(),
+      rewardProductId: z.string().nullable().default(null),
+    })
     .nullable()
     .default(null),
 });

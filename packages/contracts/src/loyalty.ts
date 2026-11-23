@@ -4,8 +4,8 @@ export const loyaltyRewardSchema = z.object({
   id: z.string(),
   name: z.string(),
   costPoints: z.number().int().positive(),
-  /** Produit de la carte offert par la récompense. */
-  productId: z.string(),
+  /** Palier (lot 11) : produits de la carte au choix, au moins un. */
+  productIds: z.array(z.string()).min(1),
 });
 
 /** Réponse de GET /v1/tenants/{subdomain}/loyalty/program. */

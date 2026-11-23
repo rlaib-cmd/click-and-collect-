@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeTotals } from './fees';
 import {
   applyReward,
+  nextReward,
   availablePoints,
   PENDING_PAYMENT_HOLD_MS,
   pointsForAmount,
@@ -13,10 +14,10 @@ import type { PricedLine } from './pricing';
 
 const rules = { pointsPerEuro: 10 };
 const fries: LoyaltyReward = {
-  id: 'rw-frites',
-  name: 'Frites',
+  id: 'rw-sides',
+  name: 'Un side offert',
   costPoints: 400,
-  productId: 'frites',
+  productIds: ['frites', 'onion-rings'],
 };
 
 function line(productId: string, base: number, options: number[] = [], quantity = 1): PricedLine {
@@ -71,7 +72,7 @@ describe('récompense « produit offert »', () => {
   it('déduit le prix de base du produit, pas ses options', () => {
     const lines = [line('burger', 1490), line('frites', 350, [100], 2)];
     const totals = totalsFor(lines);
-    const r = applyReward({ totals, lines, reward: fries, balance: 640 });
+    const r = applyReward({ totals, lines, reward: fries, productId: 'frites', balance: 640 });
     expect(r).toMatchObject({ ok: true, discountCents: 350 });
     if (r.ok) {
       expect(r.totals.totalCents).toBe(totals.totalCents - 350);
@@ -81,13 +82,27 @@ describe('récompense « produit offert »', () => {
 
   it('exige le produit dans le panier et assez de points', () => {
     const lines = [line('burger', 1490)];
-    expect(applyReward({ totals: totalsFor(lines), lines, reward: fries, balance: 640 })).toEqual({
+    expect(
+      applyReward({
+        totals: totalsFor(lines),
+        lines,
+        reward: fries,
+        productId: 'frites',
+        balance: 640,
+      }),
+    ).toEqual({
       ok: false,
       error: 'reward_product_missing',
     });
     const withFries = [line('frites', 350)];
     expect(
-      applyReward({ totals: totalsFor(withFries), lines: withFries, reward: fries, balance: 399 }),
+      applyReward({
+        totals: totalsFor(withFries),
+        lines: withFries,
+        reward: fries,
+        productId: 'frites',
+        balance: 399,
+      }),
     ).toEqual({ ok: false, error: 'insufficient_points' });
   });
 
@@ -97,13 +112,20 @@ describe('récompense « produit offert »', () => {
       totals: totalsFor(lines, 'delivery'),
       lines,
       reward: fries,
+      productId: 'frites',
       balance: 1000,
     });
     expect(r.ok && r.totals.totalCents).toBe(299);
     // Seulement le produit offert, à emporter : rien à payer, donc refusé.
     const alone = [line('frites', 350)];
     expect(
-      applyReward({ totals: totalsFor(alone), lines: alone, reward: fries, balance: 1000 }),
+      applyReward({
+        totals: totalsFor(alone),
+        lines: alone,
+        reward: fries,
+        productId: 'frites',
+        balance: 1000,
+      }),
     ).toEqual({
       ok: false,
       error: 'reward_needs_paid_items',
@@ -111,9 +133,58 @@ describe('récompense « produit offert »', () => {
     // 0,50 € restant : accepté.
     const withExtra = [line('frites', 350), line('sauce', 50)];
     expect(
-      applyReward({ totals: totalsFor(withExtra), lines: withExtra, reward: fries, balance: 1000 })
-        .ok,
+      applyReward({
+        totals: totalsFor(withExtra),
+        lines: withExtra,
+        reward: fries,
+        productId: 'frites',
+        balance: 1000,
+      }).ok,
     ).toBe(true);
+  });
+});
+
+describe('paliers de cadeaux au choix', () => {
+  it('offre le produit choisi parmi ceux du palier', () => {
+    const lines = [line('burger', 1490), line('onion-rings', 420)];
+    const r = applyReward({
+      totals: totalsFor(lines),
+      lines,
+      reward: fries,
+      productId: 'onion-rings',
+      balance: 400,
+    });
+    expect(r).toMatchObject({ ok: true, discountCents: 420 });
+  });
+
+  it('refuse un produit qui ne fait pas partie du palier', () => {
+    const lines = [line('burger', 1490)];
+    expect(
+      applyReward({
+        totals: totalsFor(lines),
+        lines,
+        reward: fries,
+        productId: 'burger',
+        balance: 900,
+      }),
+    ).toEqual({ ok: false, error: 'reward_product_not_eligible' });
+  });
+
+  it('indique le prochain palier et les points manquants', () => {
+    const tiers = [
+      { id: 'b', costPoints: 500 },
+      { id: 'a', costPoints: 400 },
+      { id: 'c', costPoints: 900 },
+    ];
+    expect(nextReward(tiers, 120)).toEqual({
+      reward: { id: 'a', costPoints: 400 },
+      missingPoints: 280,
+    });
+    expect(nextReward(tiers, 450)).toEqual({
+      reward: { id: 'b', costPoints: 500 },
+      missingPoints: 50,
+    });
+    expect(nextReward(tiers, 900)).toBeNull();
   });
 });
 

@@ -90,7 +90,7 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
           name: ctx.program.name,
           pointsPerEuro: ctx.program.pointsPerEuro,
           welcomePoints: ctx.program.welcomePoints,
-          rewards: ctx.program.rewards.map((r) => ({ ...r })),
+          rewards: ctx.program.rewards.map((r) => ({ ...r, productIds: [...r.productIds] })),
           demo: deps.loyaltyDemoLogin === true,
           otp: deps.otp !== undefined,
         }

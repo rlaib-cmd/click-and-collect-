@@ -123,7 +123,12 @@ export type QuoteResult =
       readonly loyalty: {
         readonly memberId: string;
         readonly pointsEarned: number;
-        readonly reward: { readonly id: string; readonly costPoints: number } | null;
+        readonly reward: {
+          readonly id: string;
+          readonly costPoints: number;
+          /** Produit offert, choisi dans le palier (lot 11). */
+          readonly productId: string;
+        } | null;
       } | null;
     }
   | { readonly ok: false; readonly issues: readonly OrderIssue[] };
@@ -224,9 +229,15 @@ export async function quote(
     if (!program || !member) {
       issues.push({ code: 'loyalty_session_invalid' });
     } else {
-      let reward: { id: string; costPoints: number } | null = null;
+      let reward: { id: string; costPoints: number; productId: string } | null = null;
       if (request.loyalty.rewardId) {
         const chosen = program.rewards.find((r) => r.id === request.loyalty?.rewardId);
+        // Sans choix explicite (anciennes versions), le premier produit du palier présent au panier.
+        const productId =
+          request.loyalty.rewardProductId ??
+          chosen?.productIds.find((id) => request.lines.some((l) => l.productId === id)) ??
+          chosen?.productIds[0] ??
+          '';
         if (!chosen) issues.push({ code: 'unknown_reward' });
         else if (totals && priced.ok) {
           // Les points d'un cadeau déjà choisi dans une commande en cours sont réservés (ADR 0013).
@@ -235,12 +246,13 @@ export async function quote(
             totals,
             lines: priced.lines,
             reward: chosen,
+            productId,
             balance: availablePoints(member.points, reservedRewardPoints(holds, now)),
           });
           if (applied.ok) {
             totals = applied.totals;
-            reward = { id: chosen.id, costPoints: chosen.costPoints };
-          } else issues.push({ code: applied.error, productId: chosen.productId });
+            reward = { id: chosen.id, costPoints: chosen.costPoints, productId };
+          } else issues.push({ code: applied.error, productId });
         }
       }
       loyalty = {

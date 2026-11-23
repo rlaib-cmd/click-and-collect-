@@ -160,7 +160,10 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
         ...base,
         totals: { ...base.totals, discountCents: cents(1050), totalCents: cents(1850) },
         paymentMethod: 'on_site',
-        loyalty: { memberId, reward: { id: 'rw-pizza', costPoints: 900 } },
+        loyalty: {
+          memberId,
+          reward: { id: 'rw-pizza', costPoints: 900, productId: 'p-margherita' },
+        },
       };
     };
     const a = await store.createOrder(withReward('cadeau-a'));
