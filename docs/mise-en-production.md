@@ -38,7 +38,7 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 
 ### Back-office (`apps/admin`)
 
-`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Ne **jamais** définir `ADMIN_DEV_LOGIN` hors développement (la route est de toute façon désactivée en production).
+`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_CLIENT_APP_URL` (adresse web de l'application client, pour le lien d'aperçu du studio design, lot 12). Ne **jamais** définir `ADMIN_DEV_LOGIN` hors développement (la route est de toute façon désactivée en production).
 
 ### Application (`apps/mobile`)
 
@@ -104,3 +104,12 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 1. CI verte sur la branche principale (lint, types, tests, base, builds, image Docker).
 2. `supabase db push` sur la recette, puis déploiement de l'API et du back-office en recette ; parcours complet en mode test Stripe.
 3. Même séquence en production : migrations d'abord (toujours rétrocompatibles), puis API, puis back-office et web, puis `eas update`.
+
+## Studio design (lot 12)
+
+- Logos téléversés : bucket public `brand-assets` de Supabase Storage, créé par la migration
+  `20261123050000_theme_draft.sql` (2 Mo, PNG/JPEG/WebP). L'API écrit avec `SUPABASE_URL` et
+  `SUPABASE_SERVICE_ROLE_KEY` (serveur seulement) ; sans eux, le téléversement répond 503 et seul le
+  champ « adresse du logo » sert.
+- Le design publié arrive dans les applications au prochain chargement (configuration publique en
+  cache 60 secondes). Icône, nom et écran de démarrage : nouvelle version sur les stores.

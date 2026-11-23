@@ -136,7 +136,7 @@ export const adminFr = {
     publish: 'Publier',
     publishTitle: 'Publier ces changements ?',
     publishIntro:
-      'Ils seront visibles dans toutes les applications de l’enseigne (iPhone, Android, web) à leur prochain chargement, sans mise à jour sur les stores.',
+      'Ils seront visibles dans toutes les applications de l’enseigne (iPhone, Android, web) à leur prochain chargement, dans la minute, sans mise à jour sur les stores.',
     publishConfirm: 'Publier maintenant',
     published: 'Publié : les clients voient le nouveau design.',
     discard: 'Annuler les modifications',
