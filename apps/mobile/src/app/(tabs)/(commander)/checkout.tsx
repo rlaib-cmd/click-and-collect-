@@ -725,12 +725,13 @@ const styles = StyleSheet.create({
   reward: { paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, gap: 6 },
   giftRow: { flexDirection: 'row', gap: 8 },
   promoRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  promoInput: { flex: 1, fontWeight: '700' },
+  promoInput: { flex: 1, minWidth: 0, fontWeight: '700' },
   promoButton: {
     minHeight: 48,
     paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   promoApplied: {
     flexDirection: 'row',
