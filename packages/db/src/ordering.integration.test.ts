@@ -3,6 +3,7 @@ import { cents } from '@splash360/core';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createSql } from './client';
 import { createPostgresOrderingStore, type NewOrder } from './ordering';
+import { createPostgresPromoStore } from './promos';
 import { createPostgresRestaurantStore } from './restaurants';
 
 /** Nécessite DATABASE_URL sur une base migrée et chargée avec supabase/seed.sql. */
@@ -65,6 +66,7 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
       deliveryFeeCents: cents(0),
       serviceFeeCents: cents(0),
       discountCents: cents(0),
+      promoDiscountCents: cents(0),
       totalCents: cents(2900),
     },
     idempotencyKey: `test-${run}-${key}`,
@@ -189,6 +191,65 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
     expect(await store.memberOrders(GREEN, memberId, { limit: 10, beforeNumber: null })).toEqual(
       [],
     );
+  });
+
+  it('code promo : enregistré avec la commande, une fois par client, plafond respecté', async () => {
+    const restaurantId = await bellaId();
+    const slot = '2030-01-18T11:00:00.000Z';
+    const promos = createPostgresPromoStore(sql);
+    const created = await promos.createPromo(BELLA, {
+      code: `P${run.slice(-8).toUpperCase()}`,
+      kind: 'fixed',
+      value: 300,
+      minSubtotalCents: 0,
+      startsAt: null,
+      endsAt: null,
+      maxUses: 2,
+      active: true,
+    });
+    if (created === 'conflict') throw new Error('code en double');
+    const code = `P${run.slice(-8).toUpperCase()}`;
+    expect(
+      await promos.createPromo(BELLA, {
+        code,
+        kind: 'percent',
+        value: 5,
+        minSubtotalCents: 0,
+        startsAt: null,
+        endsAt: null,
+        maxUses: null,
+        active: true,
+      }),
+    ).toBe('conflict');
+    const withPromo = (key: string, email: string): NewOrder => {
+      const base = newOrder(restaurantId, key, slot, null);
+      return {
+        ...base,
+        maxOrdersPerSlot: null,
+        customer: { ...base.customer, email },
+        totals: {
+          ...base.totals,
+          promoDiscountCents: cents(300),
+          totalCents: cents(base.totals.totalCents - 300),
+        },
+        promo: { id: created.id, code: `P${run.slice(-8).toUpperCase()}` },
+      };
+    };
+    const a = await store.createOrder(withPromo('promo-a', `a-${run}@test.fr`));
+    expect(a.ok).toBe(true);
+    expect(await store.createOrder(withPromo('promo-b', `a-${run}@test.fr`))).toEqual({
+      ok: false,
+      error: 'promo_already_used',
+    });
+    expect((await store.createOrder(withPromo('promo-c', `c-${run}@test.fr`))).ok).toBe(true);
+    expect(await store.createOrder(withPromo('promo-d', `d-${run}@test.fr`))).toEqual({
+      ok: false,
+      error: 'promo_exhausted',
+    });
+    const listed = await promos.listPromos(BELLA);
+    expect(listed.find((p) => p.id === created.id)?.uses).toBe(2);
+    expect(await promos.setPromoActive(BELLA, created.id, false)).toBe(true);
+    expect((await store.findPromo(BELLA, `P${run.slice(-8).toUpperCase()}`))?.active).toBe(false);
   });
 
   it('client sans e-mail : reconnu par son téléphone, sans doublon', async () => {

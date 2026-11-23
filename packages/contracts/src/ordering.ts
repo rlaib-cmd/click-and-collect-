@@ -82,6 +82,8 @@ export const quoteRequestSchema = z.object({
     })
     .nullable()
     .optional(),
+  /** Code promo saisi par le client (lot 11) ; le serveur le contrôle et calcule la remise. */
+  promoCode: z.string().trim().min(1).max(40).nullable().optional(),
 });
 
 export const pricedLineSchema = z.object({
@@ -100,6 +102,8 @@ export const totalsSchema = z.object({
   serviceFeeCents: cents,
   /** Récompense fidélité déduite (0 sans récompense ; absent des anciennes réponses). */
   discountCents: cents.default(0),
+  /** Remise du code promo (lot 11). */
+  promoDiscountCents: cents.default(0),
   totalCents: cents,
 });
 
@@ -117,6 +121,8 @@ export const quoteSchema = z.object({
     })
     .nullable()
     .default(null),
+  /** Code promo appliqué ; null sans code. */
+  promoCode: z.string().nullable().default(null),
 });
 
 export const customerSchema = z.object({

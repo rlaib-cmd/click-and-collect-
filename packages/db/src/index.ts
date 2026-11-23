@@ -7,3 +7,4 @@ export * from './restaurants';
 export * from './tenants';
 export * from './loyalty-demo';
 export * from './otp';
+export * from './promos';

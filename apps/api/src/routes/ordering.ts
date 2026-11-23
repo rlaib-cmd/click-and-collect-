@@ -132,6 +132,7 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
             rewardProductId: result.loyalty.reward?.productId ?? null,
           }
         : null,
+      promoCode: result.promo?.code ?? null,
     };
     return c.json(body);
   });
@@ -190,8 +191,13 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
         ? { memberId: result.loyalty.memberId, reward: result.loyalty.reward }
         : null,
       paymentMethod: request.paymentMethod,
+      promo: result.promo,
     });
-    if (!created.ok) return apiError(c, 'slot_full', 'Ce créneau vient d’être complété');
+    if (!created.ok) {
+      // Code promo épuisé ou déjà utilisé par ce client, constaté sous verrou (ADR 0015).
+      if (created.error !== 'slot_full') return orderInvalid(c, [{ code: created.error }]);
+      return apiError(c, 'slot_full', 'Ce créneau vient d’être complété');
+    }
 
     const body: PlacedOrder = {
       orderId: created.order.id,

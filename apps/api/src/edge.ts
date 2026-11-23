@@ -14,6 +14,7 @@ import { createDemoLoyaltyProvider } from '@splash360/api-loyalty';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import {
   createPostgresAdminStore,
+  createPostgresPromoStore,
   createPostgresDemoLoyaltyStore,
   createPostgresOperationsStore,
   createPostgresOrderingStore,
@@ -126,6 +127,7 @@ function build() {
     pos,
     notifier,
     admin: createPostgresAdminStore(sql),
+    promos: createPostgresPromoStore(sql),
     verifier,
     gateway,
     tokenSecret,

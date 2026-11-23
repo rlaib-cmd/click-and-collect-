@@ -18,6 +18,8 @@ export interface Totals {
   readonly serviceFeeCents: Cents;
   /** Récompense fidélité déduite (0 sans récompense). */
   readonly discountCents: Cents;
+  /** Remise du code promo (0 sans code), appliquée après la récompense (lot 11). */
+  readonly promoDiscountCents: Cents;
   readonly totalCents: Cents;
 }
 
@@ -64,6 +66,7 @@ export function computeTotals(input: {
       deliveryFeeCents,
       serviceFeeCents,
       discountCents: cents(0),
+      promoDiscountCents: cents(0),
       totalCents: addCents(subtotalCents, deliveryFeeCents, serviceFeeCents),
     },
   };

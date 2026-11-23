@@ -53,6 +53,14 @@ export const orderIssueSchema = z.object({
     'reward_product_not_eligible',
     'insufficient_points',
     'reward_needs_paid_items',
+    // Code promo (lot 11)
+    'promo_invalid',
+    'promo_not_started',
+    'promo_expired',
+    'promo_min_subtotal',
+    'promo_exhausted',
+    'promo_already_used',
+    'promo_needs_paid_amount',
     // Paiement
     'payment_method_unavailable',
     'on_site_requires_member',

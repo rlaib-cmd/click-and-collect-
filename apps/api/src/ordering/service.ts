@@ -2,7 +2,9 @@ import type { MenuCache } from '@splash360/api-menu';
 import type { AddressDto, OrderIssue, QuoteRequest } from '@splash360/contracts';
 import type { LoyaltyTenant } from '@splash360/api-loyalty';
 import {
+  applyPromo,
   applyReward,
+  normalizePromoCode,
   asapAvailability,
   availablePoints,
   reservedRewardPoints,
@@ -130,6 +132,8 @@ export type QuoteResult =
           readonly productId: string;
         } | null;
       } | null;
+      /** Code promo appliqué (lot 11, ADR 0015). */
+      readonly promo: { readonly id: string; readonly code: string } | null;
     }
   | { readonly ok: false; readonly issues: readonly OrderIssue[] };
 
@@ -220,6 +224,7 @@ export async function quote(
 
   // Fidélité : membre reconnu par son jeton, récompense recontrôlée (solde lu chez Splash360).
   let loyalty: Extract<QuoteResult, { ok: true }>['loyalty'] = null;
+  let loyaltyProgram: { readonly pointsPerEuro: number } | null = null;
   if (request.loyalty && tenant && deps.loyalty) {
     const memberId = verifyMemberToken(deps.tokenSecret, tenant.id, request.loyalty.memberToken);
     const [program, member] = await Promise.all([
@@ -229,6 +234,7 @@ export async function quote(
     if (!program || !member) {
       issues.push({ code: 'loyalty_session_invalid' });
     } else {
+      loyaltyProgram = program;
       let reward: { id: string; costPoints: number; productId: string } | null = null;
       if (request.loyalty.rewardId) {
         const chosen = program.rewards.find((r) => r.id === request.loyalty?.rewardId);
@@ -265,6 +271,29 @@ export async function quote(
     issues.push({ code: 'loyalty_session_invalid' });
   }
 
+  // Code promo (ADR 0015) : après la récompense ; les points se gagnent sur le montant payé.
+  let promo: { id: string; code: string } | null = null;
+  if (request.promoCode && tenant && totals) {
+    const code = normalizePromoCode(request.promoCode);
+    const found = code ? await deps.ordering.findPromo(tenant.id, code) : null;
+    const alreadyUsed =
+      found && loyalty ? await deps.ordering.promoUsedByMember(found.id, loyalty.memberId) : false;
+    const applied = applyPromo({
+      totals,
+      promo: found,
+      now,
+      uses: found?.uses ?? 0,
+      alreadyUsed,
+    });
+    if (applied.ok && found) {
+      totals = applied.totals;
+      promo = { id: found.id, code: found.code };
+      if (loyalty && loyaltyProgram) {
+        loyalty = { ...loyalty, pointsEarned: pointsForAmount(totals.totalCents, loyaltyProgram) };
+      }
+    } else if (!applied.ok) issues.push({ code: applied.error });
+  }
+
   if (issues.length > 0 || !priced.ok || !totals || !time.ok) {
     return { ok: false, issues };
   }
@@ -276,5 +305,6 @@ export async function quote(
     slot: time.slot,
     zoneId: zone?.id ?? null,
     loyalty,
+    promo,
   };
 }

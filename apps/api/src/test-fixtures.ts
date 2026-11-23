@@ -207,6 +207,7 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
   const deps: AppDeps = {
     tenants: createMemoryTenantStore(tenants),
     admin: admin.store,
+    promos: backend.promoAdmin,
     verifier: createSupabaseVerifier({ secret: JWT_SECRET }),
     restaurants: createMemoryRestaurantStore(restaurants),
     menus: createMenuCache(createDemoMenuProvider(), { ttlMs: 60_000, maxStaleMs: 0 }),

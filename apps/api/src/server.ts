@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/node';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import {
   createPostgresAdminStore,
+  createPostgresPromoStore,
   createPostgresDemoLoyaltyStore,
   createPostgresOperationsStore,
   createPostgresOrderingStore,
@@ -82,6 +83,7 @@ const app = createApp({
   notifier,
   posWebhookSecret: env.POS_WEBHOOK_SECRET ?? null,
   admin: createPostgresAdminStore(sql),
+  promos: createPostgresPromoStore(sql),
   verifier: createSupabaseVerifier({
     jwksUrl: env.SUPABASE_JWKS_URL,
     secret: env.SUPABASE_JWT_SECRET,

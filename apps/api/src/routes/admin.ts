@@ -1,11 +1,14 @@
 import type { LoyaltyProvider } from '@splash360/api-loyalty';
 import { MenuUnavailableError, type MenuCache } from '@splash360/api-menu';
+import { normalizePromoCode, validatePromoDefinition } from '@splash360/core';
 import {
   createTenantSchema,
   inviteSchema,
   legalSchema,
   pointsAdjustSchema,
   menuOverrideSchema,
+  promoInputSchema,
+  type AdminPromoDto,
   refundRequestSchema,
   settingsSchema,
   statusChangeSchema,
@@ -19,6 +22,7 @@ import {
 } from '@splash360/contracts';
 import type {
   AdminStore,
+  PromoAdminStore,
   OperationsStore,
   OrderReader,
   PaymentStore,
@@ -44,6 +48,8 @@ import { refundOrder } from '../payments/service';
 export interface AdminRoutesDeps extends NotifyDeps {
   readonly verifier: TokenVerifier;
   readonly admin: AdminStore;
+  /** Codes promo de l'enseigne (lot 11) ; absent = page indisponible. */
+  readonly promos?: PromoAdminStore | undefined;
   readonly tenants: TenantStore;
   readonly restaurants: RestaurantStore;
   readonly orders: OrderReader;
@@ -538,6 +544,64 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     if (!(await deps.admin.anonymizeCustomer(tenantId(c), c.req.param('id'))))
       return apiError(c, 'not_found', 'Client inconnu');
     await audit(c, 'customer.delete', c.req.param('id'));
+    return c.body(null, 204);
+  });
+
+  // ——— Codes promo (lot 11, ADR 0015) ———
+  app.get('/promos', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    if (!deps.promos) return apiError(c, 'not_found', 'Codes promo indisponibles');
+    const promos: AdminPromoDto[] = (await deps.promos.listPromos(tenantId(c))).map((p) => ({
+      id: p.id,
+      code: p.code,
+      kind: p.kind,
+      value: p.value,
+      minSubtotalCents: p.minSubtotalCents,
+      startsAt: p.startsAt?.toISOString() ?? null,
+      endsAt: p.endsAt?.toISOString() ?? null,
+      maxUses: p.maxUses,
+      active: p.active,
+      uses: p.uses,
+      createdAt: p.createdAt,
+    }));
+    return c.json({ promos });
+  });
+
+  app.post('/promos', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    if (!deps.promos) return apiError(c, 'not_found', 'Codes promo indisponibles');
+    const input = await body(c, promoInputSchema);
+    const code = input ? normalizePromoCode(input.code) : null;
+    if (!input || !code) return apiError(c, 'invalid_request', 'Code promo invalide');
+    const promo = {
+      code,
+      kind: input.kind,
+      value: input.value,
+      minSubtotalCents: input.minSubtotalCents,
+      startsAt: input.startsAt ? new Date(input.startsAt) : null,
+      endsAt: input.endsAt ? new Date(input.endsAt) : null,
+      maxUses: input.maxUses,
+      active: true,
+    };
+    const problem = validatePromoDefinition(promo);
+    if (problem) return apiError(c, 'invalid_request', `Code promo invalide (${problem})`);
+    const created = await deps.promos.createPromo(tenantId(c), promo);
+    if (created === 'conflict') return apiError(c, 'conflict', 'Ce code existe déjà');
+    await audit(c, 'promo.create', code, { kind: promo.kind, value: promo.value });
+    return c.json(created, 201);
+  });
+
+  app.patch('/promos/:id', async (c) => {
+    const denied = allow(c, ADMINS);
+    if (denied) return denied;
+    if (!deps.promos) return apiError(c, 'not_found', 'Codes promo indisponibles');
+    const input = await body(c, z.object({ active: z.boolean() }));
+    if (!input) return apiError(c, 'invalid_request', 'Modification invalide');
+    if (!(await deps.promos.setPromoActive(tenantId(c), c.req.param('id'), input.active)))
+      return apiError(c, 'not_found', 'Code promo inconnu');
+    await audit(c, input.active ? 'promo.enable' : 'promo.disable', c.req.param('id'));
     return c.body(null, 204);
   });
 

@@ -258,3 +258,26 @@ export type TenantSummaryDto = z.infer<typeof tenantSummarySchema>;
 export type AlertDto = z.infer<typeof alertSchema>;
 export type ClubMemberDto = z.infer<typeof clubMemberSchema>;
 export type PointsAdjustRequest = z.infer<typeof pointsAdjustSchema>;
+
+/** Codes promo (lot 11, ADR 0015) : création au back-office. Montants en centimes. */
+export const promoInputSchema = z.object({
+  code: z.string().trim().min(3).max(20),
+  kind: z.enum(['percent', 'fixed']),
+  value: z.number().int().positive(),
+  minSubtotalCents: z.number().int().nonnegative(),
+  startsAt: z.iso.datetime().nullable(),
+  endsAt: z.iso.datetime().nullable(),
+  maxUses: z.number().int().positive().nullable(),
+});
+
+export const adminPromoSchema = promoInputSchema.extend({
+  id: z.uuid(),
+  active: z.boolean(),
+  uses: z.number().int().nonnegative(),
+  createdAt: z.iso.datetime(),
+});
+
+export const adminPromosSchema = z.object({ promos: z.array(adminPromoSchema) });
+
+export type PromoInput = z.infer<typeof promoInputSchema>;
+export type AdminPromoDto = z.infer<typeof adminPromoSchema>;

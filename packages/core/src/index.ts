@@ -9,3 +9,4 @@ export * from './zones';
 export * from './loyalty';
 export * from './otp';
 export * from './customer';
+export * from './promo';

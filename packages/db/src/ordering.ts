@@ -6,6 +6,7 @@ import {
   type OrderMode,
   type OrderStatus,
   type PricedLine,
+  type PromoCode,
   type RewardHold,
   type ScheduleSettings,
   type SlotLoad,
@@ -67,6 +68,15 @@ export interface NewOrder {
   readonly loyalty?: OrderLoyalty | null;
   /** Sur place : commande confirmée tout de suite et envoyée en caisse (ADR 0010). */
   readonly paymentMethod?: 'online' | 'on_site';
+  /** Code promo appliqué (lot 11) ; l'utilisation est enregistrée avec la commande. */
+  readonly promo?: { readonly id: string; readonly code: string } | null;
+}
+
+/** Code promo tel que lu pour un devis (ADR 0015). */
+export interface PromoRecord extends PromoCode {
+  readonly id: string;
+  /** Utilisations enregistrées. */
+  readonly uses: number;
 }
 
 export interface OrderLoyalty {
@@ -89,7 +99,7 @@ export interface OrderSummary {
 
 export type CreateOrderResult =
   | { readonly ok: true; readonly order: OrderSummary; readonly replayed: boolean }
-  | { readonly ok: false; readonly error: 'slot_full' };
+  | { readonly ok: false; readonly error: 'slot_full' | 'promo_exhausted' | 'promo_already_used' };
 
 export interface OrderingStore {
   getConfig(tenantId: string, restaurantId: string): Promise<OrderingConfig | null>;
@@ -105,6 +115,10 @@ export interface OrderingStore {
     memberId: string,
     exceptIdempotencyKey: string | null,
   ): Promise<RewardHold[]>;
+  /** Code promo actif ou non d'une enseigne (code déjà normalisé). */
+  findPromo(tenantId: string, code: string): Promise<PromoRecord | null>;
+  /** Ce membre du club a-t-il déjà utilisé ce code ? */
+  promoUsedByMember(promoId: string, memberId: string): Promise<boolean>;
   /** Historique des commandes d'un membre (lot 11), les plus récentes d'abord. */
   memberOrders(
     tenantId: string,
@@ -173,6 +187,47 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
           and loyalty_reward_points is not null
           and idempotency_key is distinct from ${exceptIdempotencyKey}`;
       return rows.map((r) => ({ status: r.status, points: r.points, createdAt: r.created_at }));
+    },
+
+    async findPromo(tenantId, code) {
+      const [p] = await sql<
+        {
+          id: string;
+          code: string;
+          kind: 'percent' | 'fixed';
+          value: number;
+          min_subtotal_cents: number;
+          starts_at: Date | null;
+          ends_at: Date | null;
+          max_uses: number | null;
+          active: boolean;
+          uses: number;
+        }[]
+      >`
+        select p.id, p.code, p.kind, p.value, p.min_subtotal_cents, p.starts_at, p.ends_at, p.max_uses, p.active,
+               (select count(*)::int from public.promo_redemptions r where r.promo_code_id = p.id) as uses
+        from public.promo_codes p where p.tenant_id = ${tenantId} and p.code = ${code}`;
+      return p
+        ? {
+            id: p.id,
+            code: p.code,
+            kind: p.kind,
+            value: p.value,
+            minSubtotalCents: p.min_subtotal_cents,
+            startsAt: p.starts_at,
+            endsAt: p.ends_at,
+            maxUses: p.max_uses,
+            active: p.active,
+            uses: p.uses,
+          }
+        : null;
+    },
+
+    async promoUsedByMember(promoId, memberId) {
+      const [r] = await sql<{ used: boolean }[]>`
+        select exists (select 1 from public.promo_redemptions
+                       where promo_code_id = ${promoId} and loyalty_member_id = ${memberId}) as used`;
+      return r?.used ?? false;
     },
 
     async memberOrders(tenantId, memberId, page) {
@@ -356,6 +411,24 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
                 marketing_consent = public.customers.marketing_consent or excluded.marketing_consent
           returning id`;
 
+        // Code promo (ADR 0015) : sous verrou du code, plafond d'utilisations et une fois par client.
+        if (o.promo) {
+          const [promo] = await tx<{ max_uses: number | null; uses: number; used: boolean }[]>`
+            select p.max_uses,
+                   (select count(*)::int from public.promo_redemptions r where r.promo_code_id = p.id) as uses,
+                   exists (select 1 from public.promo_redemptions r
+                           where r.promo_code_id = p.id
+                             and (r.contact_key = ${contactKey}
+                                  or (${o.loyalty?.memberId ?? null}::text is not null
+                                      and r.loyalty_member_id = ${o.loyalty?.memberId ?? null}))) as used
+            from public.promo_codes p
+            where p.id = ${o.promo.id} and p.tenant_id = ${o.tenantId}
+            for update`;
+          if (!promo || (promo.max_uses !== null && promo.uses >= promo.max_uses))
+            return { ok: false as const, error: 'promo_exhausted' as const };
+          if (promo.used) return { ok: false as const, error: 'promo_already_used' as const };
+        }
+
         const [counter] = await tx<{ n: number }[]>`
           insert into public.tenant_counters (tenant_id, last_order_number) values (${o.tenantId}, 1001)
           on conflict (tenant_id) do update set last_order_number = public.tenant_counters.last_order_number + 1
@@ -368,7 +441,7 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
             delivery_address, delivery_zone_id, subtotal_cents, delivery_fee_cents, service_fee_cents, discount_cents,
             total_cents, idempotency_key, application_fee_cents, access_token_hash,
             loyalty_member_id, loyalty_reward_id, loyalty_reward_points, loyalty_reward_product_id,
-            payment_method, status)
+            promo_code, promo_discount_cents, payment_method, status)
           values (${o.id}, ${o.tenantId}, ${o.restaurantId}, ${customer?.id ?? null}, ${counter?.n ?? 0}, ${o.mode},
             ${o.requestedSlot}, ${o.estimatedAt},
             ${o.deliveryAddress ? tx.json(o.deliveryAddress as unknown as Parameters<typeof tx.json>[0]) : null},
@@ -376,6 +449,7 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
             ${o.totals.discountCents}, ${o.totals.totalCents}, ${o.idempotencyKey}, ${o.applicationFeeCents},
             ${o.accessTokenHash}, ${o.loyalty?.memberId ?? null}, ${o.loyalty?.reward?.id ?? null},
             ${o.loyalty?.reward?.costPoints ?? null}, ${o.loyalty?.reward?.productId ?? null},
+            ${o.promo?.code ?? null}, ${o.totals.promoDiscountCents},
             ${onSite ? 'on_site' : 'online'},
             ${onSite ? 'confirmed' : 'pending_payment'})
           returning id, number, status, total_cents, created_at`;
@@ -394,6 +468,12 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
                 splash360_option_id, name, price_cents)
               values (${o.tenantId}, ${item?.id ?? null}, ${opt.groupId}, ${opt.optionId}, ${opt.name}, ${opt.priceCents})`;
           }
+        }
+
+        if (o.promo) {
+          await tx`
+            insert into public.promo_redemptions (tenant_id, promo_code_id, order_id, contact_key, loyalty_member_id)
+            values (${o.tenantId}, ${o.promo.id}, ${order.id}, ${contactKey}, ${o.loyalty?.memberId ?? null})`;
         }
 
         await tx`
@@ -487,6 +567,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           delivery_fee_cents: number;
           service_fee_cents: number;
           discount_cents: number;
+          promo_discount_cents: number;
           total_cents: number;
           refunded_cents: number;
           loyalty_member_id: string | null;
@@ -541,6 +622,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           deliveryFeeCents: cents(o.delivery_fee_cents),
           serviceFeeCents: cents(o.service_fee_cents),
           discountCents: cents(o.discount_cents),
+          promoDiscountCents: cents(o.promo_discount_cents),
           totalCents: cents(o.total_cents),
         },
         refundedCents: o.refunded_cents,

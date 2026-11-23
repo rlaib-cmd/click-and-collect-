@@ -3,6 +3,7 @@ import type { AuthInviter } from './admin/invite';
 import type { MenuCache } from '@splash360/api-menu';
 import type {
   AdminStore,
+  PromoAdminStore,
   OperationsStore,
   OrderingStore,
   OrderReader,
@@ -46,6 +47,8 @@ export interface AppDeps {
   readonly pos: PosGateway;
   readonly notifier: NotificationSender;
   readonly admin: AdminStore;
+  /** Codes promo gérés au back-office (lot 11). */
+  readonly promos?: PromoAdminStore | undefined;
   /** Vérification des jetons de session du back-office (Supabase Auth). */
   readonly verifier: TokenVerifier;
   /** URL publique du back-office. */
@@ -177,6 +180,7 @@ export function createApp(deps: AppDeps) {
       ...notify,
       verifier: deps.verifier,
       admin: deps.admin,
+      promos: deps.promos,
       tenants: deps.tenants,
       restaurants: deps.restaurants,
       payments: deps.payments,

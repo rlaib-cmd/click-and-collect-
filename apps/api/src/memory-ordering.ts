@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import {
   checkTransition,
+  customerContactKey,
   type OperationalStatus,
   type OrderStatus,
   type SlotLoad,
@@ -14,6 +16,8 @@ import {
   type OrderingStore,
   type OrderReader,
   type PaymentStore,
+  type PromoAdminStore,
+  type PromoRecord,
   type Restaurant,
 } from '@splash360/db';
 
@@ -40,6 +44,9 @@ export function createMemoryOrderBackend(
   restaurants: () => readonly Restaurant[],
 ) {
   const orders: StoredOrder[] = [];
+  /** Codes promo (ADR 0015) et leurs utilisations, comme les tables Postgres. */
+  const promos: (PromoRecord & { tenantId: string })[] = [];
+  const redemptions: { promoId: string; contactKey: string; memberId: string | null }[] = [];
   let counter = 1000;
   const accounts = new Map<string, boolean>();
 
@@ -110,6 +117,14 @@ export function createMemoryOrderBackend(
             })),
           })),
       ),
+    findPromo: (tenantId, code) => {
+      const p = promos.find((x) => x.tenantId === tenantId && x.code === code);
+      return Promise.resolve(
+        p ? { ...p, uses: redemptions.filter((r) => r.promoId === p.id).length } : null,
+      );
+    },
+    promoUsedByMember: (promoId, memberId) =>
+      Promise.resolve(redemptions.some((r) => r.promoId === promoId && r.memberId === memberId)),
     createOrder(o): Promise<CreateOrderResult> {
       const summary = (x: StoredOrder) => ({
         id: x.id,
@@ -127,6 +142,18 @@ export function createMemoryOrderBackend(
         if ((load(o.restaurantId, at, at)[o.requestedSlot] ?? 0) >= o.maxOrdersPerSlot) {
           return Promise.resolve({ ok: false, error: 'slot_full' });
         }
+      }
+      const contactKey =
+        customerContactKey({ email: o.customer.email, phone: o.customer.phone }) ?? '';
+      if (o.promo) {
+        const p = promos.find((x) => x.id === o.promo?.id && x.tenantId === o.tenantId);
+        const uses = redemptions.filter((r) => r.promoId === o.promo?.id);
+        if (!p || (p.maxUses !== null && uses.length >= p.maxUses))
+          return Promise.resolve({ ok: false, error: 'promo_exhausted' });
+        const memberId = o.loyalty?.memberId ?? null;
+        if (uses.some((r) => r.contactKey === contactKey || (memberId && r.memberId === memberId)))
+          return Promise.resolve({ ok: false, error: 'promo_already_used' });
+        redemptions.push({ promoId: p.id, contactKey, memberId });
       }
       counter += 1;
       const onSite = o.paymentMethod === 'on_site';
@@ -385,5 +412,32 @@ export function createMemoryOrderBackend(
     },
   };
 
-  return { orders, ordering, payments, reader, operations, dispatches };
+  /** Codes promo au back-office (ADR 0015), sur les mêmes données que les commandes. */
+  const promoAdmin: PromoAdminStore = {
+    listPromos: (tenantId) =>
+      Promise.resolve(
+        promos
+          .filter((p) => p.tenantId === tenantId)
+          .map(({ tenantId: _t, ...p }) => ({
+            ...p,
+            uses: redemptions.filter((r) => r.promoId === p.id).length,
+            createdAt: new Date(0).toISOString(),
+          })),
+      ),
+    createPromo(tenantId, p) {
+      if (promos.some((x) => x.tenantId === tenantId && x.code === p.code))
+        return Promise.resolve('conflict' as const);
+      const id = randomUUID();
+      promos.push({ ...p, id, tenantId, uses: 0 });
+      return Promise.resolve({ id });
+    },
+    setPromoActive(tenantId, promoId, active) {
+      const p = promos.find((x) => x.tenantId === tenantId && x.id === promoId);
+      if (!p) return Promise.resolve(false);
+      Object.assign(p, { active });
+      return Promise.resolve(true);
+    },
+  };
+
+  return { orders, promos, promoAdmin, ordering, payments, reader, operations, dispatches };
 }

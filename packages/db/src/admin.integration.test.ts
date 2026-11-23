@@ -93,6 +93,7 @@ describe.skipIf(!url)('AdminStore Postgres', () => {
         deliveryFeeCents: 0 as never,
         serviceFeeCents: 0 as never,
         discountCents: 0 as never,
+        promoDiscountCents: 0 as never,
         totalCents: 0 as never,
       },
       idempotencyKey: `rgpd-${run}`,

@@ -17,6 +17,7 @@ describe('frais et minimum', () => {
         deliveryFeeCents: 0,
         serviceFeeCents: 50,
         discountCents: 0,
+        promoDiscountCents: 0,
         totalCents: 850,
       },
     });
@@ -36,6 +37,7 @@ describe('frais et minimum', () => {
         deliveryFeeCents: 290,
         serviceFeeCents: 50,
         discountCents: 0,
+        promoDiscountCents: 0,
         totalCents: 2340,
       },
     });
