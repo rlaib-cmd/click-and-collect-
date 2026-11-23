@@ -1,3 +1,4 @@
+import { can, isRestaurantScoped, type Permission } from '@splash360/core';
 import type { AdminStore, StaffUser, TenantStore, TenantWithTheme } from '@splash360/db';
 import type { Context, MiddlewareHandler } from 'hono';
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
@@ -84,19 +85,18 @@ export function requireStaff(deps: {
   };
 }
 
-/** Rôles autorisés pour une route ; l'enseigne doit être choisie pour les routes d'enseigne. */
-export function allow(
-  c: Context<AdminEnv>,
-  roles: readonly StaffUser['role'][],
-  needsTenant = true,
-) {
+/**
+ * Droit requis pour une route (ADR 0017, `can` de @splash360/core) ; l'enseigne doit être
+ * choisie pour les routes d'enseigne.
+ */
+export function allow(c: Context<AdminEnv>, permission: Permission, needsTenant = true) {
   const { staff, tenant } = c.get('admin');
-  if (!roles.includes(staff.role)) return apiError(c, 'forbidden', 'Droits insuffisants');
+  if (!can(staff.role, permission)) return apiError(c, 'forbidden', 'Droits insuffisants');
   if (needsTenant && !tenant) return apiError(c, 'invalid_request', 'Choisissez une enseigne');
   return null;
 }
 
 /** Un équipier ne voit que son restaurant. */
 export function restaurantScope(ctx: AdminContext): string | undefined {
-  return ctx.staff.role === 'staff' ? (ctx.staff.restaurantId ?? undefined) : undefined;
+  return isRestaurantScoped(ctx.staff.role) ? (ctx.staff.restaurantId ?? undefined) : undefined;
 }

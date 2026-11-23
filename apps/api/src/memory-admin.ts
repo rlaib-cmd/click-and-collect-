@@ -15,7 +15,11 @@ export function createMemoryAdminStore(input: {
   orders: () => StoredOrder[];
   settings?: Record<string, RestaurantSettingsRecord>;
 }) {
-  const staff = input.staff.map((s) => ({ ...s, disabled: false }));
+  type MemoryStaff = { -readonly [K in keyof StaffUser]: StaffUser[K] } & {
+    authUserId?: string;
+    disabled: boolean;
+  };
+  const staff: MemoryStaff[] = input.staff.map((s) => ({ ...s, disabled: false }));
   const audit: {
     tenantId: string | null;
     actorEmail: string;
@@ -57,7 +61,20 @@ export function createMemoryAdminStore(input: {
           s.authUserId = authUserId;
       return Promise.resolve(staff.filter((s) => s.authUserId === authUserId && !s.disabled));
     },
-    listStaff: (tenantId) => Promise.resolve(staff.filter((s) => s.tenantId === tenantId)),
+    listStaff: (tenantId) =>
+      Promise.resolve(
+        staff.filter((s) => s.tenantId === tenantId).map((s) => ({ ...s, pending: !s.authUserId })),
+      ),
+    updateStaffRole(tenantId, id, role, restaurantId) {
+      const s = staff.find(
+        (x) => x.tenantId === tenantId && x.id === id && x.role !== 'super_admin',
+      );
+      if (s) {
+        s.role = role;
+        s.restaurantId = restaurantId;
+      }
+      return Promise.resolve(Boolean(s));
+    },
     inviteStaff(i) {
       if (staff.some((s) => s.email === i.email.toLowerCase() && s.tenantId === i.tenantId))
         return Promise.reject(new Error('doublon'));

@@ -1,6 +1,11 @@
 import type { LoyaltyProvider } from '@splash360/api-loyalty';
 import { MenuUnavailableError, type MenuCache } from '@splash360/api-menu';
-import { normalizePromoCode, validatePromoDefinition } from '@splash360/core';
+import {
+  canAssignRole,
+  normalizePromoCode,
+  roleNeedsRestaurant,
+  validatePromoDefinition,
+} from '@splash360/core';
 import {
   createTenantSchema,
   inviteSchema,
@@ -11,6 +16,7 @@ import {
   type AdminPromoDto,
   refundRequestSchema,
   settingsSchema,
+  staffUpdateSchema,
   statusChangeSchema,
   themeUpdateSchema,
   updateTenantSchema,
@@ -88,9 +94,6 @@ async function body<T extends z.ZodType>(c: C, schema: T): Promise<z.infer<T> | 
   return parsed.success ? parsed.data : null;
 }
 
-const STAFF = ['super_admin', 'tenant_admin', 'staff'] as const;
-const ADMINS = ['super_admin', 'tenant_admin'] as const;
-
 /** Routes du back-office (section 6, ADR 0005). Chaque action sensible est journalisée. */
 export function adminRoutes(deps: AdminRoutesDeps) {
   const app = new Hono<AdminEnv>();
@@ -146,12 +149,11 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   // ——— Enseignes (super-administrateur Splash360) ———
   app.get(
     '/tenants',
-    async (c) =>
-      allow(c, ['super_admin'], false) ?? c.json({ tenants: await deps.admin.listTenants() }),
+    async (c) => allow(c, 'platform', false) ?? c.json({ tenants: await deps.admin.listTenants() }),
   );
 
   app.post('/tenants', async (c) => {
-    const denied = allow(c, ['super_admin'], false);
+    const denied = allow(c, 'platform', false);
     if (denied) return denied;
     const input = await body(c, createTenantSchema);
     if (!input) return apiError(c, 'invalid_request', 'Enseigne invalide');
@@ -171,7 +173,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.patch('/tenants/:id', async (c) => {
-    const denied = allow(c, ['super_admin'], false);
+    const denied = allow(c, 'platform', false);
     if (denied) return denied;
     const input = await body(c, updateTenantSchema);
     if (!input) return apiError(c, 'invalid_request', 'Modification invalide');
@@ -188,7 +190,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.delete('/tenants/:id', async (c) => {
-    const denied = allow(c, ['super_admin'], false);
+    const denied = allow(c, 'platform', false);
     if (denied) return denied;
     const id = c.req.param('id');
     const result = await deps.admin.deleteTenant(id);
@@ -207,7 +209,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
 
   // ——— Restaurants ———
   app.get('/restaurants', async (c) => {
-    const denied = allow(c, STAFF);
+    const denied = allow(c, 'orders');
     if (denied) return denied;
     const scope = restaurantScope(ctx(c));
     const list = (await deps.restaurants.listByTenant(tenantId(c))).filter(
@@ -226,7 +228,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/restaurants/:id/pause', async (c) => {
-    const denied = allow(c, STAFF);
+    const denied = allow(c, 'menu.pause');
     if (denied) return denied;
     const input = await body(c, z.object({ paused: z.boolean() }));
     const restaurant = await restaurantFor(c, c.req.param('id'));
@@ -241,7 +243,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/restaurants/:id/stripe/onboarding', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'payments');
     if (denied) return denied;
     if (!deps.gateway) return apiError(c, 'payments_unavailable', 'Stripe non configuré');
     const restaurant = await restaurantFor(c, c.req.param('id'));
@@ -267,7 +269,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
 
   // ——— Commandes ———
   app.get('/orders', async (c) => {
-    const denied = allow(c, STAFF);
+    const denied = allow(c, 'orders');
     if (denied) return denied;
     const statuses = c.req.query('status')?.split(',').filter(Boolean);
     const since = c.req.query('since');
@@ -283,7 +285,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.get('/orders/:id', async (c) => {
-    const denied = allow(c, STAFF);
+    const denied = allow(c, 'orders');
     if (denied) return denied;
     const d = await deps.orders.getOrderDetail(tenantId(c), c.req.param('id'));
     const scope = restaurantScope(ctx(c));
@@ -314,7 +316,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/orders/:id/status', async (c) => {
-    const denied = allow(c, STAFF);
+    const denied = allow(c, 'orders');
     if (denied) return denied;
     const input = await body(c, statusChangeSchema);
     if (!input) return apiError(c, 'invalid_request', 'Statut invalide');
@@ -335,7 +337,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/orders/:id/refund', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'orders.refund');
     if (denied) return denied;
     const input = await body(c, refundRequestSchema);
     if (!input) return apiError(c, 'invalid_request', 'Montant invalide');
@@ -366,13 +368,13 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.get('/alerts', async (c) => {
-    const denied = allow(c, STAFF);
+    const denied = allow(c, 'orders');
     if (denied) return denied;
     return c.json({ alerts: await deps.operations.listFailedDispatches(tenantId(c)) });
   });
 
   app.post('/orders/:id/dispatch-retry', async (c) => {
-    const denied = allow(c, STAFF);
+    const denied = allow(c, 'orders');
     if (denied) return denied;
     if (!(await deps.operations.retryDispatch(tenantId(c), c.req.param('id'))))
       return apiError(c, 'not_found', 'Aucun envoi en échec');
@@ -383,11 +385,11 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   // ——— Design et textes légaux ———
   app.get(
     '/theme',
-    async (c) => allow(c, ADMINS) ?? c.json(await deps.admin.getTheme(tenantId(c))),
+    async (c) => allow(c, 'design') ?? c.json(await deps.admin.getTheme(tenantId(c))),
   );
 
   app.put('/theme', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'design');
     if (denied) return denied;
     const input = await body(c, themeUpdateSchema);
     if (!input) return apiError(c, 'invalid_request', 'Design invalide');
@@ -407,7 +409,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   };
 
   app.get('/theme/draft', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'design');
     if (denied) return denied;
     const draft = await draftTheme(c);
     const state: ThemeDraftState = {
@@ -419,7 +421,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.put('/theme/draft', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'design');
     if (denied) return denied;
     const input = await body(c, themeUpdateSchema);
     if (!input) return apiError(c, 'invalid_request', 'Design invalide');
@@ -428,7 +430,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/theme/discard', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'design');
     if (denied) return denied;
     await deps.admin.setThemeDraft(tenantId(c), null);
     await audit(c, 'theme.discard', null);
@@ -436,7 +438,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/theme/publish', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'design');
     if (denied) return denied;
     const draft = await draftTheme(c);
     if (!draft) return apiError(c, 'conflict', 'Aucun brouillon à publier');
@@ -447,7 +449,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/theme/preview-link', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'design');
     if (denied) return denied;
     if (!deps.previewSecret) return apiError(c, 'not_found', 'Aperçu indisponible');
     const now = deps.now?.() ?? new Date();
@@ -456,7 +458,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/theme/logo', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'design');
     if (denied) return denied;
     if (!deps.assets) return apiError(c, 'storage_unavailable', 'Téléversement indisponible');
     const declared = Number(c.req.header('Content-Length') ?? '0');
@@ -487,11 +489,11 @@ export function adminRoutes(deps: AdminRoutesDeps) {
 
   app.get(
     '/legal',
-    async (c) => allow(c, ADMINS) ?? c.json({ text: await deps.admin.getLegalText(tenantId(c)) }),
+    async (c) => allow(c, 'design') ?? c.json({ text: await deps.admin.getLegalText(tenantId(c)) }),
   );
 
   app.put('/legal', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'design');
     if (denied) return denied;
     const input = await body(c, legalSchema);
     if (!input) return apiError(c, 'invalid_request', 'Texte invalide');
@@ -502,7 +504,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
 
   // ——— Réglages de commande ———
   app.get('/restaurants/:id/settings', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'restaurants.settings');
     if (denied) return denied;
     const restaurant = await restaurantFor(c, c.req.param('id'));
     const settings = restaurant ? await deps.admin.getSettings(tenantId(c), restaurant.id) : null;
@@ -510,7 +512,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.put('/restaurants/:id/settings', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'restaurants.settings');
     if (denied) return denied;
     const input = await body(c, settingsSchema);
     if (!input) return apiError(c, 'invalid_request', 'Réglages invalides');
@@ -523,7 +525,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
 
   // ——— Carte (lecture seule, réglages locaux) ———
   app.get('/restaurants/:id/menu', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'menu.pause');
     if (denied) return denied;
     const restaurant = await restaurantFor(c, c.req.param('id'));
     if (!restaurant) return apiError(c, 'not_found', 'Restaurant inconnu');
@@ -554,7 +556,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/restaurants/:id/menu/refresh', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'menu.manage');
     if (denied) return denied;
     const restaurant = await restaurantFor(c, c.req.param('id'));
     if (!restaurant) return apiError(c, 'not_found', 'Restaurant inconnu');
@@ -563,7 +565,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.put('/restaurants/:id/menu/overrides', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'menu.pause');
     if (denied) return denied;
     const input = await body(c, z.object({ overrides: z.array(menuOverrideSchema).max(500) }));
     const restaurant = await restaurantFor(c, c.req.param('id'));
@@ -576,7 +578,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
 
   // ——— Tableau de bord ———
   app.get('/dashboard', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'dashboard');
     if (denied) return denied;
     const q = z
       .object({ from: z.iso.date(), to: z.iso.date(), restaurantId: z.uuid().optional() })
@@ -605,14 +607,14 @@ export function adminRoutes(deps: AdminRoutesDeps) {
 
   // ——— Clients finaux (RGPD) ———
   app.get('/customers', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'customers');
     if (denied) return denied;
     const search = c.req.query('q')?.trim().slice(0, 100) || null;
     return c.json({ customers: await deps.admin.listCustomers(tenantId(c), search, 200) });
   });
 
   app.get('/customers/export', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'customers');
     if (denied) return denied;
     const rows = await deps.admin.listCustomers(tenantId(c), null, 100_000);
     const esc = (v: string | number | boolean | null) => {
@@ -644,7 +646,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.delete('/customers/:id', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'customers');
     if (denied) return denied;
     if (!(await deps.admin.anonymizeCustomer(tenantId(c), c.req.param('id'))))
       return apiError(c, 'not_found', 'Client inconnu');
@@ -654,7 +656,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
 
   // ——— Codes promo (lot 11, ADR 0015) ———
   app.get('/promos', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'promos');
     if (denied) return denied;
     if (!deps.promos) return apiError(c, 'not_found', 'Codes promo indisponibles');
     const promos: AdminPromoDto[] = (await deps.promos.listPromos(tenantId(c))).map((p) => ({
@@ -674,7 +676,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/promos', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'promos');
     if (denied) return denied;
     if (!deps.promos) return apiError(c, 'not_found', 'Codes promo indisponibles');
     const input = await body(c, promoInputSchema);
@@ -699,7 +701,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.patch('/promos/:id', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'promos');
     if (denied) return denied;
     if (!deps.promos) return apiError(c, 'not_found', 'Codes promo indisponibles');
     const input = await body(c, z.object({ active: z.boolean() }));
@@ -713,14 +715,16 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   // ——— Équipe et journal ———
   app.get(
     '/staff',
-    async (c) => allow(c, ADMINS) ?? c.json({ staff: await deps.admin.listStaff(tenantId(c)) }),
+    async (c) => allow(c, 'team') ?? c.json({ staff: await deps.admin.listStaff(tenantId(c)) }),
   );
 
   app.post('/staff', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'team');
     if (denied) return denied;
     const input = await body(c, inviteSchema);
     if (!input) return apiError(c, 'invalid_request', 'Invitation invalide');
+    if (!canAssignRole(ctx(c).staff.role, input.role))
+      return apiError(c, 'forbidden', 'Droits insuffisants');
     if (input.restaurantId && !(await deps.restaurants.findById(tenantId(c), input.restaurantId))) {
       return apiError(c, 'not_found', 'Restaurant inconnu');
     }
@@ -735,7 +739,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/staff/:id/invite', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'team');
     if (denied) return denied;
     const member = (await deps.admin.listStaff(tenantId(c))).find(
       (s) => s.id === c.req.param('id'),
@@ -745,20 +749,36 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.patch('/staff/:id', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'team');
     if (denied) return denied;
-    const input = await body(c, z.object({ disabled: z.boolean() }));
+    const input = await body(c, staffUpdateSchema);
     if (!input) return apiError(c, 'invalid_request', 'Modification invalide');
-    if (c.req.param('id') === ctx(c).staff.id)
-      return apiError(c, 'conflict', 'Vous ne pouvez pas désactiver votre propre compte');
-    if (!(await deps.admin.setStaffDisabled(tenantId(c), c.req.param('id'), input.disabled)))
-      return apiError(c, 'not_found', 'Compte inconnu');
-    await audit(c, input.disabled ? 'staff.disable' : 'staff.enable', c.req.param('id'));
+    const id = c.req.param('id');
+    if (id === ctx(c).staff.id)
+      return apiError(c, 'conflict', 'Vous ne pouvez pas modifier votre propre compte');
+    const member = (await deps.admin.listStaff(tenantId(c))).find((m) => m.id === id);
+    if (!member) return apiError(c, 'not_found', 'Compte inconnu');
+    if (input.role !== undefined) {
+      if (!canAssignRole(ctx(c).staff.role, input.role))
+        return apiError(c, 'forbidden', 'Droits insuffisants');
+      // Propriétaire : toute l'enseigne. Gérant : restaurant facultatif. Équipier : obligatoire.
+      const restaurantId = input.role === 'tenant_admin' ? null : (input.restaurantId ?? null);
+      if (roleNeedsRestaurant(input.role) && !restaurantId)
+        return apiError(c, 'invalid_request', 'Un équipier est rattaché à un restaurant');
+      if (restaurantId && !(await deps.restaurants.findById(tenantId(c), restaurantId)))
+        return apiError(c, 'not_found', 'Restaurant inconnu');
+      await deps.admin.updateStaffRole(tenantId(c), id, input.role, restaurantId);
+      await audit(c, 'staff.role', member.email, { from: member.role, to: input.role });
+    }
+    if (input.disabled !== undefined) {
+      await deps.admin.setStaffDisabled(tenantId(c), id, input.disabled);
+      await audit(c, input.disabled ? 'staff.disable' : 'staff.enable', id);
+    }
     return c.body(null, 204);
   });
 
   app.delete('/staff/:id', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'team');
     if (denied) return denied;
     if (c.req.param('id') === ctx(c).staff.id)
       return apiError(c, 'conflict', 'Vous ne pouvez pas supprimer votre propre compte');
@@ -777,7 +797,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   }
 
   app.get('/loyalty/members', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'loyalty');
     if (denied) return denied;
     const cl = await club(c);
     if (!cl) return apiError(c, 'not_found', 'Pas de club fidélité');
@@ -797,7 +817,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.post('/loyalty/members/:id/adjust', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'loyalty');
     if (denied) return denied;
     const input = await body(c, pointsAdjustSchema);
     if (!input) return apiError(c, 'invalid_request', 'Correction invalide');
@@ -821,7 +841,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   });
 
   app.delete('/loyalty/members/:id', async (c) => {
-    const denied = allow(c, ADMINS);
+    const denied = allow(c, 'loyalty');
     if (denied) return denied;
     const cl = await club(c);
     if (!cl) return apiError(c, 'not_found', 'Pas de club fidélité');
@@ -834,7 +854,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   app.get(
     '/audit',
     async (c) =>
-      allow(c, ADMINS) ?? c.json({ entries: await deps.admin.listAudit(tenantId(c), 200) }),
+      allow(c, 'audit') ?? c.json({ entries: await deps.admin.listAudit(tenantId(c), 200) }),
   );
 
   return app;

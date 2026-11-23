@@ -1,7 +1,8 @@
+import type { StaffRole, TenantRole } from '@splash360/core';
 import type { Queryable, Sql } from './client';
 import { toThemeStyle, type ThemeStyle, type ThemeStyleRow } from './tenants';
 
-export type StaffRole = 'super_admin' | 'tenant_admin' | 'staff';
+export type { StaffRole } from '@splash360/core';
 
 export interface StaffUser {
   readonly id: string;
@@ -10,6 +11,12 @@ export interface StaffUser {
   readonly role: StaffRole;
   readonly tenantId: string | null;
   readonly restaurantId: string | null;
+}
+
+/** Compte vu de la page Équipe : désactivé, ou invité sans s'être encore connecté. */
+export interface TeamMember extends StaffUser {
+  readonly disabled: boolean;
+  readonly pending: boolean;
 }
 
 export interface AuditEntry {
@@ -143,12 +150,19 @@ export interface ThemeRecord {
 export interface AdminStore {
   /** Retrouve le compte d'un utilisateur connecté ; le rattache à son identifiant Auth à la première connexion. */
   resolveStaff(authUserId: string, email: string): Promise<StaffUser[]>;
-  listStaff(tenantId: string): Promise<StaffUser[]>;
+  listStaff(tenantId: string): Promise<TeamMember[]>;
+  /** Change le rôle (et le restaurant) d'un compte de l'enseigne ; jamais un super-administrateur. */
+  updateStaffRole(
+    tenantId: string,
+    staffId: string,
+    role: TenantRole,
+    restaurantId: string | null,
+  ): Promise<boolean>;
   inviteStaff(input: {
     tenantId: string;
     email: string;
     name: string | null;
-    role: 'tenant_admin' | 'staff';
+    role: TenantRole;
     restaurantId: string | null;
   }): Promise<StaffUser>;
   setStaffDisabled(tenantId: string, staffId: string, disabled: boolean): Promise<boolean>;
@@ -250,10 +264,20 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
     },
 
     async listStaff(tenantId) {
-      const rows = await sql<Parameters<typeof toStaff>[0][]>`
-        select id, email, name, role, tenant_id, restaurant_id from public.staff_users
+      const rows = await sql<
+        (Parameters<typeof toStaff>[0] & { disabled: boolean; pending: boolean })[]
+      >`
+        select id, email, name, role, tenant_id, restaurant_id, disabled, auth_user_id is null as pending
+        from public.staff_users
         where tenant_id = ${tenantId} order by role, email`;
-      return rows.map(toStaff);
+      return rows.map((r) => ({ ...toStaff(r), disabled: r.disabled, pending: r.pending }));
+    },
+
+    async updateStaffRole(tenantId, staffId, role, restaurantId) {
+      const r =
+        await sql`update public.staff_users set role = ${role}, restaurant_id = ${restaurantId}
+                          where tenant_id = ${tenantId} and id = ${staffId} and role <> 'super_admin'`;
+      return r.count === 1;
     },
 
     async inviteStaff(input) {

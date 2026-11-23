@@ -6,7 +6,9 @@ import { subdomainSchema, tenantThemeSchema } from './tenant';
 const cents = z.number().int().nonnegative();
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
-export const staffRoleSchema = z.enum(['super_admin', 'tenant_admin', 'staff']);
+export const staffRoleSchema = z.enum(['super_admin', 'tenant_admin', 'manager', 'staff']);
+/** Rôles qu'une enseigne attribue (ADR 0017) : propriétaire, gérant, équipier. */
+export const tenantRoleSchema = z.enum(['tenant_admin', 'manager', 'staff']);
 
 export const meSchema = z.object({
   email: z.string(),
@@ -189,7 +191,23 @@ export const staffMemberSchema = z.object({
   name: z.string().nullable(),
   role: staffRoleSchema,
   restaurantId: z.uuid().nullable(),
+  disabled: z.boolean(),
+  /** Invité, pas encore connecté. */
+  pending: z.boolean(),
 });
+
+/** Modification d'un compte d'équipe : activation, rôle et restaurant. */
+export const staffUpdateSchema = z
+  .object({
+    disabled: z.boolean().optional(),
+    role: tenantRoleSchema.optional(),
+    restaurantId: z.uuid().nullable().optional(),
+  })
+  .refine((u) => u.disabled !== undefined || u.role !== undefined, 'Rien à modifier')
+  .refine(
+    (u) => u.role !== 'staff' || (u.restaurantId !== undefined && u.restaurantId !== null),
+    'Un équipier est rattaché à un restaurant',
+  );
 
 /** Réponse d'une invitation : false si l'e-mail n'a pas pu partir (compte créé quand même). */
 export const invitationSchema = z.object({ invitationSent: z.boolean() });
@@ -198,7 +216,7 @@ export const inviteSchema = z
   .object({
     email: z.email().max(200),
     name: z.string().max(100).nullable(),
-    role: z.enum(['tenant_admin', 'staff']),
+    role: tenantRoleSchema,
     restaurantId: z.uuid().nullable(),
   })
   .refine(
@@ -270,6 +288,7 @@ export type AdminMenu = z.infer<typeof adminMenuSchema>;
 export type Dashboard = z.infer<typeof dashboardSchema>;
 export type CustomerRowDto = z.infer<typeof customerRowSchema>;
 export type StaffMember = z.infer<typeof staffMemberSchema>;
+export type StaffUpdate = z.infer<typeof staffUpdateSchema>;
 export type TenantSummaryDto = z.infer<typeof tenantSummarySchema>;
 export type AlertDto = z.infer<typeof alertSchema>;
 export type ClubMemberDto = z.infer<typeof clubMemberSchema>;

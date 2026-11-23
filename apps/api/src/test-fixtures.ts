@@ -111,6 +111,7 @@ export const STAFF_IDS = {
   bellaAdmin: '20000000-0000-4000-8000-000000000002',
   bellaStaff: '20000000-0000-4000-8000-000000000003',
   greenAdmin: '20000000-0000-4000-8000-000000000004',
+  bellaManager: '20000000-0000-4000-8000-000000000005',
 };
 
 /** Jeton de session Supabase signé pour les tests. */
@@ -183,6 +184,14 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
         email: 'gerant@bella.test',
         name: 'Gérant',
         role: 'tenant_admin',
+        tenantId: BELLA_ID,
+        restaurantId: null,
+      },
+      {
+        id: STAFF_IDS.bellaManager,
+        email: 'manager@bella.test',
+        name: 'Gérant (rôle manager)',
+        role: 'manager',
         tenantId: BELLA_ID,
         restaurantId: null,
       },

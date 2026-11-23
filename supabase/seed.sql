@@ -81,6 +81,9 @@ where r.splash360_id = 'S360-R-CHICKEN-1'
 insert into public.staff_users (tenant_id, email, name, role)
 select '00000000-0000-4000-8000-000000000004', 'gerant@chickenstreet.test', 'Gérant Chicken Street', 'tenant_admin'
 where not exists (select 1 from public.staff_users where email = 'gerant@chickenstreet.test');
+insert into public.staff_users (tenant_id, email, name, role)
+select '00000000-0000-4000-8000-000000000004', 'proprietaire@chickenstreet.test', 'Propriétaire Chicken Street', 'tenant_admin'
+where not exists (select 1 from public.staff_users where email = 'proprietaire@chickenstreet.test');
 
 -- Bills Burger (démonstration) : design aux couleurs de bills-burger.fr (rouge #CF2028, damier,
 -- titres en majuscules), carte reprise de son site, restaurant et prix fictifs.
@@ -115,6 +118,15 @@ from public.restaurants r, (values ('Moins de 2 km', 2000, 199), ('Moins de 4 km
 where r.splash360_id = 'S360-R-BILLS-1'
   and not exists (select 1 from public.delivery_zones dz where dz.restaurant_id = r.id);
 
+-- Comptes de test du back-office (lot 13, ADR 0017) : un compte par rôle.
 insert into public.staff_users (tenant_id, email, name, role)
-select '00000000-0000-4000-8000-000000000005', 'gerant@billsburger.test', 'Gérant Bills Burger', 'tenant_admin'
+select '00000000-0000-4000-8000-000000000005', 'proprietaire@billsburger.test', 'Camille (propriétaire)', 'tenant_admin'
+where not exists (select 1 from public.staff_users where email = 'proprietaire@billsburger.test');
+insert into public.staff_users (tenant_id, email, name, role)
+select '00000000-0000-4000-8000-000000000005', 'gerant@billsburger.test', 'Yanis (gérant)', 'manager'
 where not exists (select 1 from public.staff_users where email = 'gerant@billsburger.test');
+insert into public.staff_users (tenant_id, restaurant_id, email, name, role)
+select '00000000-0000-4000-8000-000000000005', r.id, 'equipier@billsburger.test', 'Inès (équipière)', 'staff'
+from public.restaurants r where r.tenant_id = '00000000-0000-4000-8000-000000000005'
+  and not exists (select 1 from public.staff_users where email = 'equipier@billsburger.test')
+order by r.created_at limit 1;

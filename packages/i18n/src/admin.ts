@@ -236,7 +236,8 @@ export const adminFr = {
     role: 'Rôle',
     roles: {
       super_admin: 'Super-administrateur',
-      tenant_admin: 'Administrateur',
+      tenant_admin: 'Propriétaire',
+      manager: 'Gérant',
       staff: 'Équipier',
     },
     disable: 'Désactiver',
