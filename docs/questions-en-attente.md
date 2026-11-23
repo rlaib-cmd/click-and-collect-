@@ -19,6 +19,7 @@ Tenu à jour pendant le développement autonome. Chaque point indique ce qu'il b
 | 13 | ~~Projet Supabase de recette~~ — **fait** (`docs/environnement-recette.md`) ; reste : production, Supabase Auth (premier super-administrateur) et activation de Supabase Auth pour le back-office | Lot 6 (connexion réelle) | Connexion de développement locale |
 | 14 | Nom de domaine des enseignes (`<enseigne>.<domaine>`) et hébergeurs retenus | Lot 7 | Recommandations dans `mise-en-production.md` |
 | 15 | Enseigne pilote, ses comptes Apple Developer / Google Play, icône et écran de démarrage | Lot 7 | Marques de démonstration `bella`, `greenbowl` |
+| 16 | Réponses de Splash360 sur l'API Click & Collect reçue le 23/11 (restaurant par identifiant, caisse de test, statuts, heure de retrait, annulation, fidélité…) — liste dans `docs/api-splash360/analyse-api-click-collect.md` | Branchement réel carte et caisse | Carte et caisse de démonstration |
 
 ## API fidélité Splash360 (lot 8)
 
