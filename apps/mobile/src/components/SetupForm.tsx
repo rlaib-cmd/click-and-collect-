@@ -8,6 +8,7 @@ import { formatDay, formatTime, localDate } from '@/lib/dates';
 import { formatPrice } from '@/lib/format';
 import { useTenant } from '@/tenant/TenantProvider';
 import { Chip } from './Chip';
+import { SlotPicker } from './SlotPicker';
 
 /** Mode, adresse, jour et heure (section 4, écran Accueil). */
 export function SetupForm({
@@ -108,19 +109,13 @@ export function SetupForm({
               />
             ))}
           </ScrollView>
-          <View style={styles.slots}>
-            {slots.data?.slots.length === 0 ? (
-              <Text style={{ color: palette.textMuted }}>{messages.setup.noSlots}</Text>
-            ) : null}
-            {slots.data?.slots.map((slot) => (
-              <Chip
-                key={slot.at}
-                label={slot.label}
-                selected={setup.time.kind === 'scheduled' && setup.time.at === slot.at}
-                onPress={() => onChange({ time: { kind: 'scheduled', at: slot.at } })}
-              />
-            ))}
-          </View>
+          <SlotPicker
+            slots={slots.data?.slots ?? []}
+            loading={slots.isPending}
+            dayLabel={day ? formatDay(day, now, tz, messages.setup) : ''}
+            selectedAt={setup.time.kind === 'scheduled' ? setup.time.at : null}
+            onSelect={(at) => onChange({ time: { kind: 'scheduled', at } })}
+          />
         </>
       ) : null}
     </View>
@@ -218,7 +213,6 @@ function AddressField({
 const styles = StyleSheet.create({
   form: { gap: 12, alignSelf: 'stretch' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  slots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   label: { fontSize: 17, fontWeight: '700', marginTop: 4 },
   address: { gap: 6 },
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, minHeight: 48, fontSize: 16 },
