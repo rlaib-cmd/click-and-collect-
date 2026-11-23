@@ -8,3 +8,4 @@ export * from './tenants';
 export * from './loyalty-demo';
 export * from './otp';
 export * from './promos';
+export * from './pos';

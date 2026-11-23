@@ -520,12 +520,19 @@ export interface OrderDetail {
   };
   readonly deliveryAddress: DeliveryAddressRecord | null;
   readonly lines: readonly {
+    /** Identifiant Splash360 du produit (`order_items.splash360_product_id`). */
+    readonly productId: string;
     readonly name: string;
     readonly quantity: number;
     readonly unitPriceCents: number;
     readonly totalCents: number;
     readonly note: string | null;
-    readonly options: readonly { readonly name: string; readonly priceCents: number }[];
+    readonly options: readonly {
+      readonly groupId: string;
+      readonly optionId: string;
+      readonly name: string;
+      readonly priceCents: number;
+    }[];
   }[];
   readonly events: readonly {
     readonly status: string;
@@ -590,6 +597,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
         sql<
           {
             id: string;
+            splash360_product_id: string;
             name: string;
             quantity: number;
             unit_price_cents: number;
@@ -597,10 +605,21 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
             note: string | null;
           }[]
         >`
-          select id, name, quantity, unit_price_cents, total_cents, note from public.order_items
+          select id, splash360_product_id, name, quantity, unit_price_cents, total_cents, note
+          from public.order_items
           where tenant_id = ${tenantId} and order_id = ${orderId} order by position`,
-        sql<{ order_item_id: string; name: string; price_cents: number }[]>`
-          select oio.order_item_id, oio.name, oio.price_cents from public.order_item_options oio
+        sql<
+          {
+            order_item_id: string;
+            splash360_group_id: string;
+            splash360_option_id: string;
+            name: string;
+            price_cents: number;
+          }[]
+        >`
+          select oio.order_item_id, oio.splash360_group_id, oio.splash360_option_id, oio.name,
+                 oio.price_cents
+          from public.order_item_options oio
           join public.order_items oi on oi.id = oio.order_item_id
           where oi.tenant_id = ${tenantId} and oi.order_id = ${orderId} order by oio.id`,
         sql<{ status: string; actor: string; created_at: Date }[]>`
@@ -638,6 +657,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
         customer: { name: o.customer_name, email: o.customer_email, phone: o.customer_phone },
         deliveryAddress: o.delivery_address,
         lines: items.map((i) => ({
+          productId: i.splash360_product_id,
           name: i.name,
           quantity: i.quantity,
           unitPriceCents: i.unit_price_cents,
@@ -645,7 +665,12 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           note: i.note,
           options: options
             .filter((x) => x.order_item_id === i.id)
-            .map((x) => ({ name: x.name, priceCents: x.price_cents })),
+            .map((x) => ({
+              groupId: x.splash360_group_id,
+              optionId: x.splash360_option_id,
+              name: x.name,
+              priceCents: x.price_cents,
+            })),
         })),
         events: events.map((e) => ({
           status: e.status,
