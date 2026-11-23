@@ -15,7 +15,17 @@ export const meSchema = z.object({
   name: z.string().nullable(),
   role: staffRoleSchema,
   /** Enseigne courante (choisie par le super-administrateur, imposée sinon). */
-  tenant: z.object({ id: z.uuid(), name: z.string(), subdomain: z.string() }).nullable(),
+  tenant: z
+    .object({
+      id: z.uuid(),
+      name: z.string(),
+      subdomain: z.string(),
+      /** Tuile de marque du studio (version publiée). */
+      logoUrl: z.string().nullable().default(null),
+      primaryColor: z.string().default('#3730A3'),
+      status: z.enum(['active', 'suspended']).default('active'),
+    })
+    .nullable(),
   restaurantId: z.uuid().nullable(),
 });
 
@@ -233,6 +243,10 @@ export const tenantSummarySchema = z.object({
   applicationFeeBps: z.number().int(),
   applicationFeeFixedCents: z.number().int(),
   restaurants: z.number().int(),
+  hasDraft: z.boolean().default(false),
+  ownerActive: z.boolean().default(false),
+  primaryColor: z.string().nullable().default(null),
+  logoUrl: z.string().nullable().default(null),
 });
 
 export const createTenantSchema = z.object({

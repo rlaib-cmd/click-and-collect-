@@ -259,6 +259,12 @@ export function createMemoryAdminStore(input: {
           applicationFeeBps: t.applicationFee.bps,
           applicationFeeFixedCents: t.applicationFee.fixedCents,
           restaurants: 1,
+          hasDraft: false,
+          ownerActive: staff.some(
+            (s) => s.tenantId === t.id && s.role === 'tenant_admin' && Boolean(s.authUserId),
+          ),
+          primaryColor: t.theme?.primaryColor ?? null,
+          logoUrl: t.theme?.logoUrl ?? null,
         })),
       ),
     createTenant(i) {

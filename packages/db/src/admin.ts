@@ -99,6 +99,11 @@ export interface TenantSummary {
   readonly applicationFeeBps: number;
   readonly applicationFeeFixedCents: number;
   readonly restaurants: number;
+  /** Console Splash360 (lot 13) : brouillon de design en attente, propriétaire déjà connecté. */
+  readonly hasDraft: boolean;
+  readonly ownerActive: boolean;
+  readonly primaryColor: string | null;
+  readonly logoUrl: string | null;
 }
 
 /** Statuts comptés dans le chiffre d'affaires : payées et au-delà (remboursements déduits). */
@@ -660,11 +665,20 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
           application_fee_bps: number;
           application_fee_fixed_cents: number;
           restaurants: number;
+          has_draft: boolean;
+          owner_active: boolean;
+          primary_color: string | null;
+          logo_url: string | null;
         }[]
       >`
         select t.id, t.name, t.subdomain, t.splash360_id, t.status, t.application_fee_bps, t.application_fee_fixed_cents,
-               (select count(*)::int from public.restaurants r where r.tenant_id = t.id) as restaurants
-        from public.tenants t order by t.name`;
+               (select count(*)::int from public.restaurants r where r.tenant_id = t.id) as restaurants,
+               coalesce(th.draft is not null, false) as has_draft,
+               exists (select 1 from public.staff_users s where s.tenant_id = t.id and s.role = 'tenant_admin'
+                       and s.auth_user_id is not null and not s.disabled) as owner_active,
+               th.primary_color, th.logo_url
+        from public.tenants t left join public.tenant_theme th on th.tenant_id = t.id
+        order by t.name`;
       return rows.map((r) => ({
         id: r.id,
         name: r.name,
@@ -674,6 +688,10 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
         applicationFeeBps: r.application_fee_bps,
         applicationFeeFixedCents: r.application_fee_fixed_cents,
         restaurants: r.restaurants,
+        hasDraft: r.has_draft,
+        ownerActive: r.owner_active,
+        primaryColor: r.primary_color,
+        logoUrl: r.logo_url,
       }));
     },
 

@@ -140,7 +140,16 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       email: staff.email,
       name: staff.name,
       role: staff.role,
-      tenant: tenant ? { id: tenant.id, name: tenant.name, subdomain: tenant.subdomain } : null,
+      tenant: tenant
+        ? {
+            id: tenant.id,
+            name: tenant.name,
+            subdomain: tenant.subdomain,
+            logoUrl: tenant.theme?.logoUrl ?? null,
+            primaryColor: tenant.theme?.primaryColor ?? '#3730A3',
+            status: tenant.status,
+          }
+        : null,
       restaurantId: staff.restaurantId,
     };
     return c.json(me);
