@@ -15,11 +15,13 @@
   },
   "devDependencies": {
     "@splash360/config": "workspace:*",
+    "@types/node": "^22",
     "eslint": "^9.39.5",
     "typescript": "~6.0.3",
     "vitest": "^5.1.1"
   },
   "dependencies": {
-    "@splash360/core": "workspace:*"
+    "@splash360/core": "workspace:*",
+    "zod": "^4.6.7"
   }
 }
