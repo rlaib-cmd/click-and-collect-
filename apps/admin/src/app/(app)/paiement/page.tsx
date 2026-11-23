@@ -101,7 +101,7 @@ export default function PaymentsPage() {
       <h2>{t.pos.title}</h2>
       <p className="muted">{t.pos.help}</p>
       {data && !data.splash360Configured ? (
-        <p className="banner" role="status">
+        <p className="banner info" role="status">
           {t.pos.notConfigured}
         </p>
       ) : null}
@@ -109,7 +109,7 @@ export default function PaymentsPage() {
         <thead>
           <tr>
             <th>{messages.admin.common.restaurant}</th>
-            <th>{t.status}</th>
+            <th>{t.pos.status}</th>
             <th />
           </tr>
         </thead>

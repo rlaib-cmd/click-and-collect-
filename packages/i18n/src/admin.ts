@@ -427,6 +427,7 @@ export const adminFr = {
     /** Caisse et carte Splash360 (lot 14, ADR 0018). */
     pos: {
       title: 'Caisse Splash360',
+      status: 'Carte et caisse',
       help: 'Branché : la carte vient de Splash360 et chaque commande passe par la caisse du restaurant avant le paiement. Débranché : carte et caisse de démonstration.',
       notConfigured:
         'Identifiants Splash360 absents du serveur : seule la démonstration est possible.',
