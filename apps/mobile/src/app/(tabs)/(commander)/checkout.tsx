@@ -121,8 +121,19 @@ export default function CheckoutScreen() {
         messages.checkout.issue.other,
     );
   }, [promoRefusal]);
+  // Cadeau seul dans le panier : on le garde de côté et on bloque la commande (sinon il serait payé).
+  const [parkedGift, setParkedGift] = useState<typeof reward>(null);
+  const linesSignature = cart.lines.map((l) => `${l.key}:${l.quantity}`).join(',');
+  useEffect(() => {
+    if (!parkedGift) return;
+    dispatch({ type: 'setReward', reward: parkedGift });
+    setParkedGift(null);
+    setRewardNotice(null);
+    // Seul un changement du panier relance l'essai.
+  }, [linesSignature]);
   useEffect(() => {
     if (!refusal) return;
+    if (refusal === 'reward_needs_paid_items') setParkedGift(reward);
     dispatch({ type: 'setReward', reward: null });
     setRewardNotice(
       (messages.checkout.issue as Record<string, string>)[refusal] ?? messages.checkout.issue.other,
@@ -151,8 +162,9 @@ export default function CheckoutScreen() {
     contact,
     terms,
     needsMember: method === 'on_site' && loyalty.member === null,
+    giftAlone: parkedGift !== null,
   });
-  const canPay = customer.success && terms && methodOk && !place.isPending;
+  const canPay = customer.success && terms && methodOk && parkedGift === null && !place.isPending;
   const placeError = place.error instanceof ApiRequestError ? place.error : null;
 
   const submit = () => {

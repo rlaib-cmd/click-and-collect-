@@ -98,6 +98,7 @@ export const fr = {
     email: 'E-mail (facultatif)',
     emailHint: 'Pour recevoir ta confirmation par e-mail.',
     missing: {
+      gift: 'Ajoute au moins un article payant pour profiter de ton cadeau.',
       name: 'Indique ton nom pour commander.',
       phone: 'Indique un numéro de téléphone valide.',
       email: 'Vérifie ton e-mail, ou laisse-le vide.',

@@ -27,4 +27,9 @@ describe('ce qui manque pour commander', () => {
     expect(firstMissing({ contact: ok, terms: false, needsMember: true })).toBe('member');
     expect(firstMissing({ contact: ok, terms: false, needsMember: false })).toBe('terms');
   });
+  it('bloque un cadeau seul au panier avant tout le reste', () => {
+    expect(firstMissing({ contact: ok, terms: false, needsMember: false, giftAlone: true })).toBe(
+      'gift',
+    );
+  });
 });
