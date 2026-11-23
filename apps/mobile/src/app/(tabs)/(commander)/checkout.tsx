@@ -14,10 +14,12 @@ import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { Chip } from '@/components/Chip';
 import { SetupSummary } from '@/components/SetupSummary';
 import { BackButton, ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
+import { firstMissing } from '@/lib/checkout';
 import { formatPrice } from '@/lib/format';
 import { saveOrder } from '@/orders/storage';
 import { titleStyle } from '@/components/brand';
 import { TAB_BAR_CLEARANCE } from '@/components/layout';
+import { usablePoints } from '@/loyalty/points';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const CONTACT_KEY = 'contact';
@@ -117,6 +119,11 @@ export default function CheckoutScreen() {
   const method = chosenMethod ?? (!payment.online && payment.onSite ? 'on_site' : 'online');
   const methodOk = method === 'online' ? payment.online : payment.onSite && loyalty.member !== null;
   const customer = customerSchema.safeParse({ ...contact, marketingConsent: marketing });
+  const missing = firstMissing({
+    contact,
+    terms,
+    needsMember: method === 'on_site' && loyalty.member === null,
+  });
   const canPay = customer.success && terms && methodOk && !place.isPending;
   const placeError = place.error instanceof ApiRequestError ? place.error : null;
 
@@ -271,6 +278,7 @@ export default function CheckoutScreen() {
             onChange={(email) => setContact({ ...contact, email })}
             autoComplete="email"
             keyboard="email-address"
+            hint={messages.checkout.emailHint}
           />
           <Toggle label={messages.checkout.marketing} value={marketing} onChange={setMarketing} />
           <Toggle label={messages.checkout.terms} value={terms} onChange={setTerms} />
@@ -295,6 +303,14 @@ export default function CheckoutScreen() {
       <View
         style={[styles.footer, { borderColor: palette.border, paddingBottom: TAB_BAR_CLEARANCE }]}
       >
+        {missing ? (
+          <Text
+            style={[styles.missing, { color: palette.textMuted }]}
+            accessibilityLiveRegion="polite"
+          >
+            {messages.checkout.missing[missing]}
+          </Text>
+        ) : null}
         <PrimaryButton
           label={
             method === 'on_site'
@@ -386,8 +402,13 @@ function Rewards({
           {messages.loyalty.points(member.points)}
         </Text>
       </View>
+      {member.reservedPoints > 0 ? (
+        <Text style={{ color: palette.textMuted, fontSize: 13 }}>
+          {messages.loyalty.reserved(member.reservedPoints)}
+        </Text>
+      ) : null}
       {program.rewards.map((r) => {
-        const missing = Math.max(0, r.costPoints - member.points);
+        const missing = Math.max(0, r.costPoints - usablePoints(member));
         const unlocked = missing === 0;
         const present = inCart.has(r.productId);
         const on = selected === r.id;
@@ -491,6 +512,7 @@ function Field(props: {
   onChange: (v: string) => void;
   autoComplete: 'name' | 'tel' | 'email';
   keyboard?: 'phone-pad' | 'email-address';
+  hint?: string;
 }) {
   const { palette } = useTenant();
   return (
@@ -503,8 +525,12 @@ function Field(props: {
         keyboardType={props.keyboard ?? 'default'}
         autoCapitalize={props.autoComplete === 'name' ? 'words' : 'none'}
         accessibilityLabel={props.label}
+        accessibilityHint={props.hint}
         style={[styles.input, { borderColor: palette.border, color: palette.text }]}
       />
+      {props.hint ? (
+        <Text style={{ color: palette.textMuted, fontSize: 12 }}>{props.hint}</Text>
+      ) : null}
     </View>
   );
 }
@@ -557,5 +583,6 @@ const styles = StyleSheet.create({
   toggle: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
   link: { minHeight: 44, justifyContent: 'center' },
   issues: { flex: 1, padding: 24, gap: 12, justifyContent: 'center' },
+  missing: { textAlign: 'center', fontSize: 13, marginBottom: 8 },
   footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
 });

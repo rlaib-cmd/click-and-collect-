@@ -2,6 +2,7 @@ import type { LoyaltyMemberDto } from '@splash360/contracts';
 import { messages } from '@splash360/i18n';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { usablePoints } from '@/loyalty/points';
 import { useTenant } from '@/tenant/TenantProvider';
 import { titleStyle } from './brand';
 import { Icon } from './icons';
@@ -12,7 +13,7 @@ const t = messages.loyalty;
 export function PointsCard({ member }: { member: LoyaltyMemberDto }) {
   const { palette, radii, style } = useTenant();
   const next = member.nextReward;
-  const progress = next ? Math.min(1, member.points / next.costPoints) : 1;
+  const progress = next ? Math.min(1, usablePoints(member) / next.costPoints) : 1;
   return (
     <View style={[styles.card, { backgroundColor: palette.text, borderRadius: radii.card + 6 }]}>
       <View style={styles.cardText}>
@@ -22,6 +23,11 @@ export function PointsCard({ member }: { member: LoyaltyMemberDto }) {
         <Text style={{ color: palette.background, fontWeight: '600', fontSize: 13 }}>
           {next ? t.nextReward(next.missingPoints, next.name) : t.allRewards}
         </Text>
+        {member.reservedPoints > 0 ? (
+          <Text style={{ color: palette.background, opacity: 0.8, fontSize: 12 }}>
+            {t.reserved(member.reservedPoints)}
+          </Text>
+        ) : null}
         <View style={[styles.track, { backgroundColor: palette.textMuted }]}>
           <View
             style={[

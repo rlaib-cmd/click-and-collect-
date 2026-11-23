@@ -6,6 +6,7 @@ import { PointsCard } from '@/components/loyalty';
 import { TenantLogo } from '@/components/TenantLogo';
 import { Loading } from '@/components/ui';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
+import { usablePoints } from '@/loyalty/points';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const t = messages.loyalty;
@@ -55,12 +56,12 @@ export default function RewardsScreen() {
         {member ? <PointsCard member={member} /> : null}
         <View style={styles.list}>
           {program.rewards.map((r) => {
-            const missing = member ? Math.max(0, r.costPoints - member.points) : null;
+            const missing = member ? Math.max(0, r.costPoints - usablePoints(member)) : null;
             // Récompense à portée (ou visiteur) : couleur du club ; sinon tuile sombre et jauge.
             const locked = missing !== null && missing > 0;
             const bg = locked ? palette.text : palette.loyalty;
             const fg = locked ? palette.background : palette.onLoyalty;
-            const progress = member ? Math.min(1, member.points / r.costPoints) : 0;
+            const progress = member ? Math.min(1, usablePoints(member) / r.costPoints) : 0;
             return (
               <View
                 key={r.id}
