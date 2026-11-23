@@ -18,7 +18,6 @@ function ThemedStack() {
           }}
         >
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="r/[restaurantId]/p/[productId]" options={{ presentation: 'modal' }} />
         </Stack>
         <StatusBar style={palette.mode === 'dark' ? 'light' : 'dark'} />
       </CartProvider>

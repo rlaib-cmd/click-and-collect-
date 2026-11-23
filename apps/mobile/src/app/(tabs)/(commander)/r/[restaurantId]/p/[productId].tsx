@@ -19,6 +19,7 @@ import {
   type Selection,
 } from '@/menu/selection';
 import { titleStyle } from '@/components/brand';
+import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { useTenant } from '@/tenant/TenantProvider';
 
 function groupHint(g: OptionGroupDto): string {
@@ -179,7 +180,7 @@ export default function ProductScreen() {
       </ScrollView>
 
       <View
-        style={[styles.footer, { borderColor: palette.border, paddingBottom: 12 + insets.bottom }]}
+        style={[styles.footer, { borderColor: palette.border, paddingBottom: TAB_BAR_CLEARANCE }]}
       >
         <View style={styles.stepper} accessibilityLabel={messages.product.quantity(quantity)}>
           <StepButton

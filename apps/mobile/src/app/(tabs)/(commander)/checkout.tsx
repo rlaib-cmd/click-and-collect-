@@ -17,6 +17,7 @@ import { BackButton, ErrorState, Loading, PrimaryButton, Screen } from '@/compon
 import { formatPrice } from '@/lib/format';
 import { saveOrder } from '@/orders/storage';
 import { titleStyle } from '@/components/brand';
+import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const CONTACT_KEY = 'contact';
@@ -292,7 +293,7 @@ export default function CheckoutScreen() {
         </View>
       </ScrollView>
       <View
-        style={[styles.footer, { borderColor: palette.border, paddingBottom: 12 + insets.bottom }]}
+        style={[styles.footer, { borderColor: palette.border, paddingBottom: TAB_BAR_CLEARANCE }]}
       >
         <PrimaryButton
           label={

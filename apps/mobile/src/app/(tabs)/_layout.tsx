@@ -1,6 +1,7 @@
 import { messages } from '@splash360/i18n';
 import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { TAB_CENTER_RAISE } from '@/components/layout';
 import { Icon, type IconName } from '@/components/icons';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { useTenant } from '@/tenant/TenantProvider';
@@ -8,7 +9,7 @@ import { useTenant } from '@/tenant/TenantProvider';
 const TABS: readonly { name: string; label: string; icon: IconName; loyalty: boolean }[] = [
   { name: 'index', label: messages.tabs.home, icon: 'home', loyalty: false },
   { name: 'avantages', label: messages.tabs.rewards, icon: 'gift', loyalty: true },
-  { name: 'commander', label: messages.tabs.order, icon: 'burger', loyalty: false },
+  { name: '(commander)', label: messages.tabs.order, icon: 'burger', loyalty: false },
   { name: 'carte', label: messages.tabs.card, icon: 'qr', loyalty: true },
   { name: 'compte', label: messages.tabs.account, icon: 'user', loyalty: false },
 ];
@@ -38,7 +39,7 @@ function TabBar({ state, navigateToTab, insets }: BottomTabBarProps) {
         const route = state.routes.find((r) => r.name === tab.name);
         if (!route) return null;
         const selected = current === tab.name;
-        const center = tab.name === 'commander';
+        const center = tab.name === '(commander)';
         const color = selected || center ? palette.accent : palette.textMuted;
         return (
           <Pressable
@@ -100,7 +101,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   tab: { flex: 1, alignItems: 'center', gap: 3, minHeight: 48 },
-  centerTab: { marginTop: -30 },
+  centerTab: { marginTop: -TAB_CENTER_RAISE },
   centerButton: {
     width: 62,
     height: 62,

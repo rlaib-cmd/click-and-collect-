@@ -8,6 +8,7 @@ import { BackButton, ErrorState, Loading, PrimaryButton, Screen } from '@/compon
 import { formatPrice } from '@/lib/format';
 import { displayCart } from '@/menu/display';
 import { titleStyle } from '@/components/brand';
+import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { useTenant } from '@/tenant/TenantProvider';
 
 /** Panier (lot 2 : contenu et quantités ; récapitulatif, frais et minimum au lot 3). */
@@ -105,7 +106,7 @@ export default function CartScreen() {
         ) : null}
       </ScrollView>
       <View
-        style={[styles.footer, { borderColor: palette.border, paddingBottom: 12 + insets.bottom }]}
+        style={[styles.footer, { borderColor: palette.border, paddingBottom: TAB_BAR_CLEARANCE }]}
       >
         <PrimaryButton
           label={messages.cart.checkout}
