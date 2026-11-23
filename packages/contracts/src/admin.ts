@@ -218,7 +218,9 @@ export const updateTenantSchema = z.object({
 export const clubMemberSchema = z.object({
   id: z.string(),
   name: z.string(),
-  email: z.string(),
+  email: z.string().nullable(),
+  /** Mobile (+33…), identifiant principal en caisse (lot 10). */
+  phone: z.string().nullable(),
   points: z.number().int(),
   cardCode: z.string(),
   createdAt: z.string(),

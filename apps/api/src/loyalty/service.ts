@@ -56,6 +56,7 @@ export async function memberView(
   return {
     name: member.name,
     email: member.email,
+    phone: member.phone,
     points: member.points,
     cardCode: member.cardCode,
     nextReward: next

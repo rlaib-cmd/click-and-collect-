@@ -12,6 +12,10 @@ const t = messages.admin.club;
 const membersSchema = z.object({ members: z.array(clubMemberSchema) });
 const pointsSchema = z.object({ points: z.number().int() });
 
+/** « +33612345678 » → « 06 12 34 56 78 ». */
+const formatFrenchPhone = (e164: string) =>
+  /^\+33\d{9}$/.test(e164) ? `0${e164.slice(3).replace(/(\d)(?=(\d{2})+$)/g, '$1 ')}` : e164;
+
 /** Club fidélité de l'enseigne (lot 9) : recherche, correction des points, suppression RGPD. */
 export default function ClubPage() {
   const { auth } = useSession();
@@ -117,6 +121,7 @@ export default function ClubPage() {
         <thead>
           <tr>
             <th>{messages.admin.team.name}</th>
+            <th>{t.phone}</th>
             <th>E-mail</th>
             <th>{t.card}</th>
             <th className="num">{t.points}</th>
@@ -128,7 +133,8 @@ export default function ClubPage() {
           {data?.members.map((m) => (
             <tr key={m.id}>
               <td>{m.name}</td>
-              <td>{m.email}</td>
+              <td>{m.phone ? formatFrenchPhone(m.phone) : '—'}</td>
+              <td>{m.email ?? '—'}</td>
               <td>{m.cardCode}</td>
               <td className="num">{m.points}</td>
               <td>{new Date(m.createdAt).toLocaleDateString('fr-FR')}</td>

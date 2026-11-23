@@ -26,6 +26,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { apiError } from './errors';
 import { jsonLog, requestLogger, type Log } from './http/logging';
 import { rateLimit } from './http/rate-limit';
+import type { OtpDeps } from './loyalty/otp';
 import { settleLoyalty } from './loyalty/settle';
 import { tenantRoutes } from './routes/tenants';
 import { webhookRoutes } from './routes/webhooks';
@@ -70,6 +71,8 @@ export interface AppDeps {
   readonly loyalty?: LoyaltyProvider;
   /** Connexion au club par simple e-mail : données de test uniquement (ADR 0009). */
   readonly loyaltyDemoLogin?: boolean;
+  /** Connexion du client par code SMS ou e-mail (lot 10) ; absent = désactivée. */
+  readonly otp?: OtpDeps;
 }
 
 /**
@@ -112,6 +115,8 @@ export function createApp(deps: AppDeps) {
     '/v1/tenants/:s/restaurants/:r/quote',
     '/v1/tenants/:s/loyalty/join',
     '/v1/tenants/:s/loyalty/login',
+    '/v1/tenants/:s/loyalty/otp/start',
+    '/v1/tenants/:s/loyalty/otp/verify',
   ]) {
     app.on('POST', path, strict);
   }

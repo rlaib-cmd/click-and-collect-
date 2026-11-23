@@ -41,6 +41,23 @@ describe('fidélité de démonstration', () => {
     ).toBe(true);
   });
 
+  it('crée un compte avec le seul téléphone et le retrouve par ce numéro (lot 10)', async () => {
+    const loyalty = createDemoLoyaltyProvider(
+      createMemoryDemoLoyaltyStore(),
+      () => 'abc-def-123-456-789',
+    );
+    const first = await loyalty.join(bills, { name: 'Sam', email: null, phone: '+33600000001' });
+    expect(first).toMatchObject({
+      created: true,
+      member: { email: null, phone: '+33600000001', points: 100 },
+    });
+    expect((await loyalty.findByPhone(bills, '+33600000001'))?.id).toBe(first.member.id);
+    expect(await loyalty.findByPhone(other, '+33600000001')).toBeNull();
+    const again = await loyalty.join(bills, { name: 'X', email: 'x@x.fr', phone: '+33600000001' });
+    expect(again).toMatchObject({ created: false, member: { id: first.member.id } });
+    await expect(loyalty.join(bills, { name: 'Y', email: null, phone: null })).rejects.toThrow();
+  });
+
   it('crédite les points et consomme la récompense une seule fois par commande', async () => {
     const loyalty = createDemoLoyaltyProvider(
       createMemoryDemoLoyaltyStore(),

@@ -17,6 +17,8 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   payments_unavailable: 503,
   order_not_payable: 409,
   internal_error: 500,
+  otp_invalid: 400,
+  otp_expired: 410,
 };
 
 export function apiError(

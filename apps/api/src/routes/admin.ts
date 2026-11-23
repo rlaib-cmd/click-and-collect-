@@ -618,6 +618,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
         id: m.id,
         name: m.name,
         email: m.email,
+        phone: m.phone,
         points: m.points,
         cardCode: m.cardCode,
         createdAt: m.createdAt,

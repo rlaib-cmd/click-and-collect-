@@ -1,5 +1,5 @@
 import { createDemoLoyaltyProvider } from '@splash360/api-loyalty';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { serve } from '@hono/node-server';
 import * as Sentry from '@sentry/node';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
@@ -13,12 +13,14 @@ import {
   createPostgresRestaurantStore,
   createPostgresTenantStore,
   createSql,
+  createPostgresOtpStore,
 } from '@splash360/db';
 import { createSupabaseVerifier } from './admin/auth';
 import { createSupabaseInviter } from './admin/invite';
 import { createApp } from './app';
 import { loadEnv } from './env';
 import { jsonLog } from './http/logging';
+import { createOtpDeps, createSmsSender } from './loyalty/otp';
 import { createBanGeoProvider, createDemoGeoProvider } from './geo';
 import { createNotificationSender } from './notifications/sender';
 import { createStripeGateway } from './payments/gateway';
@@ -55,6 +57,19 @@ const log = (m: string, d?: Record<string, unknown>) => jsonLog('warn', m, d);
 // En attendant la documentation de la caisse Splash360 : caisse de démonstration.
 const pos = createDemoPosGateway((m) => jsonLog('info', m));
 
+const notifier = createNotificationSender({
+  expoAccessToken: env.EXPO_ACCESS_TOKEN,
+  brevo:
+    env.BREVO_API_KEY && env.EMAIL_SENDER
+      ? {
+          apiKey: env.BREVO_API_KEY,
+          senderEmail: env.EMAIL_SENDER,
+          senderName: env.EMAIL_SENDER_NAME,
+        }
+      : undefined,
+  log,
+});
+
 const app = createApp({
   tenants: createPostgresTenantStore(sql),
   restaurants,
@@ -64,18 +79,7 @@ const app = createApp({
   payments,
   operations,
   pos,
-  notifier: createNotificationSender({
-    expoAccessToken: env.EXPO_ACCESS_TOKEN,
-    brevo:
-      env.BREVO_API_KEY && env.EMAIL_SENDER
-        ? {
-            apiKey: env.BREVO_API_KEY,
-            senderEmail: env.EMAIL_SENDER,
-            senderName: env.EMAIL_SENDER_NAME,
-          }
-        : undefined,
-    log,
-  }),
+  notifier,
   posWebhookSecret: env.POS_WEBHOOK_SECRET ?? null,
   admin: createPostgresAdminStore(sql),
   verifier: createSupabaseVerifier({
@@ -98,7 +102,22 @@ const app = createApp({
   ...(env.LOYALTY === 'demo'
     ? {
         loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
-        loyaltyDemoLogin: env.LOYALTY_DEMO_LOGIN === '1',
+        loyaltyDemoLogin: env.LOYALTY_DEMO_LOGIN === '1' && env.APP_ENV !== 'production',
+        ...(env.LOYALTY_OTP === '1'
+          ? {
+              otp: createOtpDeps({
+                store: createPostgresOtpStore(sql),
+                sms: createSmsSender({ brevoApiKey: env.BREVO_API_KEY, log }),
+                notifier,
+                emailConfigured: Boolean(env.BREVO_API_KEY && env.EMAIL_SENDER),
+                baseSecret: env.ORDER_TOKEN_SECRET,
+                debugEcho: env.OTP_DEBUG_ECHO === '1',
+                environment: env.APP_ENV,
+                randomBytes: (n) => randomBytes(n),
+                log,
+              }),
+            }
+          : {}),
       }
     : {}),
   geo:

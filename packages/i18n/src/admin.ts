@@ -197,7 +197,8 @@ export const adminFr = {
       `Compte ${email} créé, mais l’e-mail d’invitation n’a pas pu partir. Utilisez « Renvoyer l’invitation ».`,
   },
   club: {
-    search: 'Rechercher (nom, e-mail, code carte)',
+    search: 'Rechercher (nom, téléphone, e-mail, code carte)',
+    phone: 'Téléphone',
     card: 'Carte',
     points: 'Points',
     since: 'Membre depuis',

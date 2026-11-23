@@ -7,7 +7,8 @@ import type { Sql } from './client';
 export interface DemoMemberRecord {
   readonly id: string;
   readonly name: string;
-  readonly email: string;
+  readonly email: string | null;
+  readonly phone: string | null;
   readonly points: number;
   readonly cardCode: string;
 }
@@ -22,7 +23,8 @@ export interface DemoMovementRecord {
 interface MemberRow {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
+  phone: string | null;
   points: number;
   card_code: string;
 }
@@ -31,6 +33,7 @@ const toMember = (r: MemberRow): DemoMemberRecord => ({
   id: r.id,
   name: r.name,
   email: r.email,
+  phone: r.phone,
   points: r.points,
   cardCode: r.card_code,
 });
@@ -43,7 +46,7 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
       tenantId: string,
       input: {
         readonly name: string;
-        readonly email: string;
+        readonly email: string | null;
         readonly phone: string | null;
         readonly cardCode: string;
         readonly welcomePoints: number;
@@ -53,8 +56,8 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
         const [created] = await tx<MemberRow[]>`
           insert into public.loyalty_demo_members (tenant_id, email, name, phone, points, card_code)
           values (${tenantId}, ${input.email}, ${input.name}, ${input.phone}, ${input.welcomePoints}, ${input.cardCode})
-          on conflict (tenant_id, email) do nothing
-          returning id, name, email, points, card_code`;
+          on conflict do nothing
+          returning id, name, email, phone, points, card_code`;
         if (created) {
           if (input.welcomePoints > 0) {
             await tx`insert into public.loyalty_demo_movements (tenant_id, member_id, kind, points, label)
@@ -63,8 +66,11 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
           return { member: toMember(created), created: true };
         }
         const [existing] = await tx<MemberRow[]>`
-          select id, name, email, points, card_code from public.loyalty_demo_members
-          where tenant_id = ${tenantId} and email = ${input.email}`;
+          select id, name, email, phone, points, card_code from public.loyalty_demo_members
+          where tenant_id = ${tenantId}
+            and ((${input.phone}::text is not null and phone = ${input.phone})
+              or (${input.email}::text is not null and email = ${input.email}))
+          order by (phone is not distinct from ${input.phone}) desc limit 1`;
         if (!existing) throw new Error('Membre introuvable après conflit');
         return { member: toMember(existing), created: false };
       });
@@ -72,15 +78,22 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
 
     async findByEmail(tenantId: string, email: string) {
       const [r] = await sql<MemberRow[]>`
-        select id, name, email, points, card_code from public.loyalty_demo_members
+        select id, name, email, phone, points, card_code from public.loyalty_demo_members
         where tenant_id = ${tenantId} and email = ${email}`;
+      return r ? toMember(r) : null;
+    },
+
+    async findByPhone(tenantId: string, phone: string) {
+      const [r] = await sql<MemberRow[]>`
+        select id, name, email, phone, points, card_code from public.loyalty_demo_members
+        where tenant_id = ${tenantId} and phone = ${phone}`;
       return r ? toMember(r) : null;
     },
 
     async getMember(tenantId: string, memberId: string) {
       if (!UUID.test(memberId)) return null;
       const [r] = await sql<MemberRow[]>`
-        select id, name, email, points, card_code from public.loyalty_demo_members
+        select id, name, email, phone, points, card_code from public.loyalty_demo_members
         where tenant_id = ${tenantId} and id = ${memberId}`;
       return r ? toMember(r) : null;
     },
@@ -150,9 +163,9 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
     async listMembers(tenantId: string, search: string | null, limit: number) {
       const like = search ? `%${search.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%` : null;
       const rows = await sql<(MemberRow & { created_at: Date })[]>`
-        select id, name, email, points, card_code, created_at from public.loyalty_demo_members
+        select id, name, email, phone, points, card_code, created_at from public.loyalty_demo_members
         where tenant_id = ${tenantId}
-          and (${like}::text is null or lower(name) like ${like} or email like ${like} or lower(card_code) like ${like})
+          and (${like}::text is null or lower(name) like ${like} or email like ${like} or phone like ${like} or lower(card_code) like ${like})
         order by created_at desc, id desc limit ${limit}`;
       return rows.map((r) => ({ ...toMember(r), createdAt: r.created_at.toISOString() }));
     },
@@ -179,7 +192,7 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
                  values (${tenantId}, ${memberId}, 'adjust', ${delta}, ${label})`;
         const [r] = await tx<MemberRow[]>`
           update public.loyalty_demo_members set points = points + ${delta} where id = ${memberId}
-          returning id, name, email, points, card_code`;
+          returning id, name, email, phone, points, card_code`;
         if (!r) throw new Error('Membre introuvable');
         return { ok: true as const, member: toMember(r) };
       });

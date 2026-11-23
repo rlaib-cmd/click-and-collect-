@@ -17,7 +17,10 @@ export interface LoyaltyProgram {
 export interface LoyaltyMember {
   readonly id: string;
   readonly name: string;
-  readonly email: string;
+  /** null : compte créé avec le seul téléphone. */
+  readonly email: string | null;
+  /** Mobile au format international E.164 (+33…), ou null. */
+  readonly phone: string | null;
   readonly points: number;
   /** Contenu du QR code présenté en caisse. */
   readonly cardCode: string;
@@ -65,12 +68,21 @@ export type SettleResult =
 export interface LoyaltyProvider {
   /** null : l'enseigne n'a pas de programme de fidélité. */
   getProgram(tenant: LoyaltyTenant): Promise<LoyaltyProgram | null>;
-  /** Crée le compte (points de bienvenue) ou retrouve celui de cet e-mail. */
+  /**
+   * Crée le compte (points de bienvenue) ou retrouve celui de ce téléphone ou de cet e-mail.
+   * Il faut au moins l'un des deux ; le téléphone est au format E.164.
+   */
   join(
     tenant: LoyaltyTenant,
-    input: { readonly name: string; readonly email: string; readonly phone: string | null },
+    input: {
+      readonly name: string;
+      readonly email: string | null;
+      readonly phone: string | null;
+    },
   ): Promise<{ readonly member: LoyaltyMember; readonly created: boolean }>;
   findByEmail(tenant: LoyaltyTenant, email: string): Promise<LoyaltyMember | null>;
+  /** Client reconnu par son mobile (E.164), l'identifiant principal en caisse. */
+  findByPhone(tenant: LoyaltyTenant, phone: string): Promise<LoyaltyMember | null>;
   getMember(tenant: LoyaltyTenant, memberId: string): Promise<LoyaltyMember | null>;
   history(tenant: LoyaltyTenant, memberId: string): Promise<readonly LoyaltyMovement[]>;
   /**
@@ -80,7 +92,7 @@ export interface LoyaltyProvider {
   settleOrder(tenant: LoyaltyTenant, settlement: OrderSettlement): Promise<SettleResult>;
 
   // ——— Administration (back-office de l'enseigne) ———
-  /** Membres les plus récents d'abord ; `search` filtre sur le nom, l'e-mail ou le code de carte. */
+  /** Membres les plus récents d'abord ; `search` filtre sur le nom, l'e-mail, le téléphone ou le code de carte. */
   listMembers(
     tenant: LoyaltyTenant,
     search: string | null,

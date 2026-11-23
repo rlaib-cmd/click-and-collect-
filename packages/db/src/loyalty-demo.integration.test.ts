@@ -12,6 +12,7 @@ describe.skipIf(!url)('Fidélité de démonstration Postgres', () => {
   const run = `${Date.now()}`;
   afterAll(async () => {
     await sql`delete from public.loyalty_demo_members where email like ${`%-${run}@example.fr`}`;
+    await sql`delete from public.loyalty_demo_members where card_code like ${`S360-P${run}%`}`;
     await sql.end();
   });
 
@@ -54,6 +55,17 @@ describe.skipIf(!url)('Fidélité de démonstration Postgres', () => {
       }),
     ).toEqual({ ok: false, error: 'insufficient_points' });
     expect(await store.getMember('00000000-0000-4000-8000-000000000001', member.id)).toBeNull();
+  });
+
+  it('crée un membre avec le seul téléphone et le retrouve par ce numéro (lot 10)', async () => {
+    const phone = `+3369${run.slice(-7)}`;
+    const input = { name: 'Tel', email: null, phone, cardCode: `S360-P${run}`, welcomePoints: 100 };
+    const { member, created } = await store.createMember(BILLS, input);
+    expect(created).toBe(true);
+    expect(member).toMatchObject({ email: null, phone });
+    expect((await store.findByPhone(BILLS, phone))?.id).toBe(member.id);
+    const again = await store.createMember(BILLS, { ...input, cardCode: `S360-P${run}B` });
+    expect(again).toMatchObject({ created: false, member: { id: member.id } });
   });
 
   it('administre un membre : recherche, correction sans solde négatif, suppression', async () => {

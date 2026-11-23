@@ -15,6 +15,9 @@ export const apiErrorCodeSchema = z.enum([
   'payments_unavailable',
   'order_not_payable',
   'internal_error',
+  // Connexion du client par code (lot 10)
+  'otp_invalid',
+  'otp_expired',
 ]);
 
 /** Problème précis sur une commande, pour guider le client (retour au panier avec un message clair). */

@@ -48,7 +48,7 @@ export default function CheckoutScreen() {
   // Membre du club : nom et e-mail préremplis.
   useEffect(() => {
     const m = loyalty.member;
-    if (m) setContact((c) => ({ ...c, name: c.name || m.name, email: c.email || m.email }));
+    if (m) setContact((c) => ({ ...c, name: c.name || m.name, email: c.email || (m.email ?? '') }));
   }, [loyalty.member]);
 
   const request: QuoteRequest | null = useMemo(

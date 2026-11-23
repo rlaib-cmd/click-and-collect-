@@ -7,3 +7,4 @@ export * from './status';
 export * from './time';
 export * from './zones';
 export * from './loyalty';
+export * from './otp';

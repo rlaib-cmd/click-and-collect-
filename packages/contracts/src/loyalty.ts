@@ -19,6 +19,8 @@ export const loyaltyProgramSchema = z.discriminatedUnion('enabled', [
     rewards: z.array(loyaltyRewardSchema),
     /** Données de test : connexion par e-mail sans vérification (ADR 0009). */
     demo: z.boolean(),
+    /** Connexion par code reçu par SMS ou e-mail (lot 10, ADR 0012). */
+    otp: z.boolean(),
   }),
 ]);
 
@@ -35,6 +37,38 @@ export const loyaltyJoinRequestSchema = z.object({
 
 export const loyaltyLoginRequestSchema = z.object({ email: z.email().max(200) });
 
+export const otpChannelSchema = z.enum(['sms', 'email']);
+
+/** POST /loyalty/otp/start : envoie un code au mobile (SMS) ou à l'adresse e-mail. */
+export const otpStartRequestSchema = z.object({
+  channel: otpChannelSchema,
+  /** Numéro de mobile français (06…, +33…) ou adresse e-mail selon le canal. */
+  identifier: z.string().trim().min(3).max(200),
+});
+
+/** Même réponse qu'un compte existe ou non. */
+export const otpStartResponseSchema = z.object({
+  sent: z.literal(true),
+  /** Identifiant normalisé (+33…, e-mail en minuscules), à renvoyer avec le code. */
+  identifier: z.string(),
+  /** Délai avant de pouvoir redemander un code. */
+  resendInSeconds: z.number().int().nonnegative(),
+  /** Recette sans prestataire d'envoi uniquement : le code, pour tester. Jamais en production. */
+  debugCode: z.string().optional(),
+});
+
+/** POST /loyalty/otp/verify : code reçu ; prénom et CGU lors d'une création de compte. */
+export const otpVerifyRequestSchema = z.object({
+  channel: otpChannelSchema,
+  identifier: z.string().trim().min(3).max(200),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'Code à 6 chiffres'),
+  name: z.string().trim().min(2).max(100).optional(),
+  acceptedTerms: z.literal(true).optional(),
+});
+
 export const loyaltyMovementSchema = z.object({
   kind: z.enum(['welcome', 'earn', 'redeem', 'adjust']),
   points: z.number().int(),
@@ -45,7 +79,10 @@ export const loyaltyMovementSchema = z.object({
 /** Réponse de GET /loyalty/me (en-tête Authorization: Bearer <jeton de membre>). */
 export const loyaltyMemberSchema = z.object({
   name: z.string(),
-  email: z.string(),
+  /** null : compte créé avec le seul téléphone. */
+  email: z.string().nullable(),
+  /** Mobile au format international (+33…). */
+  phone: z.string().nullable(),
   points: z.number().int().nonnegative(),
   /** Contenu du QR code à présenter en caisse. */
   cardCode: z.string(),
@@ -63,8 +100,19 @@ export const loyaltySessionSchema = z.object({
   member: loyaltyMemberSchema,
 });
 
+/** Réponse de la vérification : session ouverte, ou prénom demandé pour créer le compte. */
+export const otpVerifyResponseSchema = z.union([
+  loyaltySessionSchema,
+  z.object({ needsName: z.literal(true) }),
+]);
+
 export type LoyaltyProgramDto = z.infer<typeof loyaltyProgramSchema>;
 export type LoyaltyRewardDto = z.infer<typeof loyaltyRewardSchema>;
 export type LoyaltyMemberDto = z.infer<typeof loyaltyMemberSchema>;
 export type LoyaltySession = z.infer<typeof loyaltySessionSchema>;
 export type LoyaltyJoinRequest = z.infer<typeof loyaltyJoinRequestSchema>;
+export type OtpChannel = z.infer<typeof otpChannelSchema>;
+export type OtpStartRequest = z.infer<typeof otpStartRequestSchema>;
+export type OtpStartResponse = z.infer<typeof otpStartResponseSchema>;
+export type OtpVerifyRequest = z.infer<typeof otpVerifyRequestSchema>;
+export type OtpVerifyResponse = z.infer<typeof otpVerifyResponseSchema>;

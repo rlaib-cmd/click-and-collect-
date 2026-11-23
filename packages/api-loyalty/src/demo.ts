@@ -1,3 +1,4 @@
+import { normalizeFrenchPhone } from '@splash360/core';
 import type {
   AdjustResult,
   LoyaltyMember,
@@ -48,13 +49,14 @@ export interface DemoLoyaltyStore {
     tenantId: string,
     input: {
       readonly name: string;
-      readonly email: string;
+      readonly email: string | null;
       readonly phone: string | null;
       readonly cardCode: string;
       readonly welcomePoints: number;
     },
   ): Promise<{ readonly member: LoyaltyMember; readonly created: boolean }>;
   findByEmail(tenantId: string, email: string): Promise<LoyaltyMember | null>;
+  findByPhone(tenantId: string, phone: string): Promise<LoyaltyMember | null>;
   getMember(tenantId: string, memberId: string): Promise<LoyaltyMember | null>;
   history(tenantId: string, memberId: string): Promise<LoyaltyMovement[]>;
   listMembers(
@@ -95,19 +97,24 @@ export function createDemoLoyaltyProvider(
     async join(tenant, input) {
       const program = programs.get(tenant.splash360Id);
       if (!program) throw new Error('Pas de programme de fidélité pour cette enseigne');
+      if (!input.email && !input.phone) throw new Error('Téléphone ou e-mail requis');
       return store.createMember(tenant.id, {
         name: input.name.trim(),
-        email: input.email.trim().toLowerCase(),
+        email: input.email ? input.email.trim().toLowerCase() : null,
         phone: input.phone,
         cardCode: newCardCode(random),
         welcomePoints: program.welcomePoints,
       });
     },
     findByEmail: (tenant, email) => store.findByEmail(tenant.id, email.trim().toLowerCase()),
+    findByPhone: (tenant, phone) => store.findByPhone(tenant.id, phone),
     getMember: (tenant, memberId) => store.getMember(tenant.id, memberId),
     history: (tenant, memberId) => store.history(tenant.id, memberId),
-    listMembers: (tenant, search, limit) =>
-      store.listMembers(tenant.id, search?.trim().toLowerCase() || null, limit),
+    listMembers: (tenant, search, limit) => {
+      const q = search?.trim().toLowerCase() || null;
+      // « 06 12 34… » se cherche au format enregistré (+33612…).
+      return store.listMembers(tenant.id, (q && normalizeFrenchPhone(q)) ?? q, limit);
+    },
     async adjustPoints(tenant, memberId, delta, label) {
       if (!Number.isInteger(delta) || delta === 0) throw new Error('Ajustement invalide');
       return store.adjust(tenant.id, memberId, delta, label.trim());
@@ -140,6 +147,7 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
     id: r.id,
     name: r.name,
     email: r.email,
+    phone: r.phone,
     points: r.points,
     cardCode: r.cardCode,
   });
@@ -147,7 +155,12 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
     members.find((m) => m.tenantId === tenantId && m.id === id);
   return {
     createMember(tenantId, input) {
-      const existing = members.find((m) => m.tenantId === tenantId && m.email === input.email);
+      const existing = members.find(
+        (m) =>
+          m.tenantId === tenantId &&
+          ((input.phone !== null && m.phone === input.phone) ||
+            (input.email !== null && m.email === input.email)),
+      );
       if (existing) return Promise.resolve({ member: pub(existing), created: false });
       seq += 1;
       const row: Row = {
@@ -155,6 +168,7 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
         id: `00000000-0000-4000-9000-${String(seq).padStart(12, '0')}`,
         name: input.name,
         email: input.email,
+        phone: input.phone,
         points: input.welcomePoints,
         cardCode: input.cardCode,
         createdAt: now().toISOString(),
@@ -174,6 +188,10 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
     },
     findByEmail(tenantId, email) {
       const r = members.find((m) => m.tenantId === tenantId && m.email === email);
+      return Promise.resolve(r ? pub(r) : null);
+    },
+    findByPhone(tenantId, phone) {
+      const r = members.find((m) => m.tenantId === tenantId && m.phone === phone);
       return Promise.resolve(r ? pub(r) : null);
     },
     getMember(tenantId, memberId) {
@@ -225,7 +243,9 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
     listMembers(tenantId, search, limit) {
       const match = (m: Row) =>
         !search ||
-        [m.name.toLowerCase(), m.email, m.cardCode.toLowerCase()].some((v) => v.includes(search));
+        [m.name.toLowerCase(), m.email ?? '', m.phone ?? '', m.cardCode.toLowerCase()].some((v) =>
+          v.includes(search),
+        );
       return Promise.resolve(
         members
           .filter((m) => m.tenantId === tenantId && match(m))

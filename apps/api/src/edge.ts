@@ -22,14 +22,16 @@ import {
   createPostgresRestaurantStore,
   createPostgresTenantStore,
   createSql,
+  createPostgresOtpStore,
 } from '@splash360/db';
 import { Hono } from 'hono';
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createSupabaseVerifier } from './admin/auth';
 import { createSupabaseInviter } from './admin/invite';
 import { createApp } from './app';
 import { createBanGeoProvider } from './geo';
 import { jsonLog } from './http/logging';
+import { createOtpDeps, createSmsSender } from './loyalty/otp';
 import { createNotificationSender } from './notifications/sender';
 import { createStripeGateway } from './payments/gateway';
 import { expireUnpaidOrders } from './payments/service';
@@ -106,6 +108,10 @@ const inviter = createSupabaseInviter({
   log,
 });
 
+// Connexion du client par code (lot 10) : SMS Brevo, sinon journalisé ; recette = aide au test.
+const sms = createSmsSender({ brevoApiKey: brevoKey, log });
+const appEnv = env('APP_ENV') ?? 'recette';
+
 function build() {
   const sql = createSql(databaseUrl, { max: 3, idleTimeout: 10 });
   const payments = createPostgresPaymentStore(sql);
@@ -125,7 +131,22 @@ function build() {
     tokenSecret,
     // Aperçu : fidélité de test, connexion par e-mail (ADR 0009).
     loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
-    loyaltyDemoLogin: env('LOYALTY_DEMO_LOGIN') !== '0',
+    loyaltyDemoLogin: env('LOYALTY_DEMO_LOGIN') !== '0' && appEnv !== 'production',
+    ...(env('LOYALTY_OTP') === '1'
+      ? {
+          otp: createOtpDeps({
+            store: createPostgresOtpStore(sql),
+            sms,
+            notifier,
+            emailConfigured: Boolean(brevoKey && sender),
+            baseSecret: tokenSecret,
+            debugEcho: env('OTP_DEBUG_ECHO') === '1',
+            environment: appEnv,
+            randomBytes: (n) => randomBytes(n),
+            log,
+          }),
+        }
+      : {}),
     geo,
     adminUrl,
     inviter,

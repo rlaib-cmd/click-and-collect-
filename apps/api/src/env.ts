@@ -17,6 +17,15 @@ const envSchema = z.object({
   LOYALTY: z.enum(['demo', 'off']).default('demo'),
   /** Connexion au club par simple e-mail, sans vérification : jamais en production. */
   LOYALTY_DEMO_LOGIN: z.enum(['0', '1']).default('0'),
+  /** Connexion du client par code SMS ou e-mail (lot 10, ADR 0012). */
+  LOYALTY_OTP: z.enum(['0', '1']).default('0'),
+  /**
+   * Recette sans prestataire d'envoi : renvoie le code dans la réponse pour tester.
+   * Sans effet en production (APP_ENV=production) ou dès qu'un prestataire est configuré.
+   */
+  OTP_DEBUG_ECHO: z.enum(['0', '1']).default('0'),
+  /** Environnement : 'production' coupe toute aide de test. */
+  APP_ENV: z.enum(['development', 'recette', 'production']).default('development'),
   /** Back-office : vérification des sessions Supabase Auth (JWKS recommandé, secret HS256 en local). */
   SUPABASE_JWKS_URL: z.url().optional(),
   SUPABASE_JWT_SECRET: z.string().min(32).optional(),
