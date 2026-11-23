@@ -6,7 +6,11 @@ import { useEffect } from 'react';
 import { z } from 'zod';
 import { useApi } from '@/lib/use-api';
 
-export const restaurantsSchema = z.object({ restaurants: z.array(adminRestaurantSchema) });
+export const restaurantsSchema = z.object({
+  restaurants: z.array(adminRestaurantSchema),
+  /** Identifiants Splash360 posés sur le serveur (ADR 0018). */
+  splash360Configured: z.boolean().default(false),
+});
 
 /** Choix du restaurant (masqué s'il n'y en a qu'un). */
 export function RestaurantPicker({

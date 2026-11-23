@@ -145,6 +145,11 @@ export default function OrdersPage() {
                   {o.paymentMethod === 'on_site' ? (
                     <span className="badge">{t.toCollect}</span>
                   ) : null}
+                  {o.posPhase ? (
+                    <span className={o.posPhase === 'failed' ? 'badge blocked' : 'badge'}>
+                      {t.pos[o.posPhase]}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </section>

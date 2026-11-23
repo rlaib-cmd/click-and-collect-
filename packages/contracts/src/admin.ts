@@ -36,7 +36,18 @@ export const adminRestaurantSchema = z.object({
   status: z.enum(['active', 'paused', 'closed']),
   stripeAccountId: z.string().nullable(),
   stripeChargesEnabled: z.boolean(),
+  /** Branché sur la vraie carte et la vraie caisse Splash360 (ADR 0018). */
+  splash360Live: z.boolean().default(false),
 });
+
+/** Avancement de la commande dans la caisse Splash360 (ADR 0018). */
+export const posPhaseSchema = z.enum(['waiting', 'ready', 'payment_sent', 'confirmed', 'failed']);
+
+/** Résultat du test de connexion à Splash360. */
+export const splash360TestSchema = z.union([
+  z.object({ ok: z.literal(true), products: z.number().int(), categories: z.number().int() }),
+  z.object({ ok: z.literal(false), message: z.string() }),
+]);
 
 export const adminOrderSchema = z.object({
   id: z.uuid(),
@@ -51,6 +62,7 @@ export const adminOrderSchema = z.object({
   itemCount: z.number().int(),
   /** Sur place : à encaisser au comptoir (ADR 0010). */
   paymentMethod: z.enum(['online', 'on_site']).default('online'),
+  posPhase: posPhaseSchema.nullable().default(null),
 });
 
 export const adminOrderDetailSchema = z.object({

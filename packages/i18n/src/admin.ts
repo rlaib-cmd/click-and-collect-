@@ -261,6 +261,14 @@ export const adminFr = {
     alert: (n: number) => `${n} commande(s) n’ont pas pu être envoyées à la caisse.`,
     retry: 'Renvoyer à la caisse',
     toCollect: 'À encaisser sur place',
+    /** Avancement en caisse Splash360 (ADR 0018). */
+    pos: {
+      waiting: 'Caisse : en attente',
+      ready: 'Caisse : prête',
+      payment_sent: 'Caisse : paiement envoyé',
+      confirmed: 'En caisse',
+      failed: 'Caisse : échec',
+    },
     pickup: 'À emporter',
     delivery: 'Livraison',
     items: (n: number) => `${n} article(s)`,
@@ -416,6 +424,24 @@ export const adminFr = {
     missing: 'Pas encore de compte',
     onboard: 'Terminer l’inscription Stripe',
     help: 'Le restaurant ne peut pas ouvrir la commande en ligne tant que Stripe n’a pas autorisé les paiements.',
+    /** Caisse et carte Splash360 (lot 14, ADR 0018). */
+    pos: {
+      title: 'Caisse Splash360',
+      help: 'Branché : la carte vient de Splash360 et chaque commande passe par la caisse du restaurant avant le paiement. Débranché : carte et caisse de démonstration.',
+      notConfigured:
+        'Identifiants Splash360 absents du serveur : seule la démonstration est possible.',
+      live: 'Branché',
+      demo: 'Démonstration',
+      connect: 'Brancher la caisse',
+      disconnect: 'Revenir à la démonstration',
+      confirmConnect:
+        'Brancher ce restaurant sur la vraie caisse Splash360 ? Les commandes arriveront en caisse.',
+      test: 'Tester la connexion',
+      testing: 'Test en cours…',
+      testOk: (products: number, categories: number) =>
+        `Connexion réussie : ${products} produits dans ${categories} catégories.`,
+      testFailed: (message: string) => `Connexion impossible : ${message}`,
+    },
   },
   customers: {
     search: 'Rechercher (nom, e-mail, téléphone)',
