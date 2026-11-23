@@ -120,9 +120,11 @@ describe('carte de démonstration Bills Burger', () => {
     expect(
       priceCart(menu, [{ productId: 'bb-original', quantity: 1, optionIds: ['bb-opt-menu'] }]).ok,
     ).toBe(false);
-    // Les photos viennent du site de l'enseigne, en https.
+    // Chaque produit a une photo du site de l'enseigne (ou de son stockage), en https.
     for (const p of menu.products) {
-      if (p.imageUrl) expect(p.imageUrl).toMatch(/^https:\/\/bills-burger\.fr\//);
+      expect(p.imageUrl).toMatch(
+        /^https:\/\/(bills-burger\.fr|storage\.googleapis\.com\/bills-burger)\//,
+      );
     }
   });
 });

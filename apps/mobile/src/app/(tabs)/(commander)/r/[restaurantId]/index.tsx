@@ -7,11 +7,11 @@ import { Pressable, ScrollView, SectionList, StyleSheet, Text, View } from 'reac
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMenu } from '@/api/hooks';
 import { CartBar } from '@/components/CartBar';
+import { ProductCard } from '@/components/ProductCard';
 import { SetupSummary } from '@/components/SetupSummary';
 import { BrandBar, titleStyle } from '@/components/brand';
 import { TenantLogo } from '@/components/TenantLogo';
 import { BackButton, ErrorState, Loading, Screen } from '@/components/ui';
-import { formatPrice } from '@/lib/format';
 import { useTenant } from '@/tenant/TenantProvider';
 
 export default function MenuScreen() {
@@ -20,12 +20,18 @@ export default function MenuScreen() {
   const brandHeader = style.header === 'brand';
   const menu = useMenu(restaurantId);
   const insets = useSafeAreaInsets();
-  const list = useRef<SectionList<ProductDto>>(null);
+  const list = useRef<SectionList<readonly ProductDto[]>>(null);
   const [active, setActive] = useState(0);
 
+  // Grille à deux colonnes : chaque élément de section est une paire de produits.
   const sections = useMemo(
     () =>
-      (menu.data?.categories ?? []).map((c) => ({ key: c.id, title: c.name, data: c.products })),
+      (menu.data?.categories ?? []).map((c) => ({
+        key: c.id,
+        title: c.name,
+        image: c.products.find((p) => p.imageUrl)?.imageUrl ?? null,
+        data: pairs(c.products),
+      })),
     [menu.data],
   );
 
@@ -102,9 +108,17 @@ export default function MenuScreen() {
                 },
               ]}
             >
+              {s.image ? (
+                <Image
+                  source={{ uri: s.image }}
+                  style={[styles.tabImage, { backgroundColor: '#FFFFFF' }]}
+                  contentFit="contain"
+                  accessibilityIgnoresInvertColors
+                />
+              ) : null}
               <Text
                 style={[
-                  { color: selected ? palette.onPrimary : palette.text, fontWeight: '600' },
+                  { color: selected ? palette.onPrimary : palette.text, fontWeight: '700' },
                   titleStyle(style),
                 ]}
               >
@@ -118,7 +132,7 @@ export default function MenuScreen() {
       <SectionList
         ref={list}
         sections={sections}
-        keyExtractor={(p) => p.id}
+        keyExtractor={(row) => row.map((p) => p.id).join('+')}
         stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.listContent}
         onScrollToIndexFailed={() => undefined}
@@ -131,15 +145,21 @@ export default function MenuScreen() {
           </Text>
         )}
         renderItem={({ item }) => (
-          <ProductRow
-            product={item}
-            onPress={() =>
-              router.push({
-                pathname: '/r/[restaurantId]/p/[productId]',
-                params: { restaurantId, productId: item.id },
-              })
-            }
-          />
+          <View style={styles.gridRow}>
+            {item.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onPress={() =>
+                  router.push({
+                    pathname: '/r/[restaurantId]/p/[productId]',
+                    params: { restaurantId, productId: product.id },
+                  })
+                }
+              />
+            ))}
+            {item.length === 1 ? <View style={styles.gridFiller} /> : null}
+          </View>
         )}
       />
       <CartBar menu={menu.data} />
@@ -147,41 +167,10 @@ export default function MenuScreen() {
   );
 }
 
-function ProductRow({ product, onPress }: { product: ProductDto; onPress: () => void }) {
-  const { palette, radii, style } = useTenant();
-  const disabled = !product.available;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={[styles.row, { borderColor: palette.border, opacity: disabled ? 0.45 : 1 }]}
-    >
-      <View style={styles.rowText}>
-        <Text style={[styles.name, titleStyle(style), { color: palette.text }]}>
-          {product.name}
-        </Text>
-        {product.description ? (
-          <Text style={{ color: palette.textMuted }} numberOfLines={2}>
-            {product.description}
-          </Text>
-        ) : null}
-        <Text style={[styles.price, { color: palette.text }]}>
-          {disabled ? messages.menu.unavailable : formatPrice(product.priceCents)}
-        </Text>
-      </View>
-      {/* Pas de vignette vide : la ligne garde sa hauteur minimale sans photo. */}
-      {product.imageUrl ? (
-        <Image
-          source={{ uri: product.imageUrl }}
-          style={[styles.photo, { borderRadius: radii.card }]}
-          contentFit="cover"
-          accessibilityIgnoresInvertColors
-        />
-      ) : null}
-    </Pressable>
-  );
+function pairs<T>(items: readonly T[]): (readonly T[])[] {
+  const out: (readonly T[])[] = [];
+  for (let i = 0; i < items.length; i += 2) out.push(items.slice(i, i + 2));
+  return out;
 }
 
 const styles = StyleSheet.create({
@@ -193,21 +182,16 @@ const styles = StyleSheet.create({
   tabs: { gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
   tab: {
     minHeight: 44,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
+    paddingLeft: 6,
+    paddingRight: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  tabImage: { width: 32, height: 32, borderRadius: 16 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
-  section: { fontSize: 20, fontWeight: '700', marginTop: 20, marginBottom: 8 },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-  },
-  rowText: { flex: 1, gap: 4 },
-  name: { fontSize: 17, fontWeight: '600' },
-  price: { fontSize: 15, fontWeight: '600', marginTop: 2 },
-  photo: { width: 88, height: 88 },
+  section: { fontSize: 24, fontWeight: '900', marginTop: 20, marginBottom: 12 },
+  gridRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  gridFiller: { flex: 1 },
 });

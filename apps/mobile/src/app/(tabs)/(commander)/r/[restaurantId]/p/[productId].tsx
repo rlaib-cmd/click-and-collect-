@@ -81,7 +81,14 @@ export default function ProductScreen() {
           </Text>
         </Pressable>
         {product.imageUrl ? (
-          <Image source={{ uri: product.imageUrl }} style={styles.photo} contentFit="cover" />
+          <View style={[styles.photoBox, { borderRadius: 20 }]}>
+            <Image
+              source={{ uri: product.imageUrl }}
+              style={styles.photo}
+              contentFit="contain"
+              accessibilityIgnoresInvertColors
+            />
+          </View>
         ) : null}
         <Text
           style={[styles.title, titleStyle(brand), { color: palette.text }]}
@@ -236,7 +243,8 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 8, paddingBottom: 32 },
   close: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' },
   closeText: { fontSize: 16, fontWeight: '600' },
-  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: 16 },
+  photoBox: { backgroundColor: '#FFFFFF', height: 260, padding: 12, overflow: 'hidden' },
+  photo: { width: '100%', height: '100%' },
   title: { fontSize: 26, fontWeight: '700', marginTop: 8 },
   base: { fontSize: 18, fontWeight: '600' },
   group: { marginTop: 20, gap: 6 },

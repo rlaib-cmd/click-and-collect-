@@ -614,8 +614,36 @@ const billsBurger: Menu = {
   ],
 };
 
+/** Photos du site de l'enseigne (bills-burger.fr) pour la démonstration (lot 11). */
+const BB_IMG = 'https://storage.googleapis.com/bills-burger/menu/';
+const BILLS_PHOTOS: Readonly<Record<string, string>> = {
+  'bb-original': `${BB_IMG}smash/original.png`,
+  'bb-smoke': `${BB_IMG}smash/smoke.png`,
+  'bb-frenchy': `${BB_IMG}smash/frenchy.png`,
+  'bb-farmer': `${BB_IMG}smash/bill's%20farmer.png`,
+  'bb-honey': `${BB_IMG}smash/honey.png`,
+  'bb-crispy': `${BB_IMG}smash/chicken.png`,
+  'bb-kids': `${BB_IMG}bonPlan/etudiant.png`,
+  'bb-cheesy-smash': `${BB_IMG}sides/smash.png`,
+  'bb-twister': `${BB_IMG}sides/twister1.png`,
+  'bb-wings': `${BB_IMG}sides/dynamite2.png`,
+  'bb-frites': `${BB_IMG}sides/frites.png`,
+  'bb-frites-cajun': `${BB_IMG}sides/cajun.png`,
+  'bb-patates-douces': `${BB_IMG}sides/Frites%20patates%20douces.png`,
+  'bb-frites-cheddar-bacon': `${BB_IMG}sides/Frites%20cheddar%20bacon.png`,
+};
+
+/** Chaque produit Bills Burger a une photo : celle du site, sinon celle du burger phare. */
+const billsBurgerWithPhotos: Menu = {
+  ...billsBurger,
+  products: billsBurger.products.map((p) => ({
+    ...p,
+    imageUrl: p.imageUrl ?? BILLS_PHOTOS[p.id] ?? `${BB_IMG}smash/original.png`,
+  })),
+};
+
 const MENUS = new Map(
-  [bella, greenBowl, chickenStreet, billsBurger].map((m) => [m.restaurantId, m]),
+  [bella, greenBowl, chickenStreet, billsBurgerWithPhotos].map((m) => [m.restaurantId, m]),
 );
 
 export function createDemoMenuProvider(): MenuProvider {
