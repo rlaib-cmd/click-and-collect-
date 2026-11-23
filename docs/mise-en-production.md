@@ -27,6 +27,10 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` | pour encaisser | Compte plateforme Stripe Connect ; webhook Connect sur `/v1/webhooks/stripe` |
 | `SUPABASE_JWKS_URL` | pour le back-office | `https://<projet>.supabase.co/auth/v1/.well-known/jwks.json` |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | pour inviter | Invitations des comptes du back-office (lien « Choisir mon mot de passe ») ; clé de service côté serveur uniquement |
+| `SPLASH360_CLIENT_ID`, `SPLASH360_CLIENT_SECRET` | pour la vraie caisse | Accès OAuth2 à l'API Click & Collect Splash360 (ADR 0018) ; sans eux, carte et caisse de démonstration. À poser en secret du serveur uniquement |
+| `SPLASH360_API_URL` | non | `https://api.splash360.fr` par défaut |
+| `SPLASH360_FEE_VAT_RATE` | non | Taux de TVA des frais transmis à la caisse (0,2 par défaut, à confirmer avec Splash360) |
+| `POS_READY_TIMEOUT_SECONDS`, `POS_CONFIRM_TIMEOUT_SECONDS` | non | Attente de la caisse avant paiement (60 s) et de sa confirmation après paiement (300 s, puis remboursement automatique) |
 | `POS_WEBHOOK_SECRET` | pour la caisse | Secret partagé avec Splash360 (retour des statuts) |
 | `GEOCODER_URL` | non | Géocodeur au format API Adresse (Géoplateforme par défaut) |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | recommandé | Remontée des erreurs |

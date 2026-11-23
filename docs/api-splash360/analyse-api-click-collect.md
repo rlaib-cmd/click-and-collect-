@@ -12,6 +12,16 @@ Serveur : `https://api.splash360.fr`. Authentification : OAuth2 *client credenti
 5. `POST /api/import/submitcmdpaiement/{ticketId}` — notifier le paiement (`reglements`).
 6. La commande arrive en caisse.
 
+## Mise en œuvre (lot 14, ADR 0018)
+
+- Client unique : `packages/api-menu/src/splash360/client.ts` (OAuth2, jeton en cache) ; carte :
+  `menu.ts` ; lecture des statuts : `status.ts` ; caisse : `apps/api/src/pos/splash360.ts`.
+- Parcours confirmé par le CTO (message vocal du 23/11) : la caisse doit répondre « ready » **avant**
+  le paiement, puis « confirmed » après l'envoi du paiement ; sinon annulation ou remboursement
+  automatique.
+- Accès vérifié le 24/11 : `GET /api/export/menus` sans jeton → 401 « OAuth2 authentication
+  required » ; `/oauth/v2/token` attend `grant_type=client_credentials`.
+
 ## Correspondance avec notre application
 
 | Splash360 | Chez nous | Remarque |

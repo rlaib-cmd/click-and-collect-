@@ -22,3 +22,4 @@ Format : Contexte, Décision, Conséquences, Statut.
 | [0015](0015-codes-promo.md) | Codes promo gérés au back-office | Acceptée |
 | [0016](0016-studio-design.md) | Studio design : brouillon, aperçu fidèle, publication sans les stores | Acceptée |
 | [0017](0017-roles-du-back-office.md) | Rôles du back-office : propriétaire, gérant, équipier ; matrice de droits unique | Acceptée |
+| [0018](0018-caisse-splash360-avant-paiement.md) | Branchement réel Splash360 : la caisse accepte la commande avant le paiement | Acceptée |
