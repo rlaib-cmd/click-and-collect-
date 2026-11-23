@@ -79,6 +79,37 @@ export function createMemoryOrderBackend(
             createdAt: new Date(o.createdAt),
           })),
       ),
+    memberOrders: (tenantId, memberId, page) =>
+      Promise.resolve(
+        orders
+          .filter(
+            (o) =>
+              o.tenantId === tenantId &&
+              o.loyalty?.memberId === memberId &&
+              (page.beforeNumber === null || o.number < page.beforeNumber),
+          )
+          .sort((a, b) => b.number - a.number)
+          .slice(0, page.limit)
+          .map((o) => ({
+            id: o.id,
+            number: o.number,
+            status: o.status as OrderStatus,
+            mode: o.mode,
+            paymentMethod:
+              o.paymentMethod === 'on_site' ? ('on_site' as const) : ('online' as const),
+            totalCents: o.totals.totalCents,
+            createdAt: o.createdAt,
+            restaurantId: o.restaurantId,
+            restaurantName: restaurants().find((r) => r.id === o.restaurantId)?.name ?? '',
+            items: o.lines.map((l) => ({
+              name: l.name,
+              quantity: l.quantity,
+              productId: l.productId,
+              optionIds: l.options.map((x) => x.optionId),
+              note: l.note,
+            })),
+          })),
+      ),
     createOrder(o): Promise<CreateOrderResult> {
       const summary = (x: StoredOrder) => ({
         id: x.id,

@@ -178,6 +178,17 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
     expect(await store.rewardHolds(BELLA, memberId, null)).toEqual([]);
     // Une autre enseigne ne voit rien.
     expect(await store.rewardHolds(GREEN, memberId, null)).toEqual([]);
+    // « Mes commandes » (lot 11) : la commande du membre, avec ses articles et son restaurant.
+    const history = await store.memberOrders(BELLA, memberId, { limit: 10, beforeNumber: null });
+    expect(history.map((o) => o.id)).toContain(a.order.id);
+    expect(history[0]).toMatchObject({ paymentMethod: 'on_site', status: 'confirmed' });
+    expect(history[0]?.items.length).toBeGreaterThan(0);
+    expect(
+      await store.memberOrders(BELLA, memberId, { limit: 10, beforeNumber: a.order.number }),
+    ).toEqual([]);
+    expect(await store.memberOrders(GREEN, memberId, { limit: 10, beforeNumber: null })).toEqual(
+      [],
+    );
   });
 
   it('client sans e-mail : reconnu par son téléphone, sans doublon', async () => {

@@ -108,6 +108,38 @@ export const otpVerifyResponseSchema = z.union([
   z.object({ needsName: z.literal(true) }),
 ]);
 
+/** GET /loyalty/me/orders : historique du membre (lot 11). */
+export const memberOrdersSchema = z.object({
+  orders: z.array(
+    z.object({
+      orderId: z.uuid(),
+      number: z.number().int(),
+      status: z.string(),
+      mode: z.enum(['pickup', 'delivery']),
+      paymentMethod: z.enum(['online', 'on_site']),
+      totalCents: z.number().int().nonnegative(),
+      createdAt: z.iso.datetime(),
+      restaurantId: z.uuid(),
+      restaurantName: z.string(),
+      /** Articles, avec de quoi « Recommander » (prix recalculés au devis). */
+      items: z.array(
+        z.object({
+          name: z.string(),
+          quantity: z.number().int().positive(),
+          productId: z.string(),
+          optionIds: z.array(z.string()),
+          note: z.string().nullable(),
+        }),
+      ),
+      /** Jeton de suivi de la commande, remis seulement à son membre. */
+      accessToken: z.string(),
+    }),
+  ),
+  /** Numéro à passer en `before` pour la page suivante ; null s'il n'y en a plus. */
+  nextBefore: z.number().int().nullable(),
+});
+
+export type MemberOrdersDto = z.infer<typeof memberOrdersSchema>;
 export type LoyaltyProgramDto = z.infer<typeof loyaltyProgramSchema>;
 export type LoyaltyRewardDto = z.infer<typeof loyaltyRewardSchema>;
 export type LoyaltyMemberDto = z.infer<typeof loyaltyMemberSchema>;

@@ -105,6 +105,32 @@ export interface OrderingStore {
     memberId: string,
     exceptIdempotencyKey: string | null,
   ): Promise<RewardHold[]>;
+  /** Historique des commandes d'un membre (lot 11), les plus récentes d'abord. */
+  memberOrders(
+    tenantId: string,
+    memberId: string,
+    page: { readonly limit: number; readonly beforeNumber: number | null },
+  ): Promise<MemberOrderSummary[]>;
+}
+
+/** Commande vue dans « Mes commandes ». */
+export interface MemberOrderSummary {
+  readonly id: string;
+  readonly number: number;
+  readonly status: OrderStatus;
+  readonly mode: 'pickup' | 'delivery';
+  readonly paymentMethod: 'online' | 'on_site';
+  readonly totalCents: number;
+  readonly createdAt: string;
+  readonly restaurantId: string;
+  readonly restaurantName: string;
+  readonly items: readonly {
+    readonly name: string;
+    readonly quantity: number;
+    readonly productId: string;
+    readonly optionIds: readonly string[];
+    readonly note: string | null;
+  }[];
 }
 
 /** Statuts qui occupent un créneau (une commande en attente de paiement le réserve). */
@@ -147,6 +173,59 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
           and loyalty_reward_points is not null
           and idempotency_key is distinct from ${exceptIdempotencyKey}`;
       return rows.map((r) => ({ status: r.status, points: r.points, createdAt: r.created_at }));
+    },
+
+    async memberOrders(tenantId, memberId, page) {
+      const rows = await sql<
+        {
+          id: string;
+          number: number;
+          status: OrderStatus;
+          mode: 'pickup' | 'delivery';
+          payment_method: 'online' | 'on_site';
+          total_cents: number;
+          created_at: Date;
+          restaurant_id: string;
+          restaurant_name: string;
+          items: {
+            name: string;
+            quantity: number;
+            productId: string;
+            optionIds: string[];
+            note: string | null;
+          }[];
+        }[]
+      >`
+        select o.id, o.number, o.status, o.mode, o.payment_method, o.total_cents, o.created_at,
+               o.restaurant_id, r.name as restaurant_name,
+               coalesce(
+                 (select json_agg(json_build_object(
+                    'name', oi.name, 'quantity', oi.quantity, 'productId', oi.splash360_product_id,
+                    'note', oi.note,
+                    'optionIds', coalesce((select json_agg(oio.splash360_option_id)
+                                           from public.order_item_options oio
+                                           where oio.order_item_id = oi.id), '[]'::json))
+                    order by oi.position)
+                  from public.order_items oi where oi.order_id = o.id),
+                 '[]'::json) as items
+        from public.orders o
+        join public.restaurants r on r.id = o.restaurant_id
+        where o.tenant_id = ${tenantId} and o.loyalty_member_id = ${memberId}
+          and (${page.beforeNumber}::int is null or o.number < ${page.beforeNumber})
+        order by o.number desc
+        limit ${page.limit}`;
+      return rows.map((r) => ({
+        id: r.id,
+        number: r.number,
+        status: r.status,
+        mode: r.mode,
+        paymentMethod: r.payment_method,
+        totalCents: r.total_cents,
+        createdAt: r.created_at.toISOString(),
+        restaurantId: r.restaurant_id,
+        restaurantName: r.restaurant_name,
+        items: r.items,
+      }));
     },
 
     async getConfig(tenantId, restaurantId) {

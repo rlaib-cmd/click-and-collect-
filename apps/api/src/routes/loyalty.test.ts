@@ -7,6 +7,7 @@ import {
   loyaltyMemberSchema,
   loyaltyProgramSchema,
   loyaltySessionSchema,
+  memberOrdersSchema,
   orderTrackingSchema,
   placedOrderSchema,
   quoteSchema,
@@ -202,6 +203,31 @@ describe('club fidélité', () => {
         await quote(null, `${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}_${'a'.repeat(43)}`),
       ),
     ).toEqual(['loyalty_session_invalid']);
+  });
+
+  it('« Mes commandes » : seulement les commandes du membre, avec un suivi utilisable', async () => {
+    const s = setup();
+    const { memberToken } = await join(s);
+    const { memberToken: other } = await join(s, 'autre@example.fr');
+    const res = await post(s, '/orders', order(memberToken, null, 'cle-historique-0001'));
+    expect(res.status).toBe(201);
+    const placed = placedOrderSchema.parse(await res.json());
+
+    const list = async (token: string | null) =>
+      s.app.request(`${base}/loyalty/me/orders`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    expect((await list(null)).status).toBe(401);
+    const mine = memberOrdersSchema.parse(await (await list(memberToken)).json());
+    expect(mine.orders.map((o) => o.number)).toEqual([placed.number]);
+    expect(mine.orders[0]?.items.length).toBeGreaterThan(0);
+    expect(mine.nextBefore).toBeNull();
+    // Le jeton remis ouvre le suivi de cette commande.
+    const tracking = await s.app.request(`${base}/orders/${placed.orderId}`, {
+      headers: { Authorization: `Bearer ${mine.orders[0]?.accessToken ?? ''}` },
+    });
+    expect(tracking.status).toBe(200);
+    expect(memberOrdersSchema.parse(await (await list(other)).json()).orders).toEqual([]);
   });
 
   it('crédite les points et consomme la récompense au paiement, une seule fois', async () => {

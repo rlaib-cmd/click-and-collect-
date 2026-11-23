@@ -7,6 +7,7 @@ import {
   otpVerifyRequestSchema,
   type LoyaltyProgramDto,
   type LoyaltySession,
+  type MemberOrdersDto,
   type OtpStartResponse,
 } from '@splash360/contracts';
 import type { OrderingStore, TenantWithTheme } from '@splash360/db';
@@ -14,6 +15,7 @@ import type { Context, Hono } from 'hono';
 import { apiError } from '../errors';
 import { consumeOtp, startOtp, verifyOtp, type OtpDeps } from '../loyalty/otp';
 import { memberToken, memberView, verifyMemberToken } from '../loyalty/service';
+import { orderAccessToken } from '../payments/tokens';
 
 export interface LoyaltyRoutesDeps {
   readonly loyalty?: LoyaltyProvider | undefined;
@@ -26,7 +28,7 @@ export interface LoyaltyRoutesDeps {
 
 /** Commandes en cours avec cadeau : leurs points sont réservés (ADR 0013). */
 type ReservationDeps = Partial<{
-  readonly ordering: Pick<OrderingStore, 'rewardHolds'>;
+  readonly ordering: Pick<OrderingStore, 'rewardHolds' | 'memberOrders'>;
   readonly now: () => Date;
 }>;
 
@@ -208,5 +210,44 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
     if (!member) return apiError(c, 'unauthorized', 'Session fidélité invalide');
     c.header('Cache-Control', 'no-store');
     return c.json(await view(ctx, member));
+  });
+
+  /** Historique « Mes commandes » (lot 11) : uniquement les commandes du membre connecté. */
+  app.get('/:subdomain/loyalty/me/orders', async (c) => {
+    const tenant = c.get('tenant');
+    const memberId = verifyMemberToken(deps.tokenSecret, tenant.id, bearerMember(c));
+    if (!memberId) return apiError(c, 'unauthorized', 'Session fidélité invalide');
+    if (!deps.ordering) return apiError(c, 'not_found', 'Historique indisponible');
+    const before = Number(c.req.query('before'));
+    const limit = 20;
+    const rows = await deps.ordering.memberOrders(tenant.id, memberId, {
+      limit: limit + 1,
+      beforeNumber: Number.isSafeInteger(before) && before > 0 ? before : null,
+    });
+    const page = rows.slice(0, limit);
+    const body: MemberOrdersDto = {
+      orders: page.map((o) => ({
+        orderId: o.id,
+        number: o.number,
+        status: o.status,
+        mode: o.mode,
+        paymentMethod: o.paymentMethod,
+        totalCents: o.totalCents,
+        createdAt: o.createdAt,
+        restaurantId: o.restaurantId,
+        restaurantName: o.restaurantName,
+        items: o.items.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          productId: i.productId,
+          optionIds: [...i.optionIds],
+          note: i.note,
+        })),
+        accessToken: orderAccessToken(deps.tokenSecret, o.id),
+      })),
+      nextBefore: rows.length > limit ? (page.at(-1)?.number ?? null) : null,
+    };
+    c.header('Cache-Control', 'no-store');
+    return c.json(body);
   });
 }
