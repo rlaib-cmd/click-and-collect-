@@ -116,6 +116,19 @@ export default function CheckoutScreen() {
     promoCode !== null && quote.error instanceof ApiRequestError
       ? quote.error.issues.find((i) => i.code.startsWith('promo_'))?.code
       : undefined;
+  // Code promo refusé au moment de commander (désactivé entre-temps) : on le retire et on l'explique.
+  const placePromoRefusal =
+    place.error instanceof ApiRequestError
+      ? place.error.issues.find((i) => i.code.startsWith('promo_'))?.code
+      : undefined;
+  useEffect(() => {
+    if (!placePromoRefusal) return;
+    setPromoCode(null);
+    setPromoNotice(
+      (messages.checkout.issue as Record<string, string>)[placePromoRefusal] ??
+        messages.checkout.issue.other,
+    );
+  }, [placePromoRefusal]);
   useEffect(() => {
     if (!promoRefusal) return;
     setPromoCode(null);
@@ -338,9 +351,7 @@ export default function CheckoutScreen() {
           </Pressable>
           {placeError ? (
             <Text style={{ color: palette.accent }} accessibilityRole="alert">
-              {placeError.code === 'slot_full'
-                ? messages.checkout.slotFull
-                : messages.tenant.networkError}
+              {placeErrorText(placeError)}
             </Text>
           ) : null}
         </View>
@@ -775,3 +786,14 @@ const styles = StyleSheet.create({
   missing: { textAlign: 'center', fontSize: 13, marginBottom: 8 },
   footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
 });
+
+/** Message d'un refus de commande : créneau complet, problème précis du panier, ou réseau. */
+function placeErrorText(error: ApiRequestError): string {
+  if (error.code === 'slot_full') return messages.checkout.slotFull;
+  const texts = messages.checkout.issue as Record<string, string>;
+  const known = error.issues.map((i) => texts[i.code]).find((x): x is string => Boolean(x));
+  if (known) return known;
+  return error.code === 'order_invalid'
+    ? messages.checkout.issue.other
+    : messages.tenant.networkError;
+}
