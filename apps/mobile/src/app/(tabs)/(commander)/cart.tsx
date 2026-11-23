@@ -31,6 +31,12 @@ export default function CartScreen() {
   const minimum =
     cart.setup.mode === 'delivery' ? (availability.data?.delivery?.minimumCents ?? 0) : 0;
   const missing = Math.max(0, minimum - subtotalCents);
+  // Cadeau fidélité retenu (lot 11) : rappel, et avertissement s'il n'y a rien de payant à côté.
+  const giftName = cart.reward
+    ? (lines.find((l) => l.product?.id === cart.reward?.productId)?.product?.name ?? null)
+    : null;
+  const onlyGift =
+    cart.reward !== null && cart.lines.every((l) => l.productId === cart.reward?.productId);
 
   return (
     <Screen>
@@ -82,6 +88,21 @@ export default function CartScreen() {
             </Text>
           </View>
         ))}
+        {giftName ? (
+          <View
+            style={[styles.gift, { backgroundColor: palette.loyalty }]}
+            accessibilityRole="alert"
+          >
+            <Text style={{ color: palette.onLoyalty, fontWeight: '800' }}>
+              {messages.loyalty.giftInCart(giftName)}
+            </Text>
+            {onlyGift ? (
+              <Text style={{ color: palette.onLoyalty, fontSize: 13 }}>
+                {messages.checkout.issue.reward_needs_paid_items}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push({ pathname: '/r/[restaurantId]', params: { restaurantId } })}
@@ -132,6 +153,7 @@ function Qty({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
+  gift: { padding: 12, borderRadius: 12, gap: 2, marginTop: 8 },
   content: { padding: 16, gap: 4 },
   title: { fontSize: 26, fontWeight: '700', marginBottom: 12 },
   line: {

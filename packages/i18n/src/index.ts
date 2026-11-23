@@ -281,6 +281,7 @@ export const fr = {
     addGift: 'Ajouter mon cadeau',
     giftUnlocked: (name: string) => `Débloqué · ${name}`,
     giftPick: 'Touche un produit pour l’ajouter offert.',
+    giftInCart: (name: string) => `🎁 Cadeau fidélité : ${name} offert`,
     rewardTap: 'Débloqué · touche pour l’utiliser',
     rewardTapAdd: (name: string) => `Débloqué · touche pour ajouter ${name} offert`,
     rewardNeedsProduct: (name: string) => `Ajoute ${name} au panier pour l’utiliser.`,
