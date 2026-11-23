@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiRequestError } from '@/api/client';
-import { useAvailability, usePlaceOrder, useQuote } from '@/api/hooks';
+import { useAvailability, useMenu, usePlaceOrder, useQuote } from '@/api/hooks';
 import { useCart } from '@/cart/CartProvider';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { Chip } from '@/components/Chip';
@@ -325,7 +325,8 @@ function Rewards({
 }) {
   const { palette, radii, style: brand } = useTenant();
   const { program, member } = useLoyalty();
-  const { cart } = useCart();
+  const { cart, dispatch } = useCart();
+  const menu = useMenu(cart.restaurantId ?? '');
   if (!program?.enabled) return null;
   if (!member) {
     const estimate = Math.floor((totalCents * program.pointsPerEuro) / 100);
@@ -347,6 +348,28 @@ function Rewards({
     );
   }
   const inCart = new Set(cart.lines.map((l) => l.productId));
+  const products = new Map(
+    (menu.data?.categories ?? []).flatMap((c) => c.products.map((p) => [p.id, p] as const)),
+  );
+  /** Cadeau débloqué absent du panier : on l'ajoute d'un geste (ou on ouvre le produit s'il a des choix). */
+  const take = (rewardId: string, productId: string) => {
+    const product = products.get(productId);
+    if (!cart.restaurantId) return;
+    const needsChoice = product?.optionGroups.some((g) => g.required || g.min > 0) ?? true;
+    if (!product || needsChoice) {
+      router.navigate(`/r/${cart.restaurantId}/p/${productId}`);
+      return;
+    }
+    dispatch({
+      type: 'add',
+      restaurantId: cart.restaurantId,
+      productId,
+      quantity: 1,
+      optionIds: [],
+      note: null,
+    });
+    onSelect(rewardId);
+  };
   return (
     <View
       style={[
@@ -365,36 +388,45 @@ function Rewards({
       </View>
       {program.rewards.map((r) => {
         const missing = Math.max(0, r.costPoints - member.points);
-        const usable = missing === 0 && inCart.has(r.productId);
+        const unlocked = missing === 0;
+        const present = inCart.has(r.productId);
         const on = selected === r.id;
+        // Débloqué : couleur du club ; appliqué : plein ; pas encore atteint : grisé.
+        const bg = on ? palette.loyalty : unlocked ? palette.background : 'transparent';
+        const fg = on ? palette.onLoyalty : palette.text;
         return (
           <Pressable
             key={r.id}
             accessibilityRole="radio"
-            accessibilityState={{ checked: on, disabled: !usable }}
-            disabled={!usable}
-            onPress={() => onSelect(on ? null : r.id)}
+            accessibilityState={{ checked: on, disabled: !unlocked }}
+            disabled={!unlocked}
+            onPress={() =>
+              on ? onSelect(null) : present ? onSelect(r.id) : take(r.id, r.productId)
+            }
             style={[
               styles.reward,
               {
                 borderRadius: radii.button,
-                borderColor: on ? palette.primary : palette.border,
-                backgroundColor: on ? palette.primary : 'transparent',
-                opacity: usable ? 1 : 0.5,
+                borderColor: unlocked ? palette.loyalty : palette.border,
+                borderWidth: unlocked ? 2 : 1,
+                backgroundColor: bg,
+                opacity: unlocked ? 1 : 0.5,
               },
             ]}
           >
-            <Text style={{ color: on ? palette.onPrimary : palette.text, fontWeight: '700' }}>
+            <Text style={{ color: fg, fontWeight: '700' }}>
               {r.name} · {messages.loyalty.points(r.costPoints)}
               {on ? ` ✓ ${messages.loyalty.rewardApplied}` : ''}
             </Text>
-            {!usable ? (
-              <Text style={{ color: palette.textMuted, fontSize: 12 }}>
-                {missing > 0
-                  ? messages.loyalty.rewardTooExpensive(missing)
-                  : messages.loyalty.rewardNeedsProduct(r.name)}
+            {on ? null : unlocked ? (
+              <Text style={{ color: palette.loyalty, fontSize: 12, fontWeight: '800' }}>
+                {present ? messages.loyalty.rewardTap : messages.loyalty.rewardTapAdd(r.name)}
               </Text>
-            ) : null}
+            ) : (
+              <Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                {messages.loyalty.rewardTooExpensive(missing)}
+              </Text>
+            )}
           </Pressable>
         );
       })}

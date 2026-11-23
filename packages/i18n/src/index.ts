@@ -256,6 +256,8 @@ export const fr = {
     myOrders: 'Commander maintenant',
     useReward: 'Tes récompenses',
     rewardApplied: 'Offert',
+    rewardTap: 'Débloqué · touche pour l’utiliser',
+    rewardTapAdd: (name: string) => `Débloqué · touche pour ajouter ${name} offert`,
     rewardNeedsProduct: (name: string) => `Ajoute ${name} au panier pour l’utiliser.`,
     rewardTooExpensive: (missing: number) => `Encore ${missing} pts`,
     willEarn: (n: number) => `Cette commande te rapporte +${n} pts.`,
