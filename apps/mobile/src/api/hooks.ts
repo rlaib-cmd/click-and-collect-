@@ -12,6 +12,7 @@ import {
   type AddressDto,
   type PlaceOrderRequest,
   type QuoteRequest,
+  memberOrdersSchema,
 } from '@splash360/contracts';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTenant } from '@/tenant/TenantProvider';
@@ -185,5 +186,22 @@ export function useRegisterPushToken(
     enabled: enabled && accessToken !== null,
     staleTime: Infinity,
     retry: false,
+  });
+}
+
+/** « Mes commandes » (lot 11) : historique du membre connecté, par pages de 20. */
+export function useMemberOrders(memberToken: string | null, before: number | null) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useQuery({
+    queryKey: ['member-orders', sub, memberToken, before],
+    queryFn: () =>
+      apiGet(
+        `/v1/tenants/${sub}/loyalty/me/orders${before ? `?before=${before}` : ''}`,
+        memberOrdersSchema,
+        (input, init) =>
+          fetch(input, { ...init, headers: { Authorization: `Bearer ${memberToken ?? ''}` } }),
+      ),
+    enabled: memberToken !== null,
   });
 }

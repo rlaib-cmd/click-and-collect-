@@ -11,7 +11,7 @@ const TABS: readonly { name: string; label: string; icon: IconName; loyalty: boo
   { name: 'avantages', label: messages.tabs.rewards, icon: 'gift', loyalty: true },
   { name: '(commander)', label: messages.tabs.order, icon: 'burger', loyalty: false },
   { name: 'carte', label: messages.tabs.card, icon: 'qr', loyalty: true },
-  { name: 'compte', label: messages.tabs.account, icon: 'user', loyalty: false },
+  { name: '(compte)', label: messages.tabs.account, icon: 'user', loyalty: false },
 ];
 
 /**

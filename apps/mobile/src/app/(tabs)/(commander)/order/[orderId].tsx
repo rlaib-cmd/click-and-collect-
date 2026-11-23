@@ -30,7 +30,7 @@ type StepKey = keyof typeof messages.order.steps;
 
 /** Paiement puis suivi de la commande (sections 4 et 5). */
 export default function OrderScreen() {
-  const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const { orderId, from } = useLocalSearchParams<{ orderId: string; from?: string }>();
   const { config, palette, style: brand } = useTenant();
   const { cart, dispatch } = useCart();
   const insets = useSafeAreaInsets();
@@ -49,10 +49,10 @@ export default function OrderScreen() {
     );
   }, [config.tenant.subdomain, orderId]);
 
-  // La commande est enregistrée : le panier peut être vidé.
+  // La commande vient d'être passée : le panier peut être vidé (pas depuis l'historique).
   useEffect(() => {
-    if (tracking.data) dispatch({ type: 'clear' });
-  }, [tracking.data, dispatch]);
+    if (tracking.data && from !== 'history') dispatch({ type: 'clear' });
+  }, [tracking.data, dispatch, from]);
 
   if (token === null)
     return <ErrorState message={messages.order.notFound} onRetry={() => router.replace('/')} />;
