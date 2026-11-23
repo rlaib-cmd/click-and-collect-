@@ -20,6 +20,7 @@ const NAV: { href: string; label: string; roles: readonly string[] }[] = [
   { href: '/paiement', label: t.nav.payments, roles: ['super_admin', 'tenant_admin'] },
   { href: '/clients', label: t.nav.customers, roles: ['super_admin', 'tenant_admin'] },
   { href: '/club', label: t.nav.club, roles: ['super_admin', 'tenant_admin'] },
+  { href: '/codes-promo', label: t.nav.promos, roles: ['super_admin', 'tenant_admin'] },
   { href: '/equipe', label: t.nav.team, roles: ['super_admin', 'tenant_admin'] },
   { href: '/journal', label: t.nav.audit, roles: ['super_admin', 'tenant_admin'] },
 ];

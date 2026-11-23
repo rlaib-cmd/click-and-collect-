@@ -17,6 +17,7 @@ import { SetupSummary } from '@/components/SetupSummary';
 import { BackButton, ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { firstMissing } from '@/lib/checkout';
 import { formatPrice } from '@/lib/format';
+import { listSavedPromos } from '@/orders/promos';
 import { saveOrder } from '@/orders/storage';
 import { titleStyle } from '@/components/brand';
 import { TAB_BAR_CLEARANCE } from '@/components/layout';
@@ -41,6 +42,9 @@ export default function CheckoutScreen() {
   const loyalty = useLoyalty();
   // Cadeau choisi (palier + produit), retenu dans le panier : il peut venir de l'écran Avantages.
   const reward = cart.reward;
+  // Code promo (lot 11) : contrôlé et calculé par le serveur au devis.
+  const [promoCode, setPromoCode] = useState<string | null>(null);
+  const [promoNotice, setPromoNotice] = useState<string | null>(null);
   // Moyen de paiement (ADR 0010) : en ligne par défaut, sur place si le restaurant n'encaisse pas en ligne.
   const availability = useAvailability(cart.restaurantId);
   const [chosenMethod, setChosenMethod] = useState<'online' | 'on_site' | null>(null);
@@ -85,8 +89,9 @@ export default function CheckoutScreen() {
                   rewardProductId: reward?.productId ?? null,
                 }
               : null,
+            promoCode,
           },
-    [cart, loyalty.memberToken, reward],
+    [cart, loyalty.memberToken, reward, promoCode],
   );
   const quote = useQuote(cart.restaurantId, request);
   // Récompense refusée par le serveur (points, produit retiré) : on la retire et on recalcule.
@@ -103,6 +108,19 @@ export default function CheckoutScreen() {
         )?.code
       : undefined;
   const [rewardNotice, setRewardNotice] = useState<string | null>(null);
+  // Code promo refusé : on le retire, on explique pourquoi et on recalcule sans lui.
+  const promoRefusal =
+    promoCode !== null && quote.error instanceof ApiRequestError
+      ? quote.error.issues.find((i) => i.code.startsWith('promo_'))?.code
+      : undefined;
+  useEffect(() => {
+    if (!promoRefusal) return;
+    setPromoCode(null);
+    setPromoNotice(
+      (messages.checkout.issue as Record<string, string>)[promoRefusal] ??
+        messages.checkout.issue.other,
+    );
+  }, [promoRefusal]);
   useEffect(() => {
     if (!refusal) return;
     dispatch({ type: 'setReward', reward: null });
@@ -220,8 +238,23 @@ export default function CheckoutScreen() {
               value={`− ${formatPrice(q.totals.discountCents)}`}
             />
           ) : null}
+          {q.totals.promoDiscountCents > 0 && q.promoCode ? (
+            <Row
+              label={messages.promo.line(q.promoCode)}
+              value={`− ${formatPrice(q.totals.promoDiscountCents)}`}
+            />
+          ) : null}
           <Row label={messages.checkout.total} value={formatPrice(q.totals.totalCents)} strong />
         </View>
+
+        <PromoField
+          applied={q.promoCode}
+          notice={promoNotice}
+          onApply={(code) => {
+            setPromoNotice(null);
+            setPromoCode(code);
+          }}
+        />
 
         <Rewards
           onChange={() => setRewardNotice(null)}
@@ -498,6 +531,95 @@ function Rewards({
   );
 }
 
+/** Code promo avant paiement (lot 11) : saisie libre ou code gardé dans « Mes codes promo ». */
+function PromoField({
+  applied,
+  notice,
+  onApply,
+}: {
+  applied: string | null;
+  notice: string | null;
+  onApply: (code: string | null) => void;
+}) {
+  const { palette, radii, config, style: brand } = useTenant();
+  const [input, setInput] = useState('');
+  const [saved, setSaved] = useState<string[]>([]);
+  useEffect(() => {
+    void listSavedPromos(config.tenant.subdomain).then(setSaved);
+  }, [config.tenant.subdomain]);
+  const t = messages.promo;
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.h2, titleStyle(brand), { color: palette.text }]}>{t.title}</Text>
+      {applied ? (
+        <View
+          style={[
+            styles.promoApplied,
+            { backgroundColor: palette.surface, borderRadius: radii.card },
+          ]}
+        >
+          <Text style={{ color: palette.text, fontWeight: '800', flex: 1 }}>
+            {t.applied(applied)}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => onApply(null)}
+            style={styles.promoAction}
+          >
+            <Text style={{ color: palette.accent, fontWeight: '700' }}>{t.remove}</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          <View style={styles.promoRow}>
+            <TextInput
+              value={input}
+              onChangeText={(v) => setInput(v.toUpperCase())}
+              placeholder={t.placeholder}
+              placeholderTextColor={palette.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              accessibilityLabel={t.title}
+              style={[
+                styles.input,
+                styles.promoInput,
+                { borderColor: palette.border, color: palette.text },
+              ]}
+            />
+            <Pressable
+              accessibilityRole="button"
+              disabled={input.trim().length < 3}
+              onPress={() => onApply(input.trim())}
+              style={[
+                styles.promoButton,
+                {
+                  backgroundColor: palette.loyalty,
+                  borderRadius: radii.button,
+                  opacity: input.trim().length < 3 ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Text style={{ color: palette.onLoyalty, fontWeight: '800' }}>{t.apply}</Text>
+            </Pressable>
+          </View>
+          {saved.length > 0 ? (
+            <View style={styles.promoChips}>
+              {saved.map((code) => (
+                <Chip key={code} label={code} selected={false} onPress={() => onApply(code)} />
+              ))}
+            </View>
+          ) : null}
+        </>
+      )}
+      {notice ? (
+        <Text style={{ color: palette.accent, fontWeight: '600' }} accessibilityRole="alert">
+          {notice}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function Issues({ codes }: { codes: readonly string[] }) {
   const { palette, style: brand } = useTenant();
   const texts = [
@@ -602,6 +724,22 @@ const styles = StyleSheet.create({
   rewardsHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   reward: { paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, gap: 6 },
   giftRow: { flexDirection: 'row', gap: 8 },
+  promoRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  promoInput: { flex: 1, fontWeight: '700' },
+  promoButton: {
+    minHeight: 48,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promoApplied: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    minHeight: 52,
+  },
+  promoAction: { minHeight: 44, justifyContent: 'center' },
+  promoChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   gift: {
     borderWidth: 2,
     paddingHorizontal: 10,
