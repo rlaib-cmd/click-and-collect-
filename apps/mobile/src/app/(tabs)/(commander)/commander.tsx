@@ -10,6 +10,7 @@ import { SetupForm } from '@/components/SetupForm';
 import { CheckerBand, titleStyle } from '@/components/brand';
 import { TenantLogo } from '@/components/TenantLogo';
 import { ErrorState, Loading, PrimaryButton } from '@/components/ui';
+import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { useTenant } from '@/tenant/TenantProvider';
 
 /** Commander : restaurant, mode, adresse, jour et heure, puis la carte. */
@@ -65,7 +66,7 @@ export default function HomeScreen() {
       style={{ backgroundColor: palette.background }}
       contentContainerStyle={[
         styles.container,
-        { paddingTop: brandHeader ? 0 : insets.top + 24, paddingBottom: insets.bottom + 24 },
+        { paddingTop: brandHeader ? 0 : insets.top + 24, paddingBottom: TAB_BAR_CLEARANCE + 24 },
       ]}
     >
       {brandHeader ? (

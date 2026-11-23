@@ -19,6 +19,7 @@ import { formatPrice } from '@/lib/format';
 import { findSavedOrder } from '@/orders/storage';
 import { PaymentForm } from '@/payments/PaymentForm';
 import { titleStyle } from '@/components/brand';
+import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const STEPS = {
@@ -68,7 +69,7 @@ export default function OrderScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
+          { paddingTop: insets.top + 16, paddingBottom: TAB_BAR_CLEARANCE + 24 },
         ]}
       >
         <Text
