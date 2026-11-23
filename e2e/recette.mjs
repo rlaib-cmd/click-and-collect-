@@ -23,7 +23,6 @@ const SHOTS = process.env.E2E_SHOTS ?? 'e2e/screenshots';
 const ONLY = (process.env.E2E_ONLY ?? 'a,b,c,d,e').split(',');
 const TENANT = 'billsburger';
 const RESTAURANT = '7cb95cb9-a290-46be-95b5-7720ffbf27b2';
-const DEMO_PHONE = '06 00 00 04 50';
 
 if (!PASSWORD) {
   console.error('E2E_PASSWORD manquant : mot de passe des comptes de test de la recette.');
@@ -100,11 +99,15 @@ async function appPage() {
   return context.newPage();
 }
 
-/** Connexion du membre de démonstration par code (la recette affiche le code à l'écran). */
+/**
+ * Inscription d'un nouveau membre par code (la recette affiche le code à l'écran). Un numéro neuf
+ * à chaque passage : les envois de code sont limités par numéro (ADR 0012).
+ */
 async function memberLogin(page) {
+  const phone = `06${String(Math.floor(10_000_000 + Math.random() * 89_999_999))}`;
   await page.goto(`${APP}/?enseigne=${TENANT}`);
   await page.getByRole('tab', { name: 'Carte VIP' }).click();
-  await page.getByLabel('Numéro de mobile').first().fill(DEMO_PHONE);
+  await page.getByLabel('Numéro de mobile').first().fill(phone);
   await page
     .getByRole('button', { name: /Recevoir mon code/i })
     .first()
@@ -114,6 +117,12 @@ async function memberLogin(page) {
     .first()
     .innerText({ timeout: 20_000 });
   await page.getByLabel('Code à 6 chiffres').first().fill(text.match(/\d{6}/)[0]);
+  await page.getByPlaceholder('Prénom').first().fill('Test E2E');
+  await page.getByRole('switch').first().click();
+  await page
+    .getByRole('button', { name: /Créer mon compte/i })
+    .first()
+    .click();
   await page
     .getByText(/MEMBRE VIP/i)
     .first()
@@ -333,12 +342,7 @@ try {
   // (c) + (d) : code promo créé au back-office, accepté par l'app ; commande sur place suivie
   // des deux côtés jusqu'à la remise, points crédités.
   const member = ONLY.includes('c') || ONLY.includes('d') ? await appPage() : null;
-  // Un code par numéro et par minute (ADR 0012) : si un envoi récent bloque, on attend.
-  if (member)
-    await memberLogin(member).catch(async () => {
-      await sleep(65_000);
-      await memberLogin(member);
-    });
+  if (member) await memberLogin(member);
   const code = `E2E${Date.now().toString(36).toUpperCase().slice(-6)}`;
 
   await scenario('c', 'Code promo créé au back-office, accepté au récapitulatif', async () => {
