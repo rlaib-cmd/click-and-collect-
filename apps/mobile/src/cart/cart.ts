@@ -190,3 +190,14 @@ export function reorderCart(snapshot: CartState): CartState | null {
   // Le cadeau n'est pas reconduit : il dépend des points du moment.
   return { ...snapshot, reward: null, setup: { ...snapshot.setup, time: { kind: 'asap' } } };
 }
+
+/**
+ * Le cadeau choisi est seul au panier (une seule unité du produit offert, rien d'autre) :
+ * il faut au moins un article payant pour l'utiliser. Le serveur recontrôle.
+ */
+export function giftAlone(state: CartState): boolean {
+  const reward = state.reward;
+  if (!reward) return false;
+  const units = state.lines.reduce((n, l) => n + l.quantity, 0);
+  return units <= 1 && state.lines.every((l) => l.productId === reward.productId);
+}

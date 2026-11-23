@@ -10,6 +10,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiRequestError } from '@/api/client';
 import { useAvailability, usePlaceOrder, useQuote } from '@/api/hooks';
+import { giftAlone } from '@/cart/cart';
 import { useCart } from '@/cart/CartProvider';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { Chip } from '@/components/Chip';
@@ -42,6 +43,8 @@ export default function CheckoutScreen() {
   const loyalty = useLoyalty();
   // Cadeau choisi (palier + produit), retenu dans le panier : il peut venir de l'écran Avantages.
   const reward = cart.reward;
+  // Cadeau seul au panier : il reste dans le panier, mais n'est pas demandé au devis et bloque la commande.
+  const aloneGift = giftAlone(cart);
   // Code promo (lot 11) : contrôlé et calculé par le serveur au devis.
   const [promoCode, setPromoCode] = useState<string | null>(null);
   const [promoNotice, setPromoNotice] = useState<string | null>(null);
@@ -85,13 +88,13 @@ export default function CheckoutScreen() {
             loyalty: loyalty.memberToken
               ? {
                   memberToken: loyalty.memberToken,
-                  rewardId: reward?.rewardId ?? null,
-                  rewardProductId: reward?.productId ?? null,
+                  rewardId: aloneGift ? null : (reward?.rewardId ?? null),
+                  rewardProductId: aloneGift ? null : (reward?.productId ?? null),
                 }
               : null,
             promoCode,
           },
-    [cart, loyalty.memberToken, reward, promoCode],
+    [cart, loyalty.memberToken, reward, aloneGift, promoCode],
   );
   const quote = useQuote(cart.restaurantId, request);
   // Récompense refusée par le serveur (points, produit retiré) : on la retire et on recalcule.
@@ -121,19 +124,8 @@ export default function CheckoutScreen() {
         messages.checkout.issue.other,
     );
   }, [promoRefusal]);
-  // Cadeau seul dans le panier : on le garde de côté et on bloque la commande (sinon il serait payé).
-  const [parkedGift, setParkedGift] = useState<typeof reward>(null);
-  const linesSignature = cart.lines.map((l) => `${l.key}:${l.quantity}`).join(',');
-  useEffect(() => {
-    if (!parkedGift) return;
-    dispatch({ type: 'setReward', reward: parkedGift });
-    setParkedGift(null);
-    setRewardNotice(null);
-    // Seul un changement du panier relance l'essai.
-  }, [linesSignature]);
   useEffect(() => {
     if (!refusal) return;
-    if (refusal === 'reward_needs_paid_items') setParkedGift(reward);
     dispatch({ type: 'setReward', reward: null });
     setRewardNotice(
       (messages.checkout.issue as Record<string, string>)[refusal] ?? messages.checkout.issue.other,
@@ -162,9 +154,9 @@ export default function CheckoutScreen() {
     contact,
     terms,
     needsMember: method === 'on_site' && loyalty.member === null,
-    giftAlone: parkedGift !== null,
+    giftAlone: aloneGift,
   });
-  const canPay = customer.success && terms && methodOk && parkedGift === null && !place.isPending;
+  const canPay = customer.success && terms && methodOk && !aloneGift && !place.isPending;
   const placeError = place.error instanceof ApiRequestError ? place.error : null;
 
   const submit = () => {

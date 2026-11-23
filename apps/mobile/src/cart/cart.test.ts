@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cartReducer,
   EMPTY_CART,
+  giftAlone,
   itemCount,
   parseStoredCart,
   reorderCart,
@@ -126,5 +127,28 @@ describe('commander comme la dernière fois', () => {
 
   it('ignore un panier vide ou sans restaurant', () => {
     expect(reorderCart(EMPTY_CART)).toBeNull();
+  });
+});
+
+describe('giftAlone', () => {
+  const reward = { rewardId: 'rw', productId: 'frites' };
+  const line = (productId: string, quantity: number) => ({
+    key: productId,
+    productId,
+    quantity,
+    optionIds: [],
+    note: null,
+  });
+  it('signale un cadeau seul au panier', () => {
+    expect(giftAlone({ ...EMPTY_CART, reward, lines: [line('frites', 1)] })).toBe(true);
+  });
+  it('accepte le cadeau avec un autre article ou une 2e unité', () => {
+    expect(
+      giftAlone({ ...EMPTY_CART, reward, lines: [line('frites', 1), line('burger', 1)] }),
+    ).toBe(false);
+    expect(giftAlone({ ...EMPTY_CART, reward, lines: [line('frites', 2)] })).toBe(false);
+  });
+  it('ignore un panier sans cadeau', () => {
+    expect(giftAlone({ ...EMPTY_CART, lines: [line('frites', 1)] })).toBe(false);
   });
 });
