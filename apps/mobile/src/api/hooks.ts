@@ -5,6 +5,7 @@ import {
   menuSchema,
   orderTrackingSchema,
   paymentSessionSchema,
+  posReadinessSchema,
   placedOrderSchema,
   quoteSchema,
   restaurantListSchema,
@@ -139,6 +140,29 @@ export function useOrderTracking(orderId: string, accessToken: string | null) {
     enabled: accessToken !== null,
     refetchInterval: (query) =>
       query.state.data && TERMINAL.has(query.state.data.status) ? false : 4000,
+  });
+}
+
+/**
+ * Caisse du restaurant prête à accepter la commande (ADR 0018) : interrogée chaque seconde
+ * tant qu'elle répond « waiting » ; le paiement n'est proposé qu'à « ready ».
+ */
+export function usePosReadiness(orderId: string, accessToken: string | null, enabled: boolean) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useQuery({
+    queryKey: ['pos-readiness', sub, orderId],
+    queryFn: () =>
+      apiGet(
+        `/v1/tenants/${sub}/orders/${orderId}/pos-readiness`,
+        posReadinessSchema,
+        (input, init) =>
+          fetch(input, { ...init, headers: { Authorization: `Bearer ${accessToken ?? ''}` } }),
+      ),
+    enabled: enabled && accessToken !== null,
+    refetchInterval: (query) =>
+      !query.state.data || query.state.data.state === 'waiting' ? 1000 : false,
+    gcTime: 0,
   });
 }
 

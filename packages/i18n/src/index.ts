@@ -186,6 +186,13 @@ export const fr = {
     processing: 'Paiement en cours…',
     failed: 'Le paiement n’a pas abouti. Vous pouvez réessayer.',
     unavailable: 'Le paiement en ligne est momentanément indisponible pour ce restaurant.',
+    /** Caisse du restaurant pas encore prête (ADR 0018) : le paiement attend. */
+    posWaiting: 'Le restaurant prépare votre commande…',
+    posWaitingHint:
+      'Nous attendons que la caisse du restaurant accepte votre commande. Le paiement s’ouvre dans quelques secondes.',
+    posUnavailable:
+      'Le restaurant ne peut pas prendre votre commande pour le moment. Vous n’avez pas été débité.',
+    backToMenu: 'Retour à la carte',
     secure:
       'Paiement sécurisé par Stripe. Vos données de carte ne transitent pas par nos serveurs.',
   },

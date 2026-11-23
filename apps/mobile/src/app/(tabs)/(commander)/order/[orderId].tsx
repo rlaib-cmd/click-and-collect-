@@ -3,13 +3,14 @@ import { messages } from '@splash360/i18n';
 import QRCode from 'react-native-qrcode-svg';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiRequestError } from '@/api/client';
 import {
   useAvailability,
   useOrderTracking,
   usePaymentSession,
+  usePosReadiness,
   useRegisterPushToken,
 } from '@/api/hooks';
 import { useCart } from '@/cart/CartProvider';
@@ -152,14 +153,41 @@ function PaymentSection({
   merchantName: string;
 }) {
   const { palette } = useTenant();
+  // La caisse doit d'abord accepter la commande : pas de paiement avant (ADR 0018).
+  const readiness = usePosReadiness(orderId, token, true);
+  const ready = readiness.data?.state === 'ready';
   const session = usePaymentSession(orderId, token);
   const [confirmed, setConfirmed] = useState(false);
   const { mutate } = session;
 
   useEffect(() => {
-    mutate();
-  }, [mutate]);
+    if (ready) mutate();
+  }, [ready, mutate]);
 
+  if (readiness.data?.state === 'unavailable')
+    return (
+      <View style={styles.payment}>
+        <Text style={{ color: palette.accent, textAlign: 'center' }} accessibilityRole="alert">
+          {messages.payment.posUnavailable}
+        </Text>
+        <PrimaryButton label={messages.payment.backToMenu} onPress={() => router.replace('/')} />
+      </View>
+    );
+  if (!ready)
+    return (
+      <View style={styles.payment} accessibilityLiveRegion="polite">
+        <ActivityIndicator color={palette.primary} />
+        <Text
+          style={{ color: palette.text, textAlign: 'center', fontWeight: '700' }}
+          accessibilityRole="text"
+        >
+          {messages.payment.posWaiting}
+        </Text>
+        <Text style={{ color: palette.textMuted, textAlign: 'center', fontSize: 13 }}>
+          {messages.payment.posWaitingHint}
+        </Text>
+      </View>
+    );
   if (confirmed)
     return (
       <Text style={{ color: palette.textMuted, textAlign: 'center' }}>
