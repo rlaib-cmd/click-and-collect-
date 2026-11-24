@@ -50,7 +50,11 @@ export interface PaymentGateway {
     idempotencyKey: string;
   }): Promise<void>;
   /** Vérifie la signature et décode l'événement ; lève `InvalidWebhookSignature` sinon. */
-  parseWebhook(rawBody: string, signature: string | undefined): PaymentEvent;
+  /**
+   * Vérifie la signature et traduit l'événement. Asynchrone : sur Supabase Edge (Deno), le SDK Stripe
+   * ne peut vérifier la signature qu'avec SubtleCrypto, donc en asynchrone.
+   */
+  parseWebhook(rawBody: string, signature: string | undefined): Promise<PaymentEvent>;
   /** Crée le compte connecté d'un restaurant (paiements directs, le restaurant est le marchand). */
   createConnectedAccount(input: {
     restaurantId: string;
@@ -101,6 +105,8 @@ export function createStripeGateway(options: {
   webhookSecret: string;
 }): PaymentGateway {
   const stripe = new Stripe(options.secretKey, { maxNetworkRetries: 2, timeout: 15_000 });
+  // SubtleCrypto (Web Crypto) : disponible sous Node 22 comme sous Deno (Supabase Edge).
+  const cryptoProvider = Stripe.createSubtleCryptoProvider();
   return {
     publishableKey: options.publishableKey,
 
@@ -178,11 +184,17 @@ export function createStripeGateway(options: {
       return link.url;
     },
 
-    parseWebhook(rawBody, signature) {
+    async parseWebhook(rawBody, signature) {
       if (!signature) throw new InvalidWebhookSignature();
       let event: Stripe.Event;
       try {
-        event = stripe.webhooks.constructEvent(rawBody, signature, options.webhookSecret);
+        event = await stripe.webhooks.constructEventAsync(
+          rawBody,
+          signature,
+          options.webhookSecret,
+          undefined,
+          cryptoProvider,
+        );
       } catch {
         throw new InvalidWebhookSignature();
       }

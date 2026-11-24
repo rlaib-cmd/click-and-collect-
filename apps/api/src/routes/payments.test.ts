@@ -219,7 +219,7 @@ describe('webhook Stripe', () => {
     expect(retry.status).toBe(200);
   });
 
-  it('vérifie les vraies signatures Stripe', () => {
+  it('vérifie les vraies signatures Stripe (SubtleCrypto, comme sur Supabase Edge)', async () => {
     const secret = 'whsec_cle_de_test';
     const gateway = createStripeGateway({
       secretKey: 'sk_test_x',
@@ -235,14 +235,14 @@ describe('webhook Stripe', () => {
       },
     });
     const header = Stripe.webhooks.generateTestHeaderString({ payload, secret });
-    expect(gateway.parseWebhook(payload, header)).toEqual({
+    await expect(gateway.parseWebhook(payload, header)).resolves.toEqual({
       type: 'payment_succeeded',
       paymentIntentId: 'pi_1',
       amountCents: 1450,
       currency: 'eur',
     });
-    expect(() => gateway.parseWebhook(payload, 't=1,v1=faux')).toThrow();
-    expect(() => gateway.parseWebhook(payload.replace('1450', '1'), header)).toThrow();
+    await expect(gateway.parseWebhook(payload, 't=1,v1=faux')).rejects.toThrow();
+    await expect(gateway.parseWebhook(payload.replace('1450', '1'), header)).rejects.toThrow();
   });
 });
 

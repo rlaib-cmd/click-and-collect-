@@ -12,7 +12,7 @@ export function webhookRoutes(deps: PaymentDeps) {
     const raw = await c.req.text();
     let event;
     try {
-      event = deps.gateway.parseWebhook(raw, c.req.header('stripe-signature'));
+      event = await deps.gateway.parseWebhook(raw, c.req.header('stripe-signature'));
     } catch (error) {
       if (error instanceof InvalidWebhookSignature) return c.json({ received: false }, 400);
       throw error;

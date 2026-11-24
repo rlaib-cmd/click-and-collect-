@@ -47,8 +47,8 @@ export function createFakeGateway(secret = 'whsec_test') {
       );
     },
     parseWebhook(rawBody, signature) {
-      if (signature !== secret) throw new InvalidWebhookSignature();
-      return JSON.parse(rawBody) as PaymentEvent;
+      if (signature !== secret) return Promise.reject(new InvalidWebhookSignature());
+      return Promise.resolve(JSON.parse(rawBody) as PaymentEvent);
     },
   };
   return { gateway, created, cancelled, refunds, accounts };
