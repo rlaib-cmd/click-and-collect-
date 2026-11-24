@@ -26,7 +26,7 @@ export interface PosTiming {
 
 export const DEFAULT_POS_TIMING: PosTiming = {
   readyTimeoutMs: 60_000,
-  confirmTimeoutMs: 5 * 60_000,
+  confirmTimeoutMs: 60_000,
   minCheckIntervalMs: 1000,
 };
 

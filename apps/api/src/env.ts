@@ -58,7 +58,7 @@ const envSchema = z.object({
   SPLASH360_FEE_VAT_RATE: z.coerce.number().min(0).max(1).default(0.2),
   /** Attente maximale de la caisse avant paiement, puis après paiement. */
   POS_READY_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(60),
-  POS_CONFIRM_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(300),
+  POS_CONFIRM_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(60),
   MENU_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(180),
   /** Âge maximal de la carte servie si l'API menu tombe ; au-delà, commande bloquée. Valeur à fixer avec Splash360. */
   /** Géocodeur (API Adresse, format GeoJSON) ; `demo` = adresses de démonstration hors ligne. */

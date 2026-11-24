@@ -43,6 +43,11 @@ describe('toMenu (carte Splash360 → carte interne)', () => {
     expect(ids).not.toContain('prd900');
   });
 
+  it('écarte les cadeaux fidélité à 0 € de la caisse, et leur groupe devenu vide', () => {
+    expect(menu.products.map((p) => p.id)).not.toContain('prd950');
+    expect(menu.categories.map((c) => c.id)).not.toContain('grp40');
+  });
+
   it('ordonne les produits par poids', () => {
     const burgers = menu.products.filter((p) => p.categoryId === 'grp10').map((p) => p.id);
     expect(burgers).toEqual(['prd85', 'prd87']);

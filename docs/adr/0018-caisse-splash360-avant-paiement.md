@@ -43,7 +43,7 @@ Le parcours existant (ADR 0010 et lot 5) déposait la commande **après** paieme
    - Après le webhook Stripe vérifié (seul passage à « payée », inchangé) : l'envoi en caisse
      notifie le paiement (`carte`, montant, identifiant du paiement Stripe en détail) puis attend
      « confirmed ». Une attente n'est pas un échec : nouvel essai 15 s plus tard. Sans confirmation
-     dans les 5 min (`POS_CONFIRM_TIMEOUT_SECONDS`) ou en cas de refus : **remboursement intégral
+     dans les 60 s (`POS_CONFIRM_TIMEOUT_SECONDS`, choix du 24/11 : 60 s à chaque étape) ou en cas de refus : **remboursement intégral
      automatique**, client prévenu, alerte au back-office.
    - Paiement sur place : l'envoi en caisse dépose la commande, attend « ready », notifie un
      paiement vide (`reglements: []`, prévu par la doc), attend « confirmed » ; en cas d'échec,

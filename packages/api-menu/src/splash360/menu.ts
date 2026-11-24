@@ -10,7 +10,9 @@ import type { Splash360Client } from './client';
  * - les `groupes` (Burgers, Boissons…) deviennent nos catégories, dans l'ordre de leur `categorie`
  *   parente puis de leur `weight` ; un groupe `hidden` et ses produits ne sont pas affichés ;
  * - un produit `visible: 0` est ignoré, `active: 0` le montre « indisponible » ;
- * - prix TTC en centimes : `prix_c`, sinon `prix` (« 12.50 ») ; un produit sans prix est ignoré ;
+ * - prix TTC en centimes : `prix_c`, sinon `prix` (« 12.50 ») ; un produit sans prix ou à 0 € est
+ *   ignoré : ce sont les cadeaux fidélité de la caisse (groupes « 30 POINTS »…), qui ne doivent pas
+ *   pouvoir être commandés gratuitement ;
  * - photo : `image.location`, rendue absolue par rapport à l'URL de l'API.
  *
  * Non traduit tant que Splash360 ne l'a pas documenté (questions-en-attente.md, n° 16) :
@@ -118,7 +120,7 @@ export function toMenu(raw: unknown, restaurantId: string, baseUrl: string): Men
     .flatMap(({ p }) => {
       const price = priceCents(p.prix_c, p.prix);
       if (!p.groupe || !known.has(p.groupe) || seen.has(p.produit_id)) return [];
-      if (!truthy(p.visible, true) || price === null) return [];
+      if (!truthy(p.visible, true) || price === null || price <= 0) return [];
       seen.add(p.produit_id);
       const description = p.description?.trim() || p.legende?.trim() || null;
       return [
@@ -140,7 +142,9 @@ export function toMenu(raw: unknown, restaurantId: string, baseUrl: string): Men
   const used = new Set(products.map((p) => p.categoryId));
   return {
     restaurantId,
-    categories: menuCategories.filter((c) => used.has(c.id)),
+    categories: menuCategories
+      .filter((c) => used.has(c.id))
+      .map((c, index) => ({ ...c, position: index + 1 })),
     products,
   };
 }

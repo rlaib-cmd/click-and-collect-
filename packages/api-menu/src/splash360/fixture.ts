@@ -14,6 +14,7 @@ export const splash360MenuFixture = {
     { groupe_id: 'grp20', categorie: 'cat2', nom: 'Sodas', weight: 1, hidden: false },
     { groupe_id: 'grp99', categorie: 'cat1', nom: 'Composants internes', weight: 0, hidden: true },
     { groupe_id: 'grp30', categorie: 'cat1', nom: 'Groupe vide', weight: 9, hidden: false },
+    { groupe_id: 'grp40', categorie: 'cat2', nom: '30 POINTS', weight: 5, hidden: false },
   ],
   produits: [
     {
@@ -52,6 +53,7 @@ export const splash360MenuFixture = {
     { produit_id: 'prd500', groupe: 'grp20', active: 1, visible: 1, nom: 'Cola', prix_c: 250 },
     { produit_id: 'prd501', groupe: 'grp20', active: 1, visible: 0, nom: 'Masqué', prix_c: 250 },
     { produit_id: 'prd900', groupe: 'grp99', active: 1, visible: 1, nom: 'Steak', prix_c: 0 },
+    { produit_id: 'prd950', groupe: 'grp40', active: 1, visible: 1, nom: 'Coca offert', prix_c: 0 },
     { produit_id: 'prd901', groupe: 'grp11', active: 1, visible: 1, nom: 'Sans prix' },
   ],
   ingredients: [],

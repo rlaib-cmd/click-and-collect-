@@ -130,7 +130,7 @@ const seconds = (name: string, fallback: number) => {
 };
 const posTiming = {
   readyTimeoutMs: seconds('POS_READY_TIMEOUT_SECONDS', 60),
-  confirmTimeoutMs: seconds('POS_CONFIRM_TIMEOUT_SECONDS', 300),
+  confirmTimeoutMs: seconds('POS_CONFIRM_TIMEOUT_SECONDS', 60),
 };
 const geo = createBanGeoProvider(env('GEOCODER_URL') ?? 'https://data.geopf.fr/geocodage/search');
 
