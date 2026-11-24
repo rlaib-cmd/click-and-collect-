@@ -15,7 +15,8 @@ export type IconName =
   | 'card'
   | 'help'
   | 'logout'
-  | 'chevron';
+  | 'chevron'
+  | 'store';
 
 export function Icon({ name, color, size = 24 }: { name: IconName; color: string; size?: number }) {
   const common = { stroke: color, strokeWidth: 2, fill: 'none' } as const;
@@ -40,6 +41,16 @@ export function Icon({ name, color, size = 24 }: { name: IconName; color: string
           <Rect x={14} y={3} width={7} height={7} {...common} />
           <Rect x={3} y={14} width={7} height={7} {...common} />
           <Path d="M14 14h3v3h-3zM20 14v7M14 20h3" {...common} />
+        </>
+      ) : null}
+      {name === 'store' ? (
+        <>
+          <Path
+            d="M4 9l1.5-5h13L20 9M4 9h16v2a3 3 0 0 1-5.3 2 3 3 0 0 1-5.4 0A3 3 0 0 1 4 11z"
+            {...common}
+            strokeLinejoin="round"
+          />
+          <Path d="M5 13v8h14v-8M10 21v-5h4v5" {...common} />
         </>
       ) : null}
       {name === 'crown' ? (

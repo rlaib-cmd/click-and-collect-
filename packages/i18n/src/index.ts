@@ -184,6 +184,7 @@ export const fr = {
     title: 'Paiement',
     pay: (amount: string) => `Payer ${amount}`,
     processing: 'Paiement en cours…',
+    orCard: 'ou par carte bancaire',
     failed: 'Le paiement n’a pas abouti. Vous pouvez réessayer.',
     unavailable: 'Le paiement en ligne est momentanément indisponible pour ce restaurant.',
     /** Caisse du restaurant pas encore prête (ADR 0018) : le paiement attend. */
@@ -202,9 +203,12 @@ export const fr = {
       `Les conditions générales de vente et les mentions légales de ${name} seront affichées ici.`,
   },
   pay: {
-    choose: 'Paiement',
-    online: 'Payer en ligne',
-    onSite: 'Payer sur place',
+    choose: 'Comment veux-tu payer ?',
+    online: 'Carte bancaire',
+    onlineHint: 'Apple Pay, Google Pay ou carte',
+    onSite: 'Sur place',
+    onSiteShort: 'Au comptoir, au retrait',
+    onSiteLocked: 'Réservé aux membres du club',
     onSiteHint: 'Espèces ou carte au comptoir, en récupérant ta commande.',
     onSiteMembersOnly: 'Le paiement sur place est réservé aux membres du club : connecte-toi.',
     onlineUnavailable: 'Paiement en ligne indisponible pour ce restaurant.',

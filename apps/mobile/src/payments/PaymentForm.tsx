@@ -1,5 +1,11 @@
 import { messages } from '@splash360/i18n';
-import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
+import {
+  Elements,
+  ExpressCheckoutElement,
+  PaymentElement,
+  useElements,
+  useStripe,
+} from '@stripe/react-stripe-js';
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -50,6 +56,8 @@ function WebForm({ session, onConfirmed }: Pick<PaymentFormProps, 'session' | 'o
   const { palette } = useTenant();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Apple Pay / Google Pay proposés seulement si l'appareil et le navigateur les gèrent.
+  const [wallets, setWallets] = useState(false);
 
   const pay = async () => {
     if (!stripe || !elements) return;
@@ -67,7 +75,22 @@ function WebForm({ session, onConfirmed }: Pick<PaymentFormProps, 'session' | 'o
 
   return (
     <View style={styles.form}>
-      <PaymentElement />
+      <ExpressCheckoutElement
+        options={{
+          buttonHeight: 48,
+          paymentMethods: { applePay: 'always', googlePay: 'always', link: 'never' },
+        }}
+        onReady={(e) => setWallets(Boolean(e.availablePaymentMethods))}
+        onConfirm={() => void pay()}
+      />
+      {wallets ? (
+        <View style={styles.divider}>
+          <View style={[styles.line, { backgroundColor: palette.border }]} />
+          <Text style={{ color: palette.textMuted, fontSize: 13 }}>{messages.payment.orCard}</Text>
+          <View style={[styles.line, { backgroundColor: palette.border }]} />
+        </View>
+      ) : null}
+      <PaymentElement options={{ wallets: { applePay: 'never', googlePay: 'never' } }} />
       {error ? (
         <Text style={{ color: palette.accent }} accessibilityRole="alert">
           {error}
@@ -86,4 +109,8 @@ function WebForm({ session, onConfirmed }: Pick<PaymentFormProps, 'session' | 'o
   );
 }
 
-const styles = StyleSheet.create({ form: { gap: 16 } });
+const styles = StyleSheet.create({
+  form: { gap: 16 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  line: { flex: 1, height: 1 },
+});

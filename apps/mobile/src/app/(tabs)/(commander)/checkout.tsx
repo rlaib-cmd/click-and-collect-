@@ -14,6 +14,7 @@ import { giftAlone } from '@/cart/cart';
 import { useCart } from '@/cart/CartProvider';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { Chip } from '@/components/Chip';
+import { PaymentMethodCards } from '@/components/PaymentMethodCards';
 import { SetupSummary } from '@/components/SetupSummary';
 import { BackButton, ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { firstMissing } from '@/lib/checkout';
@@ -282,38 +283,32 @@ export default function CheckoutScreen() {
           totalCents={q.totals.totalCents}
         />
 
-        {payment.onSite || !payment.online ? (
-          <View style={styles.section}>
-            <Text style={[styles.h2, titleStyle(brand), { color: palette.text }]}>
-              {messages.pay.choose}
-            </Text>
-            <View style={styles.methods}>
-              {(['online', 'on_site'] as const)
-                .filter((m) => (m === 'online' ? payment.online : payment.onSite))
-                .map((m) => (
-                  <Chip
-                    key={m}
-                    label={m === 'online' ? messages.pay.online : messages.pay.onSite}
-                    selected={method === m}
-                    onPress={() => setChosenMethod(m)}
-                  />
-                ))}
-            </View>
-            {method === 'on_site' ? (
-              <Text style={{ color: palette.textMuted }}>{messages.pay.onSiteHint}</Text>
-            ) : null}
-            {method === 'on_site' && !loyalty.member ? (
-              <Pressable accessibilityRole="link" onPress={() => router.navigate('/carte')}>
-                <Text style={{ color: palette.accent, fontWeight: '700' }}>
-                  {messages.pay.onSiteMembersOnly} →
-                </Text>
-              </Pressable>
-            ) : null}
-            {!payment.online && !payment.onSite ? (
-              <Text style={{ color: palette.accent }}>{messages.pay.onlineUnavailable}</Text>
-            ) : null}
-          </View>
-        ) : null}
+        <View style={styles.section}>
+          <Text style={[styles.h2, titleStyle(brand), { color: palette.text }]}>
+            {messages.pay.choose}
+          </Text>
+          {payment.online || payment.onSite ? (
+            <PaymentMethodCards
+              online={payment.online}
+              onSite={payment.onSite}
+              onSiteLocked={loyalty.member === null}
+              selected={method}
+              onSelect={setChosenMethod}
+            />
+          ) : (
+            <Text style={{ color: palette.accent }}>{messages.pay.onlineUnavailable}</Text>
+          )}
+          {method === 'on_site' ? (
+            <Text style={{ color: palette.textMuted }}>{messages.pay.onSiteHint}</Text>
+          ) : null}
+          {method === 'on_site' && !loyalty.member ? (
+            <Pressable accessibilityRole="link" onPress={() => router.navigate('/carte')}>
+              <Text style={{ color: palette.accent, fontWeight: '700' }}>
+                {messages.pay.onSiteMembersOnly} →
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
 
         <View style={styles.section}>
           <Text style={[styles.h2, { color: palette.text }]}>{messages.checkout.contact}</Text>
@@ -736,7 +731,6 @@ function Toggle({
 }
 
 const styles = StyleSheet.create({
-  methods: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   rewardsBox: { padding: 14, gap: 10 },
   rewardsHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   reward: { paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, gap: 6 },
