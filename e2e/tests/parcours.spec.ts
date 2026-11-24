@@ -14,17 +14,22 @@ test('commande planifiée à emporter, payée par webhook Stripe, transmise à l
   await page.route('https://placehold.co/**', (r) => r.abort());
   await page.route('https://js.stripe.com/**', (r) => r.abort());
 
+  // Le restaurant encaisse par Stripe (compte connecté de test) : sinon le paiement par carte
+  // n'est pas proposé au récapitulatif.
+  const sql = postgres(DATABASE_URL, { max: 1 });
+  await sql`update public.restaurants set stripe_account_id = 'acct_e2e', stripe_charges_enabled = true where splash360_id = 'S360-R-BELLA-1'`;
+
   // Accueil : à emporter, planifiée au premier créneau du premier jour proposé.
   await page.goto('/?enseigne=bella');
   await expect(page.getByRole('heading', { name: 'Pizzeria Bella' })).toBeVisible();
-  await page.getByRole('radio', { name: 'À emporter' }).click();
+  await page.getByRole('button', { name: 'À emporter' }).click();
   await page.getByRole('radio', { name: 'Planifier' }).click();
+  await page.getByRole('radio', { name: 'Demain' }).click();
+  // Heure : liste déroulante (bas d'écran), premier créneau proposé.
+  await page.getByText('Choisir l’heure').click();
   await page
-    .getByRole('radio', { name: /^(Demain|lun\.|mar\.|mer\.|jeu\.|ven\.|sam\.|dim\.)/ })
-    .first()
-    .click();
-  await page
-    .getByRole('radio', { name: /^\d{2}:\d{2}$/ })
+    .getByRole('button', { name: /^\d{2}:\d{2}/ })
+    .or(page.getByRole('radio', { name: /^\d{2}:\d{2}/ }))
     .first()
     .click();
   await page.getByRole('button', { name: 'Voir la carte' }).click();
@@ -45,6 +50,7 @@ test('commande planifiée à emporter, payée par webhook Stripe, transmise à l
   await page.getByLabel('Téléphone').fill('06 12 34 56 78');
   await page.getByLabel('E-mail').fill('camille.e2e@example.fr');
   await page.getByText("J'accepte les conditions générales de vente.").click();
+  await expect(page.getByRole('radio', { name: /^Carte bancaire/ })).toBeChecked();
   await page.getByRole('button', { name: 'Commander et payer 18,00 €' }).click();
 
   // Commande créée, en attente de paiement.
@@ -54,9 +60,7 @@ test('commande planifiée à emporter, payée par webhook Stripe, transmise à l
   expect(orderId).toMatch(/^[0-9a-f-]{36}$/);
 
   // Le paiement est simulé côté Stripe : on rattache un PaymentIntent puis on envoie le webhook signé.
-  const sql = postgres(DATABASE_URL, { max: 1 });
   try {
-    await sql`update public.restaurants set stripe_account_id = 'acct_e2e', stripe_charges_enabled = true where splash360_id = 'S360-R-BELLA-1'`;
     await sql`update public.orders set stripe_payment_intent_id = ${`pi_e2e_${orderId}`} where id = ${orderId}`;
     const payload = JSON.stringify({
       id: `evt_e2e_${orderId}`,

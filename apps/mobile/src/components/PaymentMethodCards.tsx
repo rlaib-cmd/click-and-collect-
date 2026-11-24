@@ -67,6 +67,7 @@ function MethodCard({
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ selected, checked: selected }}
+      aria-checked={selected}
       accessibilityLabel={`${label}. ${hint}`}
       onPress={onPress}
       style={[
