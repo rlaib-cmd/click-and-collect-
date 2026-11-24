@@ -74,6 +74,21 @@ describe.skipIf(!url)('PosTicketStore Postgres (ADR 0018)', () => {
     return id;
   }
 
+  it('ne branche la caisse réelle que sur un seul restaurant à la fois', async () => {
+    const [bella] = await restaurants.listByTenant(BELLA);
+    const [green] = await restaurants.listByTenant(GREEN);
+    if (!bella || !green) throw new Error('seed incomplet');
+    try {
+      expect(await restaurants.setSplash360Live(BELLA, bella.id, true)).toBe(true);
+      expect(await restaurants.setSplash360Live(GREEN, green.id, true)).toBe(false);
+      expect(await restaurants.setSplash360Live(BELLA, bella.id, true)).toBe(true);
+    } finally {
+      await restaurants.setSplash360Live(BELLA, bella.id, false);
+    }
+    expect(await restaurants.setSplash360Live(GREEN, green.id, true)).toBe(true);
+    await restaurants.setSplash360Live(GREEN, green.id, false);
+  });
+
   it('suit la poignée de main avec la caisse, par enseigne', async () => {
     const id = await newOrder('a', false);
     const t0 = new Date('2026-11-24T12:00:00Z');

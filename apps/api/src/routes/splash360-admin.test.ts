@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { AppDeps } from '../app';
-import { BELLA_ID, BELLA_RESTO, sessionToken, testSetup } from '../test-fixtures';
+import {
+  BELLA_ID,
+  BELLA_RESTO,
+  GREEN_ID,
+  GREEN_RESTO,
+  sessionToken,
+  testSetup,
+} from '../test-fixtures';
 
 /** Lot 14 (ADR 0018) : branchement de la vraie caisse Splash360 par restaurant, au back-office. */
 async function admin(
@@ -60,6 +67,21 @@ describe('caisse Splash360 au back-office', () => {
     );
     const actions = setup.admin.audit.map((a) => a.action);
     expect(actions).toEqual(expect.arrayContaining(['splash360.connect', 'splash360.disconnect']));
+  });
+
+  it('ne branche les accès du serveur que sur un seul restaurant (un accès par restaurant)', async () => {
+    const setup = testSetup(probe(() => Promise.resolve({ products: 3, categories: 1 })));
+    expect(await setup.deps.restaurants.setSplash360Live(GREEN_ID, GREEN_RESTO, true)).toBe(true);
+    const res = await admin(setup, `/restaurants/${BELLA_RESTO}/splash360`, {
+      method: 'POST',
+      body: { live: true },
+    });
+    expect(res.status).toBe(409);
+    expect((await setup.deps.restaurants.findById(BELLA_ID, BELLA_RESTO))?.splash360Live).toBe(
+      false,
+    );
+    expect(await setup.deps.restaurants.setSplash360Live(GREEN_ID, GREEN_RESTO, false)).toBe(true);
+    expect(await setup.deps.restaurants.setSplash360Live(BELLA_ID, BELLA_RESTO, true)).toBe(true);
   });
 
   it('réserve le branchement au propriétaire et à Splash360', async () => {

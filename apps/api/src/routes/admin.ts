@@ -255,7 +255,14 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     if (input.live && !deps.splash360) {
       return apiError(c, 'conflict', 'Identifiants Splash360 absents du serveur');
     }
-    await deps.restaurants.setSplash360Live(tenantId(c), restaurant.id, input.live);
+    const changed = await deps.restaurants.setSplash360Live(tenantId(c), restaurant.id, input.live);
+    if (!changed) {
+      return apiError(
+        c,
+        'conflict',
+        'Les accès Splash360 du serveur sont déjà branchés sur un autre restaurant (un accès par restaurant)',
+      );
+    }
     deps.menus.invalidate(restaurant.id);
     await audit(c, input.live ? 'splash360.connect' : 'splash360.disconnect', restaurant.id);
     return c.body(null, 204);

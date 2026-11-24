@@ -3,7 +3,7 @@
  *
  * La documentation ne liste pas les valeurs (elle ne décrit que `status: success`) ; le CTO de
  * Splash360 a indiqué oralement : en attente (« pending »), puis « ready » quand la caisse peut
- * accepter la commande, puis « confirmed » une fois le paiement intégré. La lecture est donc
+ * accepter la commande, puis « vérifiée » une fois le paiement intégré (réponse du 24/11). La lecture est donc
  * tolérante (casse, accents, synonymes) ; une valeur inconnue est traitée comme « on attend ».
  */
 export type CommandeState = 'pending' | 'ready' | 'confirmed' | 'failed';
@@ -28,6 +28,13 @@ const SYNONYMS: Record<string, CommandeState> = {
   confirmee: 'confirmed',
   integrated: 'confirmed',
   integree: 'confirmed',
+  verified: 'confirmed',
+  verifie: 'confirmed',
+  verifiee: 'confirmed',
+  valid: 'confirmed',
+  validated: 'confirmed',
+  valide: 'confirmed',
+  validee: 'confirmed',
   error: 'failed',
   failed: 'failed',
   rejected: 'failed',

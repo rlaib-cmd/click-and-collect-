@@ -171,6 +171,8 @@ describe('readCommandeStatus', () => {
     [{ status: 'READY' }, 'ready'],
     [{ status: 'success', statut: 'Prête' }, 'ready'],
     [{ status: 'confirmed' }, 'confirmed'],
+    [{ status: 'verified' }, 'confirmed'],
+    [{ status: 'Vérifiée' }, 'confirmed'],
     [{ status: 'success', commande: { status: 'confirmée' } }, 'confirmed'],
     [{ status: 'error', error_message: 'x' }, 'failed'],
     [{ status: 'cancelled_by_pos' }, 'failed'],

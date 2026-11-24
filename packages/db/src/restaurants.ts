@@ -25,7 +25,11 @@ export interface RestaurantStore {
   listByTenant(tenantId: string): Promise<Restaurant[]>;
   findById(tenantId: string, restaurantId: string): Promise<Restaurant | null>;
   setStripeAccount(tenantId: string, restaurantId: string, accountId: string): Promise<void>;
-  /** Branche ou débranche la caisse et la carte réelles Splash360 ; faux si restaurant inconnu. */
+  /**
+   * Branche ou débranche la caisse et la carte réelles Splash360 ; faux si restaurant inconnu,
+   * ou si un autre restaurant est déjà branché : Splash360 donne un accès par restaurant et le
+   * serveur n'en porte qu'un (ADR 0018).
+   */
   setSplash360Live(tenantId: string, restaurantId: string, live: boolean): Promise<boolean>;
 }
 
@@ -89,7 +93,11 @@ export function createPostgresRestaurantStore(sql: Sql): RestaurantStore {
     async setSplash360Live(tenantId, restaurantId, live) {
       if (!UUID.test(restaurantId)) return false;
       const rows = await sql`update public.restaurants set splash360_live = ${live}
-                where tenant_id = ${tenantId} and id = ${restaurantId} returning id`;
+                where tenant_id = ${tenantId} and id = ${restaurantId}
+                  and (not ${live} or not exists (
+                    select 1 from public.restaurants o
+                    where o.splash360_live and o.id <> ${restaurantId}))
+                returning id`;
       return rows.length > 0;
     },
   };
@@ -116,8 +124,10 @@ export function createMemoryRestaurantStore(source: readonly Restaurant[]): Rest
     },
     setSplash360Live(tenantId, restaurantId, live) {
       const r = restaurants.find((x) => x.tenantId === tenantId && x.id === restaurantId);
-      if (r) Object.assign(r, { splash360Live: live });
-      return Promise.resolve(Boolean(r));
+      const other = restaurants.some((x) => x.splash360Live && x.id !== restaurantId);
+      if (!r || (live && other)) return Promise.resolve(false);
+      Object.assign(r, { splash360Live: live });
+      return Promise.resolve(true);
     },
   };
 }
