@@ -152,7 +152,12 @@ export function createSplash360PosGateway(
     },
     async ticketStatus({ ticketId }) {
       const body = await client.getCommandeStatus(ticketId).catch(translate);
-      return readCommandeStatus(body);
+      const status = readCommandeStatus(body);
+      // Format de réponse non documenté : sans statut reconnu, on garde un extrait de la réponse
+      // brute (sans données client : cmdstatus ne renvoie que l'état du ticket) pour le diagnostic.
+      return status.raw === null && body !== null && body !== undefined
+        ? { ...status, raw: JSON.stringify(body).slice(0, 300) }
+        : status;
     },
     async submitPayment({ ticketId }, payment) {
       const reglements =

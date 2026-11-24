@@ -167,6 +167,9 @@ describe('client Splash360', () => {
 describe('readCommandeStatus', () => {
   it.each([
     [{ status: 'pending' }, 'pending'],
+    [{ ticketId: 't', ccstatus: 'pending', numero: '' }, 'pending'],
+    [{ ticketId: 't', ccstatus: 'ready', numero: '42' }, 'ready'],
+    [{ ticketId: 't', ccstatus: 'verified', numero: '42' }, 'confirmed'],
     [{ status: 'standby' }, 'pending'],
     [{ status: 'READY' }, 'ready'],
     [{ status: 'success', statut: 'Prête' }, 'ready'],

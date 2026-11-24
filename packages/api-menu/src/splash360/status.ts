@@ -47,6 +47,9 @@ const SYNONYMS: Record<string, CommandeState> = {
 
 /** Champs où chercher le statut de la commande, par ordre de préférence. */
 const FIELDS = [
+  // Réponse réelle constatée le 24/11 : { ticketId, ccstatus: 'pending', numero: '' }.
+  'ccstatus',
+  'ccStatus',
   'cmdstatus',
   'cmdStatus',
   'commandeStatus',

@@ -117,3 +117,18 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
   champ « adresse du logo » sert.
 - Le design publié arrive dans les applications au prochain chargement (configuration publique en
   cache 60 secondes). Icône, nom et écran de démarrage : nouvelle version sur les stores.
+
+## Relance périodique de la caisse Splash360 (lot 14)
+
+Le suivi des commandes en caisse (attente de « ready », puis de « verified ») avance à chaque requête reçue
+par l'API, au plus toutes les 10 s. Sans trafic (la nuit, commande sur place que personne ne suit), il faut
+une relance planifiée, à poser une fois par environnement (SQL Editor de Supabase) :
+
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+select cron.schedule('relance-caisse-splash360', '10 seconds',
+  $$select net.http_get('https://<projet>.supabase.co/functions/v1/api/health')$$);
+```
+
+Pour l'arrêter : `select cron.unschedule('relance-caisse-splash360');`
