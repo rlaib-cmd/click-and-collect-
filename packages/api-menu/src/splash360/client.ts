@@ -76,6 +76,8 @@ export interface Splash360ClientOptions extends Splash360Credentials {
   readonly fetch?: typeof fetch;
   /** Sans `gate`, la file et la pause d'une minute ne valent que pour cette instance. */
   readonly gate?: Splash360Gate;
+  /** Événement notable sans secret (ex. repli sur les identifiants principaux pour la carte). */
+  readonly onNotice?: (message: string, detail?: Record<string, unknown>) => void;
   readonly now?: () => number;
   /** Délai maximal d'une requête (défaut 10 s). */
   readonly timeoutMs?: number;
@@ -345,6 +347,9 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
       const refused =
         error instanceof Splash360Error && (error.status === 400 || error.status === 401);
       if (!refused) throw error;
+      options.onNotice?.('Identifiants de carte Splash360 refusés : repli sur les principaux', {
+        status: error.status,
+      });
       return authorized(path, {}, mainToken);
     }
   }

@@ -152,7 +152,11 @@ const splash360Gate = createPostgresSplash360Gate(() => {
   return gateSql;
 });
 const splash360Client = splash360
-  ? createSplash360Client({ ...splash360, gate: splash360Gate })
+  ? createSplash360Client({
+      ...splash360,
+      gate: splash360Gate,
+      onNotice: (m, d) => jsonLog('warn', m, d),
+    })
   : null;
 const menus = createMenuCache(
   createRoutingMenuProvider({
