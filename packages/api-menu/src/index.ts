@@ -7,4 +7,5 @@ export * from './demo';
 export * from './provider';
 export * from './splash360/client';
 export * from './splash360/menu';
+export * from './splash360/sales';
 export * from './splash360/status';
