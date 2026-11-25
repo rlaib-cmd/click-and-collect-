@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { checkPaymentMethod, checkTransition, isFinished } from './status';
+import {
+  checkPaymentMethod,
+  checkTransition,
+  isFinished,
+  missingForOnlinePayment,
+  ONLINE_PAYMENT_MINIMUM_CENTS,
+} from './status';
 
 describe('changements de statut', () => {
   it('avance dans le parcours, en sautant éventuellement des étapes', () => {
@@ -77,5 +83,17 @@ describe('paiement sur place', () => {
       ok: false,
       error: 'on_site_requires_member',
     });
+  });
+});
+
+describe('paiement en ligne : minimum de Stripe (0,50 €)', () => {
+  it('refuse un montant positif sous 0,50 € et indique ce qui manque', () => {
+    expect(missingForOnlinePayment(10)).toBe(40);
+    expect(missingForOnlinePayment(49)).toBe(1);
+  });
+  it('accepte 0,50 € et plus, et une commande entièrement offerte', () => {
+    expect(missingForOnlinePayment(ONLINE_PAYMENT_MINIMUM_CENTS)).toBeNull();
+    expect(missingForOnlinePayment(1290)).toBeNull();
+    expect(missingForOnlinePayment(0)).toBeNull();
   });
 });

@@ -11,7 +11,12 @@ import {
 } from '@splash360/contracts';
 import type { Restaurant, RestaurantStore, TenantWithTheme } from '@splash360/db';
 import type { Context, Hono } from 'hono';
-import { cents, checkPaymentMethod, computeApplicationFee } from '@splash360/core';
+import {
+  cents,
+  checkPaymentMethod,
+  computeApplicationFee,
+  missingForOnlinePayment,
+} from '@splash360/core';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { hashToken, orderAccessToken } from '../payments/tokens';
@@ -162,6 +167,12 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
         isMember: result.loyalty !== null,
       });
       if (!choice.ok) return orderInvalid(c, [{ code: choice.error }]);
+    } else {
+      // Stripe refuse un paiement par carte sous 0,50 € : le client le saurait trop tard.
+      const missing = missingForOnlinePayment(result.totals.totalCents);
+      if (missing !== null) {
+        return orderInvalid(c, [{ code: 'below_online_payment_minimum', missingCents: missing }]);
+      }
     }
 
     const orderId = randomUUID();

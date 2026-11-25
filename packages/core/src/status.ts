@@ -68,6 +68,19 @@ export type PaymentChoice =
       readonly error: 'payment_method_unavailable' | 'on_site_requires_member';
     };
 
+/** Montant minimal d'un paiement par carte chez Stripe en euros (0,50 €). */
+export const ONLINE_PAYMENT_MINIMUM_CENTS = 50;
+
+/**
+ * Paiement en ligne d'un montant positif mais inférieur au minimum de Stripe : impossible à
+ * encaisser. Renvoie le montant manquant, ou null si le paiement est possible (ou gratuit).
+ */
+export function missingForOnlinePayment(totalCents: number): number | null {
+  return totalCents > 0 && totalCents < ONLINE_PAYMENT_MINIMUM_CENTS
+    ? ONLINE_PAYMENT_MINIMUM_CENTS - totalCents
+    : null;
+}
+
 /**
  * Moyen de paiement choisi par le client. En ligne : le restaurant doit pouvoir encaisser par Stripe.
  * Sur place : option du restaurant, réservée aux membres connectés du club fidélité.

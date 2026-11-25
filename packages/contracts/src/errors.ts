@@ -47,6 +47,7 @@ export const orderIssueSchema = z.object({
     'address_required',
     'out_of_delivery_zone',
     'below_delivery_minimum',
+    'below_online_payment_minimum',
     // Heure
     'restaurant_closed',
     'scheduling_disabled',

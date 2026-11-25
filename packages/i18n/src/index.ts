@@ -124,6 +124,8 @@ export const fr = {
       too_few_options: 'Un choix obligatoire manque sur un article.',
       too_many_options: 'Trop d’options choisies sur un article.',
       below_delivery_minimum: 'Le minimum de livraison n’est pas atteint.',
+      below_online_payment_minimum:
+        'Paiement par carte : 0,50 € minimum. Ajoute un article ou paie sur place.',
       out_of_delivery_zone: 'Votre adresse est hors de la zone de livraison.',
       address_required: 'Indiquez votre adresse de livraison.',
       restaurant_closed: 'Le restaurant est fermé : planifiez votre commande.',
