@@ -36,13 +36,20 @@ export const TICKET_CHECKS_BLOCKING_CREDIT: readonly TicketCheck[] = [
   'unpaid',
 ];
 
-/** Données lues sur la photo du ticket (signées par le serveur). */
-export interface TicketPhotoData {
-  /** Journée du ticket (AAAA-MM-JJ). */
-  readonly date: string;
-  /** Numéro de commande normalisé. */
-  readonly number: string;
-  readonly totalCents: number;
+/**
+ * Ticket à vérifier auprès des ventes Splash360 (ADR 0025) : identifiant de la vente, lu sur la
+ * photo du ticket (avec sa date, son heure et son total s'ils sont lisibles) ou dans le QR de la
+ * borne (identifiant seul).
+ */
+export interface VerifiableTicket {
+  /** `ticket_id` Splash360 (UUID, en minuscules). */
+  readonly ticketId: string;
+  /** Date imprimée (AAAA-MM-JJ) ; null pour un QR. */
+  readonly date: string | null;
+  /** Heure imprimée (HH:MM, heure de Paris) ; null si illisible. */
+  readonly time: string | null;
+  /** Total lu, en centimes (indicatif : le rapprochement se fait par identifiant). */
+  readonly totalCents: number | null;
 }
 
 export interface AmbassadorEntry {
@@ -67,9 +74,10 @@ export interface AmbassadorEntry {
   readonly photoReason: string | null;
   readonly needsReview: boolean;
   readonly ticketCheck: TicketCheck;
-  /** Ticket photographié (lot 20) ; null pour un ticket scanné ou saisi. */
+  /** Identifiant Splash360 de la vente (lot 20) ; null pour un ticket non vérifiable. */
+  readonly ticketId: string | null;
   readonly ticketDate: string | null;
-  readonly ticketNumber: string | null;
+  readonly ticketTime: string | null;
   readonly ticketTotalCents: number | null;
 }
 
@@ -83,8 +91,8 @@ export interface NewAmbassadorEntry {
   readonly photoVerdict?: PhotoVerdict | null;
   readonly photoReason?: string | null;
   readonly needsReview?: boolean;
-  /** Ticket photographié : la participation attend le rapprochement avec les ventes. */
-  readonly ticketPhoto?: TicketPhotoData | null;
+  /** Ticket identifié (photo ou QR de borne) : la participation attend le rapprochement. */
+  readonly ticket?: VerifiableTicket | null;
 }
 
 export type AmbassadorEventType =
@@ -185,7 +193,7 @@ export interface AmbassadorStore {
    * n'est jamais échu tant que le ticket est à vérifier, introuvable ou impayé (lot 20).
    */
   dueEntries(now: Date, limit: number): Promise<readonly DueAmbassadorEntry[]>;
-  /** Tickets photographiés à rapprocher des ventes (toutes enseignes, les plus anciens d'abord). */
+  /** Tickets à rapprocher des ventes (toutes enseignes, participations les plus anciennes d'abord). */
   pendingTicketChecks(limit: number): Promise<readonly AmbassadorEntry[]>;
   /**
    * Résultat du rapprochement, une seule fois (ticket encore « pending », participation en
@@ -234,8 +242,9 @@ interface Row {
   photo_reason: string | null;
   needs_review: boolean;
   ticket_check: TicketCheck;
+  ticket_id: string | null;
   ticket_date: Date | string | null;
-  ticket_number: string | null;
+  ticket_time: string | null;
   ticket_total_cents: number | null;
 }
 
@@ -264,8 +273,9 @@ const toEntry = (r: Row): AmbassadorEntry => ({
   photoReason: r.photo_reason,
   needsReview: r.needs_review,
   ticketCheck: r.ticket_check,
+  ticketId: r.ticket_id,
   ticketDate: dateText(r.ticket_date),
-  ticketNumber: r.ticket_number,
+  ticketTime: r.ticket_time,
   ticketTotalCents: r.ticket_total_cents,
 });
 
@@ -340,12 +350,12 @@ export function createPostgresAmbassadorStore(sql: Sql): AmbassadorStore {
         const rows = await tx<Row[]>`
           insert into public.ambassador_entries (tenant_id, member_id, ticket_ref, ticket_qr,
             instagram_handle, bonus_points, photo_verdict, photo_reason, needs_review,
-            ticket_check, ticket_date, ticket_number, ticket_total_cents)
+            ticket_check, ticket_id, ticket_date, ticket_time, ticket_total_cents)
           values (${e.tenantId}, ${e.memberId}, ${e.ticketRef}, ${e.ticketQr ?? null},
             ${e.instagramHandle}, ${e.bonusPoints}, ${e.photoVerdict ?? null},
             ${e.photoReason ?? null}, ${e.needsReview ?? false},
-            ${e.ticketPhoto ? 'pending' : 'unverified'}, ${e.ticketPhoto?.date ?? null},
-            ${e.ticketPhoto?.number ?? null}, ${e.ticketPhoto?.totalCents ?? null})
+            ${e.ticket ? 'pending' : 'unverified'}, ${e.ticket?.ticketId ?? null},
+            ${e.ticket?.date ?? null}, ${e.ticket?.time ?? null}, ${e.ticket?.totalCents ?? null})
           on conflict (tenant_id, ticket_ref) do nothing
           returning *`;
         const r = rows[0];
@@ -472,7 +482,7 @@ export function createPostgresAmbassadorStore(sql: Sql): AmbassadorStore {
     async pendingTicketChecks(limit) {
       const rows = await sql<Row[]>`select * from public.ambassador_entries
         where status = 'pending' and ticket_check = 'pending'
-        order by ticket_date, created_at limit ${limit}`;
+        order by created_at limit ${limit}`;
       return rows.map(toEntry);
     },
 
@@ -597,10 +607,11 @@ export function createMemoryAmbassadorStore(
         photoVerdict: e.photoVerdict ?? null,
         photoReason: e.photoReason ?? null,
         needsReview: e.needsReview ?? false,
-        ticketCheck: e.ticketPhoto ? 'pending' : 'unverified',
-        ticketDate: e.ticketPhoto?.date ?? null,
-        ticketNumber: e.ticketPhoto?.number ?? null,
-        ticketTotalCents: e.ticketPhoto?.totalCents ?? null,
+        ticketCheck: e.ticket ? 'pending' : 'unverified',
+        ticketId: e.ticket?.ticketId ?? null,
+        ticketDate: e.ticket?.date ?? null,
+        ticketTime: e.ticket?.time ?? null,
+        ticketTotalCents: e.ticket?.totalCents ?? null,
       };
       entries.push(entry);
       for (const ev of events) log(e.tenantId, entry.id, ev, entry.createdAt);
@@ -698,11 +709,7 @@ export function createMemoryAmbassadorStore(
       Promise.resolve(
         entries
           .filter((e) => e.status === 'pending' && e.ticketCheck === 'pending')
-          .sort(
-            (a, b) =>
-              (a.ticketDate ?? '').localeCompare(b.ticketDate ?? '') ||
-              a.createdAt.getTime() - b.createdAt.getTime(),
-          )
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
           .slice(0, limit),
       ),
     recordTicketCheck(tenantId, entryId, check) {

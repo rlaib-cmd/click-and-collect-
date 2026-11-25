@@ -68,8 +68,9 @@ export const toAdminEntryDto = (
   checkResult: e.checkResult,
   photoReason: e.photoReason,
   needsReview: e.needsReview,
+  ticketId: e.ticketId,
   ticketDate: e.ticketDate,
-  ticketNumber: e.ticketNumber,
+  ticketTime: e.ticketTime,
   ticketTotalCents: e.ticketTotalCents,
   events: events
     .filter((ev) => ev.entryId === e.id)

@@ -563,8 +563,10 @@ export const adminFr = {
     },
     ticketCheckHint:
       'Ticket photographié : numéro, date et total lus par l’IA, puis comparés aux ventes de la caisse Splash360.',
-    ticketRead: (orderNumber: string, date: string, amount: string) =>
-      `Commande n° ${orderNumber} du ${date} · ${amount}`,
+    /** Identifiant de vente raccourci (8 premiers caractères), journée ou origine, montant. */
+    ticketRead: (shortId: string, when: string, amount: string | null) =>
+      `Ticket ${shortId}… · ${when}${amount ? ` · ${amount}` : ''}`,
+    ticketFromQr: 'QR de borne',
     instagram: 'Instagram du client',
     status: 'Étape',
     photo: 'Photo',
@@ -618,10 +620,14 @@ export const adminFr = {
       creditDueAt: 'crédit prévu',
       result: 'résultat',
       points: 'points',
-      orderNumber: 'commande n°',
-      date: 'journée',
-      totalCents: 'total (centimes)',
-      sale: 'vente Splash360',
+      ticketId: 'ticket',
+      source: 'lu par',
+      date: 'date',
+      time: 'heure',
+      totalCents: 'total lu',
+      jour: 'journée comptable',
+      saleTotalCents: 'total en caisse',
+      totalDiffers: 'total différent',
     } as Readonly<Record<string, string>>,
     resultLabel: {
       online: 'story en ligne',

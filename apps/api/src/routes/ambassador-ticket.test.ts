@@ -27,6 +27,10 @@ const programs = new Map<string, LoyaltyProgram>([
   ['S360-DEMO-BELLA', { name: 'Club Bella', pointsPerEuro: 10, welcomePoints: 100, rewards: [] }],
 ]);
 
+/** Identifiants de vente factices (aucun identifiant réel dans le dépôt). */
+const ID = '6f1c1c2e-0000-4000-8000-00000000000b';
+const ID2 = '6f1c1c2e-0000-4000-8000-00000000000c';
+
 /** Lecture simulée : résultat fixé, taille de l'image reçue mémorisée. */
 function fakeReader(result: Partial<TicketReading> = {}) {
   const seen: number[] = [];
@@ -35,7 +39,7 @@ function fakeReader(result: Partial<TicketReading> = {}) {
       seen.push(image.data.byteLength);
       return Promise.resolve({
         readable: true,
-        orderNumber: '6',
+        ticketId: ID,
         date: '2026-11-24',
         time: '12:41',
         totalCents: 1230,
@@ -115,8 +119,9 @@ describe('achat vérifié : lecture du ticket photographié (lot 20)', () => {
     const body = ticketPhotoResponseSchema.parse(await res.json());
     expect(body).toMatchObject({
       readable: true,
-      orderNumber: '6',
+      ticketId: ID,
       date: '2026-11-24',
+      time: '12:41',
       totalCents: 1230,
     });
     expect(body.token).toMatch(/^r1\./);
@@ -129,8 +134,9 @@ describe('achat vérifié : lecture du ticket photographié (lot 20)', () => {
       const body = ticketPhotoResponseSchema.parse(await (await ticketPhoto(s, token)).json());
       expect(body).toEqual({
         readable: false,
-        orderNumber: null,
+        ticketId: null,
         date: null,
+        time: null,
         totalCents: null,
         token: null,
       });
@@ -174,13 +180,14 @@ describe('achat vérifié : participation avec le ticket photographié (lot 20)'
     const res = await enter(s, token, { ticketPhoto: await photographed(s, token) });
     expect(res.status).toBe(201);
     expect(ambassadorEntrySchema.parse(await res.json())).toMatchObject({
-      ticketRef: '20261124-6-1230',
+      ticketRef: ID.toUpperCase(),
       ticketCheck: 'pending',
     });
     expect(s.ambassador.entries[0]).toMatchObject({
       ticketQr: null,
+      ticketId: ID,
       ticketDate: '2026-11-24',
-      ticketNumber: '6',
+      ticketTime: '12:41',
       ticketTotalCents: 1230,
     });
     expect(s.ambassador.history.map((h) => [h.type, h.actor])).toEqual([
@@ -196,13 +203,13 @@ describe('achat vérifié : participation avec le ticket photographié (lot 20)'
     expect(again.status).toBe(409);
 
     // Le numéro saisi en plus est ignoré : la référence vient des données signées.
-    const s2 = setup(fakeReader({ orderNumber: '7' }).reader);
+    const s2 = setup(fakeReader({ ticketId: ID2 }).reader);
     const t2 = await join(s2);
     const typed = await enter(s2, t2, {
       ticketRef: 'AUTRE-1',
       ticketPhoto: await photographed(s2, t2),
     });
-    expect(ambassadorEntrySchema.parse(await typed.json()).ticketRef).toBe('20261124-7-1230');
+    expect(ambassadorEntrySchema.parse(await typed.json()).ticketRef).toBe(ID2.toUpperCase());
 
     // Liste du membre et back-office : état de la vérification et données lues.
     const mine = ambassadorEntriesSchema.parse(
@@ -219,8 +226,9 @@ describe('achat vérifié : participation avec le ticket photographié (lot 20)'
     });
     expect(adminAmbassadorEntriesSchema.parse(await admin.json()).entries[0]).toMatchObject({
       ticketCheck: 'pending',
+      ticketId: ID,
       ticketDate: '2026-11-24',
-      ticketNumber: '6',
+      ticketTime: '12:41',
       ticketTotalCents: 1230,
       scanned: false,
     });
@@ -267,26 +275,52 @@ describe('achat vérifié : participation avec le ticket photographié (lot 20)'
       ticketRef: 'BB4002',
       ticketCheck: 'unverified',
     });
+    // QR de borne portant le ticket_id : vérifié comme une photo, sans date ni total.
+    const kiosk = await enter(s, token, {
+      ticketRef: 'BB4003',
+      ticketQr: `https://borne.test/t?id=${ID2.toUpperCase()}`,
+    });
+    expect(ambassadorEntrySchema.parse(await kiosk.json())).toMatchObject({
+      ticketRef: ID2.toUpperCase(),
+      ticketCheck: 'pending',
+    });
+    expect(s.ambassador.entries.at(-1)).toMatchObject({
+      ticketId: ID2,
+      ticketDate: null,
+      ticketTotalCents: null,
+    });
+    expect(s.ambassador.history.filter((h) => h.type === 'ticket_read').at(-1)).toMatchObject({
+      actor: 'client',
+      detail: { ticketId: ID2, source: 'QR' },
+    });
+  });
+
+  it('ticket de plus de 7 jours selon la journée comptable : coupure à 02:00', async () => {
+    // Maintenant : 24/11 10 h à Paris. Ticket du 17/11 à 01:30 : journée du 16, refusée.
+    const night = setup(fakeReader({ date: '2026-11-17', time: '01:30' }).reader);
+    expect((await ticketPhoto(night, await join(night))).status).toBe(400);
+    // Heure illisible : le 17 reste possible.
+    const unknown = setup(fakeReader({ date: '2026-11-17', time: null }).reader);
+    expect((await ticketPhoto(unknown, await join(unknown))).status).toBe(200);
   });
 });
 
 describe('achat vérifié : crédit des points (lot 20)', () => {
   const HOUR = 3600_000;
-  /** Export simulé : une vente du 24/11 (numéro, statut), ou une réponse imposée. */
-  function source(numero: string | null, status: 'confirmed' | 'deleted' = 'confirmed') {
+  /** Export simulé : une vente du 24/11 (identifiant, statut), ou une réponse imposée. */
+  function source(ticketId: string | null, status: 'confirmed' | 'deleted' = 'confirmed') {
     let forced: SalesFetchResult | null = null;
     const calls: number[] = [];
     const salesSource: SalesSource = {
       fetchPage(_jour, page) {
         calls.push(page);
         if (forced) return Promise.resolve(forced);
-        const sales = numero
+        const sales = ticketId
           ? [
               {
-                ticketId: 'v-1',
+                ticketId,
                 restaurantId: '164',
                 jourComptable: '2026-11-24',
-                numero,
                 status,
                 totalCents: 1230,
               },
@@ -337,7 +371,7 @@ describe('achat vérifié : crédit des points (lot 20)', () => {
   }
 
   it('achat vérifié : points crédités à l’échéance', async () => {
-    const src = source('6');
+    const src = source(ID);
     const p = await participate(src);
     p.at(25);
     const r = await p.s.app.runAmbassador();
@@ -376,7 +410,7 @@ describe('achat vérifié : crédit des points (lot 20)', () => {
   });
 
   it('commande annulée en caisse : participation refusée, aucun point', async () => {
-    const p = await participate(source('6', 'deleted'));
+    const p = await participate(source(ID, 'deleted'));
     p.at(25);
     const r = await p.s.app.runAmbassador();
     expect(r.tickets.unpaid).toBe(1);

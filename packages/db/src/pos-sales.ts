@@ -5,20 +5,19 @@ import type { Sql } from './client';
  * « Ambassadeur » photographié : ni client, ni lignes, ni règlements.
  */
 export interface PosSaleRecord {
+  /** Identifiant de la vente (UUID, en minuscules), imprimé sur le ticket. */
   readonly ticketId: string;
   /** Identifiant Splash360 du restaurant (comme `restaurants.splash360_id`). */
   readonly restaurantId: string;
   /** Journée comptable (AAAA-MM-JJ). */
   readonly jourComptable: string;
-  /** Numéro de commande normalisé. */
-  readonly numero: string;
   readonly status: 'confirmed' | 'deleted';
   readonly totalCents: number;
 }
 
 /** Avancement de la lecture de l'export pour une enseigne et une journée. */
 export interface PosSalesCursor {
-  /** Prochaine page à lire (0 = début). */
+  /** Prochaine page à lire (1 = début : l'export commence à la page 1). */
   readonly nextPage: number;
   /** La lecture en cours a commencé après la fin de la journée (heure de Paris). */
   readonly passAfterDay: boolean;
@@ -26,8 +25,11 @@ export interface PosSalesCursor {
   readonly complete: boolean;
 }
 
+/** Première page de l'export des ventes Splash360. */
+export const FIRST_SALES_PAGE = 1;
+
 export const EMPTY_SALES_CURSOR: PosSalesCursor = {
-  nextPage: 0,
+  nextPage: FIRST_SALES_PAGE,
   passAfterDay: false,
   complete: false,
 };
@@ -35,8 +37,8 @@ export const EMPTY_SALES_CURSOR: PosSalesCursor = {
 export interface PosSalesStore {
   /** Enregistre (ou met à jour : statut, total) des ventes d'une enseigne. */
   saveSales(tenantId: string, sales: readonly PosSaleRecord[], at: Date): Promise<void>;
-  /** Ventes d'une journée portant ce numéro (normalisé). */
-  findSales(tenantId: string, jour: string, numero: string): Promise<readonly PosSaleRecord[]>;
+  /** Vente de l'enseigne portant cet identifiant (sans casse), quelle que soit sa journée. */
+  findSale(tenantId: string, ticketId: string): Promise<PosSaleRecord | null>;
   getCursor(tenantId: string, jour: string): Promise<PosSalesCursor>;
   saveCursor(tenantId: string, jour: string, cursor: PosSalesCursor, at: Date): Promise<void>;
 }
@@ -45,7 +47,6 @@ interface SaleRow {
   ticket_id: string;
   splash360_restaurant_id: string;
   jour_comptable: string;
-  numero: string;
   status: 'confirmed' | 'deleted';
   total_cents: number;
 }
@@ -58,10 +59,9 @@ export function createPostgresPosSalesStore(sql: Sql): PosSalesStore {
       if (sales.length === 0) return;
       const rows = sales.map((s) => ({
         tenant_id: tenantId,
-        ticket_id: s.ticketId,
+        ticket_id: s.ticketId.toLowerCase(),
         splash360_restaurant_id: s.restaurantId,
         jour_comptable: s.jourComptable,
-        numero: s.numero,
         status: s.status,
         total_cents: s.totalCents,
         synced_at: at,
@@ -69,26 +69,26 @@ export function createPostgresPosSalesStore(sql: Sql): PosSalesStore {
       await sql`insert into public.pos_sales ${sql(rows)}
         on conflict (tenant_id, ticket_id) do update set
           splash360_restaurant_id = excluded.splash360_restaurant_id,
-          jour_comptable = excluded.jour_comptable, numero = excluded.numero,
+          jour_comptable = excluded.jour_comptable,
           status = excluded.status, total_cents = excluded.total_cents,
           synced_at = excluded.synced_at`;
     },
 
-    async findSales(tenantId, jour, numero) {
-      if (!DATE.test(jour)) return [];
+    async findSale(tenantId, ticketId) {
       const rows = await sql<SaleRow[]>`select ticket_id, splash360_restaurant_id,
-          jour_comptable::text, numero, status, total_cents
+          jour_comptable::text, status, total_cents
         from public.pos_sales
-        where tenant_id = ${tenantId} and jour_comptable = ${jour} and numero = ${numero}
-        order by ticket_id`;
-      return rows.map((r) => ({
-        ticketId: r.ticket_id,
-        restaurantId: r.splash360_restaurant_id,
-        jourComptable: r.jour_comptable,
-        numero: r.numero,
-        status: r.status,
-        totalCents: r.total_cents,
-      }));
+        where tenant_id = ${tenantId} and ticket_id = ${ticketId.toLowerCase()}`;
+      const r = rows[0];
+      return r
+        ? {
+            ticketId: r.ticket_id,
+            restaurantId: r.splash360_restaurant_id,
+            jourComptable: r.jour_comptable,
+            status: r.status,
+            totalCents: r.total_cents,
+          }
+        : null;
     },
 
     async getCursor(tenantId, jour) {
@@ -126,15 +126,18 @@ export function createMemoryPosSalesStore(): PosSalesStore & {
     sales,
     cursors,
     saveSales(tenantId, list) {
-      for (const s of list) sales.set(`${tenantId}/${s.ticketId}`, { ...s, tenantId });
+      for (const s of list) {
+        const ticketId = s.ticketId.toLowerCase();
+        sales.set(`${tenantId}/${ticketId}`, { ...s, ticketId, tenantId });
+      }
       return Promise.resolve();
     },
-    findSales: (tenantId, jour, numero) =>
-      Promise.resolve(
-        [...sales.values()]
-          .filter((s) => s.tenantId === tenantId && s.jourComptable === jour && s.numero === numero)
-          .map(({ tenantId: _t, ...s }) => s),
-      ),
+    findSale(tenantId, ticketId) {
+      const found = sales.get(`${tenantId}/${ticketId.toLowerCase()}`);
+      if (!found) return Promise.resolve(null);
+      const { tenantId: _t, ...sale } = found;
+      return Promise.resolve(sale);
+    },
     getCursor: (tenantId, jour) =>
       Promise.resolve(cursors.get(`${tenantId}/${jour}`) ?? EMPTY_SALES_CURSOR),
     saveCursor(tenantId, jour, cursor) {

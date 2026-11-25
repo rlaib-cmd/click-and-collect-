@@ -57,6 +57,19 @@ function fnv1a64(text: string): string {
   return hash.toString(16).padStart(16, '0');
 }
 
+/** Identifiant de vente Splash360 (UUID 8-4-4-4-12), où qu'il soit dans un texte. */
+const UUID_IN_TEXT = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/**
+ * `ticket_id` Splash360 contenu dans un QR de ticket (UUID seul ou dans une URL), en minuscules ;
+ * null sinon. Lot 20 (ADR 0025) : un ticket de borne scanné est alors vérifié comme une photo.
+ */
+export function ticketIdFromQr(raw: string): string | null {
+  const content = raw.trim();
+  const found = UUID_IN_TEXT.exec(content) ?? UUID_IN_TEXT.exec(safeDecode(content));
+  return found ? found[0].toLowerCase() : null;
+}
+
 const safeDecode = (v: string) => {
   try {
     return decodeURIComponent(v.replace(/\+/g, ' '));
@@ -77,6 +90,10 @@ const safeDecode = (v: string) => {
  */
 export function ticketRefFromQr(raw: string): string {
   const content = raw.trim();
+  // Identifiant de vente Splash360 (lot 20) : la référence est l'identifiant en majuscules,
+  // comme pour un ticket photographié (une participation par ticket, quel que soit le moyen).
+  const ticketId = ticketIdFromQr(content);
+  if (ticketId) return ticketId.toUpperCase();
   const direct = normalizeRef(content);
   if (TICKET_REF.test(direct)) return direct;
   const url = /^https?:\/\/[^/?#]+([^?#]*)(?:\?([^#]*))?/i.exec(content);
@@ -168,9 +185,12 @@ export const TICKET_PHOTO_MAX_AGE_DAYS = 7;
 export const ticketPhotoResponseSchema = z.object({
   /** Faux : ticket illisible (ou lecture indisponible), le client tape le numéro. */
   readable: z.boolean(),
-  orderNumber: z.string().nullable(),
-  /** Journée du ticket (AAAA-MM-JJ). */
+  /** `ticket_id` Splash360 imprimé sur le ticket (UUID, en minuscules). */
+  ticketId: z.string().nullable(),
+  /** Date imprimée (AAAA-MM-JJ). */
   date: z.string().nullable(),
+  /** Heure imprimée (HH:MM), si lisible. */
+  time: z.string().nullable(),
   totalCents: z.number().int().nonnegative().nullable(),
   /** À renvoyer avec la participation (valable 30 minutes) ; null si illisible. */
   token: z.string().nullable(),
@@ -312,9 +332,10 @@ export const adminAmbassadorEntrySchema = ambassadorEntrySchema.extend({
   checkResult: z.enum(['online', 'removed']).nullable(),
   photoReason: z.string().nullable(),
   needsReview: z.boolean(),
-  /** Données lues sur la photo du ticket (lot 20) ; null pour un ticket scanné ou saisi. */
+  /** Ticket vérifiable (lot 20) : identifiant Splash360, et date, heure, total lus sur la photo. */
+  ticketId: z.string().nullable().default(null),
   ticketDate: z.string().nullable().default(null),
-  ticketNumber: z.string().nullable().default(null),
+  ticketTime: z.string().nullable().default(null),
   ticketTotalCents: z.number().int().nullable().default(null),
   events: z.array(ambassadorEventSchema),
 });

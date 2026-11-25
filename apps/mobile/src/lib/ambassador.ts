@@ -84,9 +84,16 @@ export function ticketCheckLabel(entry: AmbassadorEntryDto): string | null {
   }
 }
 
-/** « Commande n° 6 · 24/11/2026 · 12,30 € » : ce que l'IA a lu, à confirmer par le client. */
+/**
+ * « Ticket 6f1c1c2e… · 24/11/2026 à 12:41 · 12,30 € » : ce que l'IA a lu (identifiant raccourci),
+ * à confirmer par le client.
+ */
 export function ticketReadSummary(read: TicketPhotoResponse): string | null {
-  if (!read.readable || !read.orderNumber || !read.date || read.totalCents === null) return null;
+  if (!read.readable || !read.ticketId || !read.date) return null;
   const date = read.date.split('-').reverse().join('/');
-  return messages.ambassador.ticketRead(read.orderNumber, date, formatPrice(read.totalCents));
+  return messages.ambassador.ticketRead(
+    read.ticketId.slice(0, 8),
+    read.time ? `${date} à ${read.time}` : date,
+    read.totalCents !== null ? formatPrice(read.totalCents) : null,
+  );
 }

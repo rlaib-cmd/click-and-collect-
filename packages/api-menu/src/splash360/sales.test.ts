@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Splash360Error } from './client';
-import { eurosToCents, normalizeOrderNumber, readSalesPage } from './sales';
+import { eurosToCents, readSalesPage } from './sales';
 
 /** Vente au format relevé le 25/11 (valeurs inventées, aucune donnée réelle). */
 const sale = (over: Record<string, unknown> = {}) => ({
@@ -35,7 +35,6 @@ describe('export des ventes Splash360 (lot 20)', () => {
           ticketId: '6f1c1c2e-0000-4000-8000-000000000001',
           restaurantId: '164',
           jourComptable: '2026-11-24',
-          numero: '6',
           status: 'confirmed',
           totalCents: 1230,
         },
@@ -51,11 +50,16 @@ describe('export des ventes Splash360 (lot 20)', () => {
     expect(eurosToCents(0)).toBe(0);
   });
 
-  it('normalise le numéro : espaces, majuscules, zéros de tête d’un numéro', () => {
-    expect(normalizeOrderNumber(' 006 ')).toBe('6');
-    expect(normalizeOrderNumber('0')).toBe('0');
-    expect(normalizeOrderNumber('b 12')).toBe('B12');
-    expect(normalizeOrderNumber('A007')).toBe('A007');
+  it('identifiant de vente en minuscules, refusé s’il n’est pas un UUID', () => {
+    const page = readSalesPage({
+      data: [
+        sale({ ticket_id: '6F1C1C2E-0000-4000-8000-00000000000B' }),
+        sale({ ticket_id: '42' }),
+      ],
+      pagination: { hasNextPage: false },
+    });
+    expect(page.sales.map((s) => s.ticketId)).toEqual(['6f1c1c2e-0000-4000-8000-00000000000b']);
+    expect(page.skipped).toBe(1);
   });
 
   it('ignore une vente incomplète sans bloquer la page, et lit la suite', () => {
@@ -63,14 +67,14 @@ describe('export des ventes Splash360 (lot 20)', () => {
       data: [
         sale({ restaurant_id: 'x' }),
         sale({ status: 'standby' }),
-        sale({ numero: 7, status: 'deleted', total: 5 }),
+        sale({ status: 'deleted', total: 5 }),
         'pas une vente',
       ],
       pagination: { hasNextPage: true },
     });
     expect(page.skipped).toBe(3);
     expect(page.hasNextPage).toBe(true);
-    expect(page.sales).toEqual([expect.objectContaining({ numero: '7', status: 'deleted' })]);
+    expect(page.sales).toEqual([expect.objectContaining({ status: 'deleted', totalCents: 500 })]);
   });
 
   it('refuse une enveloppe inconnue', () => {

@@ -1,6 +1,6 @@
 -- Achat vérifié (lot 20, ADR 0025) : ticket photographié, ventes Splash360 copiées, accès serveur.
 begin;
-select plan(13);
+select plan(15);
 
 insert into public.tenants (id, name, subdomain, splash360_id) values
   ('eeeeeeee-0000-4000-8000-000000000021', 'G', 'test-g20', 'T-G20'),
@@ -21,49 +21,64 @@ select throws_ok($$
 
 select lives_ok($$
   insert into public.ambassador_entries (tenant_id, member_id, ticket_ref, instagram_handle,
-    bonus_points, ticket_check, ticket_date, ticket_number, ticket_total_cents)
-  values ('eeeeeeee-0000-4000-8000-000000000021', 'm1', '20261124-6-1230', 'client.test', 50,
-    'pending', '2026-11-24', '6', 1230) $$, 'ticket photographié enregistré à vérifier');
+    bonus_points, ticket_check, ticket_id, ticket_date, ticket_time, ticket_total_cents)
+  values ('eeeeeeee-0000-4000-8000-000000000021', 'm1', '6F1C1C2E-0000-4000-8000-00000000000B',
+    'client.test', 50, 'pending', '6f1c1c2e-0000-4000-8000-00000000000b', '2026-11-24', '12:41',
+    1230) $$, 'ticket photographié enregistré à vérifier');
+
+select lives_ok($$
+  insert into public.ambassador_entries (tenant_id, member_id, ticket_ref, instagram_handle,
+    bonus_points, ticket_check, ticket_id)
+  values ('eeeeeeee-0000-4000-8000-000000000021', 'm1', '6F1C1C2E-0000-4000-8000-00000000000C',
+    'client.test', 50, 'pending', '6f1c1c2e-0000-4000-8000-00000000000c') $$,
+  'ticket de borne scanné (QR) : identifiant seul, à vérifier');
 
 select throws_ok($$
   insert into public.ambassador_entries (tenant_id, member_id, ticket_ref, instagram_handle,
-    bonus_points, ticket_check, ticket_date, ticket_number, ticket_total_cents)
-  values ('eeeeeeee-0000-4000-8000-000000000021', 'm1', '20261124-7-1230', 'client.test', 50,
-    'maybe', '2026-11-24', '7', 1230) $$,
+    bonus_points, ticket_check, ticket_id)
+  values ('eeeeeeee-0000-4000-8000-000000000021', 'm1', 'BB-2003', 'client.test', 50,
+    'maybe', '6f1c1c2e-0000-4000-8000-00000000000d') $$,
   '23514', null, 'état de vérification inconnu refusé');
 
 select throws_ok($$
   insert into public.ambassador_entries (tenant_id, member_id, ticket_ref, instagram_handle,
-    bonus_points, ticket_check, ticket_date, ticket_number, ticket_total_cents)
-  values ('eeeeeeee-0000-4000-8000-000000000021', 'm1', '20261124-8-1230', 'client.test', 50,
-    'pending', '2026-11-24', 'n° 8 ; drop', 1230) $$,
-  '23514', null, 'numéro de commande hors format refusé');
+    bonus_points, ticket_check, ticket_id, ticket_date, ticket_time)
+  values ('eeeeeeee-0000-4000-8000-000000000021', 'm1', 'BB-2004', 'client.test', 50,
+    'pending', '6f1c1c2e-0000-4000-8000-00000000000e', '2026-11-24', '24:10') $$,
+  '23514', null, 'heure hors format refusée');
+
+select throws_ok($$
+  insert into public.ambassador_entries (tenant_id, member_id, ticket_ref, instagram_handle,
+    bonus_points, ticket_date)
+  values ('eeeeeeee-0000-4000-8000-000000000021', 'm1', 'BB-2005', 'client.test', 50,
+    '2026-11-24') $$,
+  '23514', null, 'ticket non vérifié : ni journée ni total');
 
 select lives_ok($$
   insert into public.ambassador_events (tenant_id, entry_id, type, actor, detail)
   values ('eeeeeeee-0000-4000-8000-000000000021', 'aaaaaaaa-0000-4000-8000-000000000020',
           'ticket_checked', 'système', '{"result":"verified"}') $$, 'événement ticket_checked accepté');
 
--- Ventes : une par identifiant de vente et par enseigne, statut connu.
+-- Ventes : une par identifiant de vente et par enseigne, statut connu ; export à partir de la page 1.
 select lives_ok($$
   insert into public.pos_sales (tenant_id, ticket_id, splash360_restaurant_id, jour_comptable,
-    numero, status, total_cents)
-  values ('eeeeeeee-0000-4000-8000-000000000021', 'v-1', '164', '2026-11-24', '6', 'confirmed', 1230) $$,
+    status, total_cents)
+  values ('eeeeeeee-0000-4000-8000-000000000021', 'v-1', '164', '2026-11-24', 'confirmed', 1230) $$,
   'vente copiée');
 select throws_ok($$
   insert into public.pos_sales (tenant_id, ticket_id, splash360_restaurant_id, jour_comptable,
-    numero, status, total_cents)
-  values ('eeeeeeee-0000-4000-8000-000000000021', 'v-1', '164', '2026-11-24', '6', 'confirmed', 1230) $$,
+    status, total_cents)
+  values ('eeeeeeee-0000-4000-8000-000000000021', 'v-1', '164', '2026-11-24', 'confirmed', 1230) $$,
   '23505', null, 'une seule copie d''une vente par enseigne');
 select throws_ok($$
   insert into public.pos_sales (tenant_id, ticket_id, splash360_restaurant_id, jour_comptable,
-    numero, status, total_cents)
-  values ('eeeeeeee-0000-4000-8000-000000000022', 'v-2', '164', '2026-11-24', '6', 'standby', 1230) $$,
+    status, total_cents)
+  values ('eeeeeeee-0000-4000-8000-000000000022', 'v-2', '164', '2026-11-24', 'standby', 1230) $$,
   '23514', null, 'statut de vente inconnu refusé');
 select throws_ok($$
   insert into public.pos_sales_sync (tenant_id, jour, next_page)
-  values ('eeeeeeee-0000-4000-8000-000000000021', '2026-11-24', -1) $$,
-  '23514', null, 'page négative refusée');
+  values ('eeeeeeee-0000-4000-8000-000000000021', '2026-11-24', 0) $$,
+  '23514', null, 'page 0 refusée : l''export commence à la page 1');
 
 set local role anon;
 select is((select count(*)::int from public.pos_sales), 0, 'anon ne lit aucune vente');

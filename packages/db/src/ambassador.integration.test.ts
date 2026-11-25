@@ -149,8 +149,14 @@ describe.skipIf(!url)('AmbassadorStore Postgres (lots 15 et 17)', () => {
     expect(await store.events(BELLA, [id])).toEqual([]);
   });
   it('enregistre un ticket photographié « à vérifier » et ne le crédite pas avant le rapprochement', async () => {
-    const photo = { date: '2026-11-24', number: '6', totalCents: 1230 };
-    const create = (suffix: string) =>
+    const ids = { P1: 'a1', P2: 'a2', P3: 'a3' } as const;
+    const ticket = (suffix: keyof typeof ids) => ({
+      ticketId: `6f1c1c2e-0000-4000-8000-${run}00${ids[suffix]}`,
+      date: '2026-11-24',
+      time: '12:41',
+      totalCents: 1230,
+    });
+    const create = (suffix: keyof typeof ids) =>
       store.createEntry(
         {
           tenantId: BILLS,
@@ -158,9 +164,9 @@ describe.skipIf(!url)('AmbassadorStore Postgres (lots 15 et 17)', () => {
           ticketRef: `T${run}${suffix}`,
           instagramHandle: 'client.test',
           bonusPoints: 50,
-          ticketPhoto: photo,
+          ticket: ticket(suffix),
         },
-        [{ type: 'ticket_read', actor: 'IA', detail: { orderNumber: '6' } }],
+        [{ type: 'ticket_read', actor: 'IA', detail: { ticketId: ticket(suffix).ticketId } }],
       );
     const a = await create('P1');
     const b = await create('P2');
@@ -168,10 +174,29 @@ describe.skipIf(!url)('AmbassadorStore Postgres (lots 15 et 17)', () => {
     if (!a.ok || !b.ok || !c.ok) throw new Error('participations non créées');
     expect(a.entry).toMatchObject({
       ticketCheck: 'pending',
+      ticketId: ticket('P1').ticketId,
       ticketDate: '2026-11-24',
-      ticketNumber: '6',
+      ticketTime: '12:41',
       ticketTotalCents: 1230,
     });
+    // Ticket de borne scanné : identifiant seul, sans journée ni total.
+    const qr = await store.createEntry(
+      {
+        tenantId: BILLS,
+        memberId: 'membre-test',
+        ticketRef: `T${run}Q2`,
+        instagramHandle: 'client.test',
+        bonusPoints: 50,
+        ticket: {
+          ticketId: `6f1c1c2e-0000-4000-8000-${run}00b1`,
+          date: null,
+          time: null,
+          totalCents: null,
+        },
+      },
+      [],
+    );
+    expect(qr.ok && qr.entry).toMatchObject({ ticketCheck: 'pending', ticketDate: null });
     const pending = await store.pendingTicketChecks(500);
     expect(pending.some((e) => e.id === a.entry.id)).toBe(true);
 

@@ -84,21 +84,25 @@ describe('achat vérifié (lot 20)', () => {
     expect(ticketCheckLabel(entry({ ticketCheck: 'unverified' }))).toBeNull();
   });
 
-  it('résume ce qui a été lu sur le ticket, pour confirmation', () => {
-    expect(
-      ticketReadSummary({
-        readable: true,
-        orderNumber: '6',
-        date: '2026-11-24',
-        totalCents: 1230,
-        token: 'r1.x.y',
-      }),
-    ).toBe('Commande n° 6 · 24/11/2026 · 12,30\u00a0€');
+  it('résume ce qui a été lu sur le ticket (identifiant raccourci), pour confirmation', () => {
+    const read = {
+      readable: true,
+      ticketId: '6f1c1c2e-0000-4000-8000-00000000000b',
+      date: '2026-11-24',
+      time: '12:41',
+      totalCents: 1230,
+      token: 'r1.x.y',
+    };
+    expect(ticketReadSummary(read)).toBe('Ticket 6f1c1c2e… · 24/11/2026 à 12:41 · 12,30\u00a0€');
+    expect(ticketReadSummary({ ...read, time: null, totalCents: null })).toBe(
+      'Ticket 6f1c1c2e… · 24/11/2026',
+    );
     expect(
       ticketReadSummary({
         readable: false,
-        orderNumber: null,
+        ticketId: null,
         date: null,
+        time: null,
         totalCents: null,
         token: null,
       }),

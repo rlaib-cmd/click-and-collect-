@@ -7,14 +7,12 @@ import { Splash360Error } from './client';
  * au rapprochement d'un ticket « Ambassadeur » sont gardés ; ni client, ni lignes de vente.
  */
 export interface Splash360Sale {
-  /** Identifiant unique de la vente (UUID). */
+  /** Identifiant unique de la vente (UUID, en minuscules) : celui imprimé sur le ticket. */
   readonly ticketId: string;
   /** Identifiant Splash360 du restaurant (entier, ex. 164), en texte comme `restaurants.splash360_id`. */
   readonly restaurantId: string;
   /** Journée comptable (AAAA-MM-JJ). */
   readonly jourComptable: string;
-  /** Numéro de commande imprimé sur le ticket, normalisé (`normalizeOrderNumber`). */
-  readonly numero: string;
   readonly status: 'confirmed' | 'deleted';
   /** Total TTC en centimes (l'API le donne en euros, nombre à virgule). */
   readonly totalCents: number;
@@ -27,21 +25,13 @@ export interface Splash360SalesPage {
   readonly skipped: number;
 }
 
-/**
- * Numéro de commande comparable : espaces retirés, majuscules, zéros de tête retirés pour un
- * numéro purement numérique (« 006 » imprimé = « 6 » dans l'export). Vide si rien d'utilisable.
- */
-export function normalizeOrderNumber(raw: string): string {
-  const compact = raw.trim().toUpperCase().replace(/\s+/g, '');
-  return /^\d+$/.test(compact) ? compact.replace(/^0+(?=\d)/, '') : compact;
-}
-
 /** Euros (nombre à virgule) → centimes entiers, arrondi exact (12.3 → 1230, 0.29 → 29). */
 export function eurosToCents(euros: number): number {
   return Math.round(euros * 100);
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Enveloppe stricte ; ventes lues une à une (une vente illisible ne bloque pas la page). */
 const envelope = z.object({
@@ -51,10 +41,9 @@ const envelope = z.object({
 
 /** Champs utilisés, stricts ; les autres champs de la vente sont ignorés. */
 const sale = z.looseObject({
-  ticket_id: z.string().trim().min(1).max(64),
+  ticket_id: z.string().trim().regex(UUID),
   restaurant_id: z.number().int().nonnegative(),
   jour_comptable: z.string().regex(DATE),
-  numero: z.union([z.string(), z.number().int().nonnegative()]),
   status: z.enum(['confirmed', 'deleted']),
   total: z.number().finite(),
 });
@@ -69,16 +58,14 @@ export function readSalesPage(body: unknown): Splash360SalesPage {
   let skipped = 0;
   for (const raw of parsed.data.data) {
     const s = sale.safeParse(raw);
-    const numero = s.success ? normalizeOrderNumber(String(s.data.numero)) : '';
-    if (!s.success || !numero || numero.length > 20) {
+    if (!s.success) {
       skipped += 1;
       continue;
     }
     sales.push({
-      ticketId: s.data.ticket_id,
+      ticketId: s.data.ticket_id.toLowerCase(),
       restaurantId: String(s.data.restaurant_id),
       jourComptable: s.data.jour_comptable,
-      numero,
       status: s.data.status,
       totalCents: eurosToCents(s.data.total),
     });

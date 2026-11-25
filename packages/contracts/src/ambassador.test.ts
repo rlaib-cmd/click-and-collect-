@@ -4,6 +4,7 @@ import {
   ambassadorSettingsSchema,
   instagramHandleSchema,
   ticketQrSchema,
+  ticketIdFromQr,
   ticketRefFromQr,
   ticketRefSchema,
 } from './ambassador';
@@ -55,6 +56,16 @@ describe('référence de ticket tirée du QR code', () => {
     expect(ticketRefSchema.safeParse(a).success).toBe(true);
     // Empreinte FNV-1a 64 bits de référence (chaîne vide).
     expect(ticketRefFromQr('https://')).toMatch(/^QR-/);
+  });
+
+  it('reconnaît un identifiant de vente Splash360 (lot 20), seul ou dans une URL', () => {
+    const id = '6f1c1c2e-0000-4000-8000-00000000000b';
+    expect(ticketIdFromQr(id.toUpperCase())).toBe(id);
+    expect(ticketIdFromQr(`https://borne.test/t?ticket=${id}&x=1`)).toBe(id);
+    expect(ticketIdFromQr(`https://borne.test/t%2F${id}`)).toBe(id);
+    expect(ticketIdFromQr('BB-1042')).toBeNull();
+    expect(ticketRefFromQr(`https://borne.test/tickets/${id}`)).toBe(id.toUpperCase());
+    expect(ticketRefSchema.safeParse(id.toUpperCase()).success).toBe(true);
   });
 
   it('accepte un contenu de QR brut raisonnable et refuse un contenu trop long', () => {

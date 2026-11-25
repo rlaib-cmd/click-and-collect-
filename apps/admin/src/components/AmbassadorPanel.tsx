@@ -38,7 +38,8 @@ function detailValue(key: string, value: string | number | boolean | null): stri
   if (typeof value === 'string' && ISO.test(value)) return when(value);
   if (key === 'verdict' && typeof value === 'string') return verdicts[value] ?? value;
   if (key === 'result' && typeof value === 'string') return t.resultLabel[value] ?? value;
-  if (key === 'totalCents' && typeof value === 'number') return euros(value);
+  if ((key === 'totalCents' || key === 'saleTotalCents') && typeof value === 'number')
+    return euros(value);
   return String(value);
 }
 
@@ -243,12 +244,14 @@ export function AmbassadorPanel() {
                       ) : (
                         <div className="muted">{t.ticketCheckLabel.unverified}</div>
                       )}
-                      {e.ticketNumber && e.ticketDate && e.ticketTotalCents !== null ? (
-                        <div className="muted">
+                      {e.ticketId ? (
+                        <div className="muted" title={e.ticketId}>
                           {t.ticketRead(
-                            e.ticketNumber,
-                            day(e.ticketDate),
-                            euros(e.ticketTotalCents),
+                            e.ticketId.slice(0, 8),
+                            e.ticketDate
+                              ? `${day(e.ticketDate)}${e.ticketTime ? ` ${e.ticketTime}` : ''}`
+                              : t.ticketFromQr,
+                            e.ticketTotalCents !== null ? euros(e.ticketTotalCents) : null,
                           )}
                         </div>
                       ) : null}

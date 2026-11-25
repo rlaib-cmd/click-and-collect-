@@ -5,6 +5,7 @@ import {
   ambassadorEntryRequestSchema,
   ambassadorProfileRequestSchema,
   photoCheckRequestSchema,
+  ticketIdFromQr,
   ticketRefFromQr,
   MAX_PHOTO_BYTES,
   type AmbassadorConfig,
@@ -36,7 +37,7 @@ import {
   ticketDateMessage,
   ticketDateProblem,
   ticketPhotoToken,
-  ticketRefFromReceipt,
+  ticketRefFromTicketId,
   type TicketReader,
 } from '../loyalty/ticket-read';
 
@@ -181,27 +182,30 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
     if (image instanceof Response) return image;
     const reading = await (deps.ticketReader ?? manualTicketReader).read(image);
     c.header('Cache-Control', 'no-store');
-    if (!reading.readable || !reading.orderNumber || !reading.date || reading.totalCents === null) {
+    if (!reading.readable || !reading.ticketId || !reading.date) {
       const body: TicketPhotoResponse = {
         readable: false,
-        orderNumber: null,
+        ticketId: null,
         date: null,
+        time: null,
         totalCents: null,
         token: null,
       };
       return c.json(body);
     }
-    const problem = ticketDateProblem(reading.date, now());
+    const problem = ticketDateProblem(reading.date, reading.time, now());
     if (problem) return apiError(c, 'invalid_request', ticketDateMessage(problem));
     const data = {
+      ticketId: reading.ticketId,
       date: reading.date,
-      number: reading.orderNumber,
+      time: reading.time,
       totalCents: reading.totalCents,
     };
     const body: TicketPhotoResponse = {
       readable: true,
-      orderNumber: reading.orderNumber,
+      ticketId: reading.ticketId,
       date: reading.date,
+      time: reading.time,
       totalCents: reading.totalCents,
       token: ticketPhotoToken(deps.tokenSecret, tenant.id, memberId, data, now()),
     };
@@ -256,13 +260,21 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
       );
       if (!ticketPhoto)
         return apiError(c, 'invalid_request', 'Photo du ticket expirée : reprends-la en photo');
-      const problem = ticketDateProblem(ticketPhoto.date, now());
+      const problem = ticketDateProblem(ticketPhoto.date, ticketPhoto.time, now());
       if (problem) return apiError(c, 'invalid_request', ticketDateMessage(problem));
     }
     // QR scanné : la référence est recalculée ici à partir du contenu brut (pas de confiance au client).
     const ticketQr = ticketPhoto ? null : (parsed.data.ticketQr ?? null);
-    const ticketRef = ticketPhoto
-      ? ticketRefFromReceipt(ticketPhoto)
+    // QR de borne portant le `ticket_id` Splash360 : vérifié comme une photo, sans date ni total
+    // (la journée vient de la date de participation, ADR 0025).
+    const qrTicketId = ticketQr ? ticketIdFromQr(ticketQr) : null;
+    const ticket = ticketPhoto
+      ? ticketPhoto
+      : qrTicketId
+        ? { ticketId: qrTicketId, date: null, time: null, totalCents: null }
+        : null;
+    const ticketRef = ticket
+      ? ticketRefFromTicketId(ticket.ticketId)
       : ticketQr
         ? ticketRefFromQr(ticketQr)
         : parsed.data.ticketRef;
@@ -278,15 +290,17 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
           instagram: handle,
         },
       },
-      ...(ticketPhoto
+      ...(ticket
         ? [
             {
               type: 'ticket_read' as const,
-              actor: 'IA',
+              actor: ticketPhoto ? 'IA' : CLIENT_ACTOR,
               detail: {
-                orderNumber: ticketPhoto.number,
-                date: ticketPhoto.date,
-                totalCents: ticketPhoto.totalCents,
+                ticketId: ticket.ticketId,
+                source: ticketPhoto ? 'photo' : 'QR',
+                date: ticket.date,
+                time: ticket.time,
+                totalCents: ticket.totalCents,
               },
             },
           ]
@@ -314,7 +328,7 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
         photoVerdict: photo?.verdict ?? null,
         photoReason: photo?.reason ?? 'Photo non analysée',
         needsReview: photo?.verdict !== 'accepted',
-        ticketPhoto,
+        ticket,
       },
       events,
     );

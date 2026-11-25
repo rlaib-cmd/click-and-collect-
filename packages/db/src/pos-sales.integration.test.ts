@@ -13,36 +13,41 @@ describe.skipIf(!url)('PosSalesStore Postgres (lot 20)', () => {
   const run = `${Date.now()}`.slice(-8);
   const jour = '2026-11-20';
   afterAll(async () => {
-    await sql`delete from public.pos_sales where ticket_id like ${`t-${run}-%`}`;
+    await sql`delete from public.pos_sales where ticket_id like ${`6f1c1c2e-0000-4000-8000-${run}%`}`;
     await sql`delete from public.pos_sales_sync where tenant_id = ${BILLS} and jour = ${jour}`;
     await sql.end();
   });
 
-  it('enregistre les ventes, met à jour le statut et retrouve un numéro par enseigne', async () => {
+  it('enregistre les ventes, met à jour le statut et retrouve un identifiant par enseigne', async () => {
+    const id = `6f1c1c2e-0000-4000-8000-${run}0001`;
     const sale = {
-      ticketId: `t-${run}-1`,
+      ticketId: id,
       restaurantId: '164',
       jourComptable: jour,
-      numero: `N${run}`,
       status: 'confirmed' as const,
       totalCents: 1230,
     };
     await store.saveSales(
       BILLS,
-      [sale, { ...sale, ticketId: `t-${run}-2`, numero: 'AUTRE' }],
+      [sale, { ...sale, ticketId: `6f1c1c2e-0000-4000-8000-${run}0002` }],
       new Date(),
     );
-    expect(await store.findSales(BILLS, jour, `N${run}`)).toEqual([sale]);
-    await store.saveSales(BILLS, [{ ...sale, status: 'deleted' }], new Date());
-    expect((await store.findSales(BILLS, jour, `N${run}`))[0]?.status).toBe('deleted');
-    expect(await store.findSales(BELLA, jour, `N${run}`)).toEqual([]);
-    expect(await store.findSales(BILLS, '2026-11-21', `N${run}`)).toEqual([]);
+    expect(await store.findSale(BILLS, id)).toEqual(sale);
+    // Sans casse : l'identifiant lu peut être en majuscules.
+    expect(await store.findSale(BILLS, id.toUpperCase())).toEqual(sale);
+    await store.saveSales(
+      BILLS,
+      [{ ...sale, ticketId: id.toUpperCase(), status: 'deleted' }],
+      new Date(),
+    );
+    expect((await store.findSale(BILLS, id))?.status).toBe('deleted');
+    expect(await store.findSale(BELLA, id)).toBeNull();
     await store.saveSales(BILLS, [], new Date());
   });
 
   it('garde l’avancement de la lecture par enseigne et par journée', async () => {
     expect(await store.getCursor(BILLS, jour)).toEqual({
-      nextPage: 0,
+      nextPage: 1,
       passAfterDay: false,
       complete: false,
     });

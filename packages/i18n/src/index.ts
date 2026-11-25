@@ -392,8 +392,9 @@ export const fr = {
       'Le plus simple : on lit ton ticket et on vérifie ton achat auprès du restaurant.',
     readingTicket: 'Lecture de ton ticket…',
     ticketReadTitle: 'Ticket lu',
-    ticketRead: (orderNumber: string, date: string, amount: string) =>
-      `Commande n° ${orderNumber} · ${date} · ${amount}`,
+    /** Identifiant de vente raccourci (8 premiers caractères), date (et heure), montant. */
+    ticketRead: (shortId: string, when: string, amount: string | null) =>
+      `Ticket ${shortId}… · ${when}${amount ? ` · ${amount}` : ''}`,
     ticketReadConfirm: 'Les informations sont justes',
     ticketRetake: 'Reprendre la photo du ticket',
     ticketUnreadable:
@@ -404,7 +405,7 @@ export const fr = {
       `Ce ticket ne peut pas servir : seuls les achats des ${days} derniers jours comptent (ou la date a été mal lue). Reprends la photo ou tape le numéro.`,
     ticketPhotoExpired: 'La photo du ticket a expiré : reprends-la.',
     ticketConsent:
-      'Ta photo du ticket est lue automatiquement (numéro, date, montant), puis effacée : elle n’est pas conservée.',
+      'Ta photo du ticket est lue automatiquement (identifiant du ticket, date, heure, montant), puis effacée : elle n’est pas conservée.',
     ticketCheck: {
       verified: 'Achat vérifié',
       pending: 'Vérification du ticket en cours',
