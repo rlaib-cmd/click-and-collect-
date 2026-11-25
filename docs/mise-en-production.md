@@ -132,3 +132,12 @@ select cron.schedule('relance-caisse-splash360', '10 seconds',
 ```
 
 Pour l'arrêter : `select cron.unschedule('relance-caisse-splash360');`
+
+Installée en recette le 25/11. Coût : 8 640 appels de la fonction par jour (environ 260 000 par
+mois, sur 2 millions inclus dans l'offre Pro). L'historique de pg_cron garde une ligne par passage :
+à purger chaque nuit (à poser avec accord, non installé en recette) :
+
+```sql
+select cron.schedule('nettoyage-historique-cron', '17 3 * * *',
+  $$delete from cron.job_run_details where end_time < now() - interval '2 days'$$);
+```
