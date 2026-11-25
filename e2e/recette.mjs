@@ -12,9 +12,12 @@ const { chromium } = require('playwright');
 const PASSWORD = process.env.E2E_PASSWORD;
 const ADMIN = (process.env.ADMIN_URL ?? 'http://localhost:4466').replace(/\/+$/, '');
 const APP = (process.env.APP_URL ?? 'http://localhost:4455').replace(/\/+$/, '');
-const API = (
-  process.env.API_URL ?? 'https://yfrvtrebukdbxnuqhlfy.supabase.co/functions/v1/api'
-).replace(/\/+$/, '');
+// Cible explicite obligatoire (audit du 25/11, F10) : aucune API distante par défaut.
+const API = (process.env.API_URL ?? '').replace(/\/+$/, '');
+if (!/^https?:\/\//.test(API)) {
+  console.error('API_URL manquant : indiquez explicitement l’API visée (recette ou locale).');
+  process.exit(2);
+}
 const PUBLIC_APP = (process.env.PUBLIC_APP_URL ?? 'https://claude-splash360.expo.app').replace(
   /\/+$/,
   '',
@@ -51,7 +54,7 @@ const json = async (path) => {
 };
 
 async function scenario(id, title, fn) {
-  if (!ONLY.includes(id)) return;
+  if (!ONLY.includes(id) || stopped) return;
   const started = Date.now();
   try {
     await fn();
@@ -63,8 +66,14 @@ async function scenario(id, title, fn) {
       for (const page of context.pages()) await shot(page, `${id}-echec-${(i += 1)}`);
     results.push({ id, title, ok: false, error: e.message.split('\n')[0] });
     console.log(`✗ (${id}) ${title} — ${e.message.split('\n')[0]}`);
+  } finally {
+    // Aucune page ne reste ouverte entre deux scénarios : rien ne peut appeler l'API en fond.
+    for (const context of browser.contexts()) await context.close().catch(() => {});
   }
+  // Première erreur : on arrête la campagne et on rend le diagnostic (pas de scénario suivant).
+  if (!results.at(-1)?.ok) stopped = true;
 }
+let stopped = false;
 
 const browser = await chromium.launch();
 const shot = (page, name) => page.screenshot({ path: `${SHOTS}/${name}.png` }).catch(() => {});

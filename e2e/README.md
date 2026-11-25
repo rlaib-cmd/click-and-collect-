@@ -34,11 +34,13 @@ place) et remettent tout en place à la fin.
 2. Lancer les scénarios (mot de passe des comptes de test de la recette, jamais commité) :
 
    ```sh
-   E2E_PASSWORD=… pnpm e2e:recette            # tous
-   E2E_PASSWORD=… E2E_ONLY=a,e pnpm e2e:recette # une partie
+   API_URL=https://yfrvtrebukdbxnuqhlfy.supabase.co/functions/v1/api E2E_PASSWORD=… pnpm e2e:recette
+   API_URL=… E2E_PASSWORD=… E2E_ONLY=a,e pnpm e2e:recette # une partie
    ```
 
-   Variables : `ADMIN_URL`, `APP_URL`, `API_URL`, `E2E_SHOTS` (captures, `e2e/screenshots` par
+   `API_URL` est obligatoire : le script ne vise jamais une API distante par défaut. La campagne
+   s'arrête à la première erreur et ferme les pages de chaque scénario (aucun appel en fond).
+   Autres variables : `ADMIN_URL`, `APP_URL`, `E2E_SHOTS` (captures, `e2e/screenshots` par
    défaut, ignoré par git). Playwright doit être installé sur la machine (`require('playwright')`).
 
 ## Comptes de test (recette uniquement)
