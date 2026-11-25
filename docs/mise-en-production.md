@@ -136,9 +136,17 @@ Pour l'arrêter : `select cron.unschedule('relance-caisse-splash360');`
 
 Installée en recette le 25/11. Coût : 8 640 appels de la fonction par jour (environ 260 000 par
 mois, sur 2 millions inclus dans l'offre Pro). L'historique de pg_cron garde une ligne par passage :
-à purger chaque nuit (à poser avec accord, non installé en recette) :
+à purger chaque nuit (installé en recette le 25/11, à 3h17 UTC) :
 
 ```sql
 select cron.schedule('nettoyage-historique-cron', '17 3 * * *',
   $$delete from cron.job_run_details where end_time < now() - interval '2 days'$$);
 ```
+
+## Projet Supabase de production
+
+Créé le 25/11 : `splash360-commande-production`, référence `azenkeuuejwwtbudvwqt`, région Paris
+(eu-west-3). Vide : aucune migration, aucune fonction, aucun secret. À faire, avec accord explicite :
+migrations sans `seed.sql`, fonction `api`, secrets de production (Stripe live, Splash360 par
+restaurant, `DATABASE_POOLER_URL`, `APP_ENV=production`, jamais `OTP_DEBUG_ECHO`), relance de caisse
+et purge, compte super-administrateur, puis back-office et app pointés vers ce projet.
