@@ -2,6 +2,7 @@ import { DEFAULT_STYLE } from '@splash360/theme';
 import { createDemoMenuProvider, createMenuCache } from '@splash360/api-menu';
 import { cents } from '@splash360/core';
 import {
+  createMemoryAmbassadorStore,
   createMemoryRestaurantStore,
   createMemoryTenantStore,
   type OrderingConfig,
@@ -220,6 +221,9 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
     tenants: createMemoryTenantStore(tenants),
     admin: admin.store,
     promos: backend.promoAdmin,
+    ambassador: createMemoryAmbassadorStore({
+      [BELLA_ID]: { enabled: true, instagramHandle: 'pizzeriabella', bonusPoints: 50 },
+    }),
     verifier: createSupabaseVerifier({ secret: JWT_SECRET }),
     restaurants: createMemoryRestaurantStore(restaurants),
     menus: createMenuCache(createDemoMenuProvider(), { ttlMs: 60_000, maxStaleMs: 0 }),

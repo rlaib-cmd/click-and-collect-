@@ -21,6 +21,7 @@ import {
 } from '@splash360/api-menu';
 import {
   createPostgresAdminStore,
+  createPostgresAmbassadorStore,
   createPostgresPromoStore,
   createPostgresDemoLoyaltyStore,
   createPostgresOperationsStore,
@@ -172,6 +173,7 @@ function build() {
     notifier,
     admin: createPostgresAdminStore(sql),
     promos: createPostgresPromoStore(sql),
+    ambassador: createPostgresAmbassadorStore(sql),
     verifier,
     gateway,
     tokenSecret,

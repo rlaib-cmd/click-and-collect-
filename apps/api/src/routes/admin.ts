@@ -7,6 +7,8 @@ import {
   validatePromoDefinition,
 } from '@splash360/core';
 import {
+  ambassadorSettingsSchema,
+  type AmbassadorSettingsDto,
   createTenantSchema,
   inviteSchema,
   legalSchema,
@@ -29,6 +31,7 @@ import {
 } from '@splash360/contracts';
 import { DEFAULT_THEME, themeChanges } from '@splash360/theme';
 import type {
+  AmbassadorStore,
   AdminStore,
   PromoAdminStore,
   OperationsStore,
@@ -48,6 +51,7 @@ import {
   type AdminEnv,
   type TokenVerifier,
 } from '../admin/auth';
+import { toEntryDto } from './ambassador';
 import type { AuthInviter } from '../admin/invite';
 import { apiError } from '../errors';
 import { toMenuDto } from '../menu-dto';
@@ -77,6 +81,8 @@ export interface AdminRoutesDeps extends NotifyDeps {
   readonly menus: MenuCache;
   /** Club fidélité (Splash360 ou données de test) ; absent = pas de fidélité. */
   readonly loyalty?: LoyaltyProvider | undefined;
+  /** Ambassadeur (lot 15, ADR 0019) ; absent = fonction indisponible. */
+  readonly ambassador?: AmbassadorStore | undefined;
   /** URL publique du back-office (retours de l'inscription Stripe). */
   readonly adminUrl: string;
   /** Envoi des invitations Supabase Auth ; null : non configuré (aucun e-mail envoyé). */
@@ -858,6 +864,43 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     const ref = { id: tenant.id, splash360Id: tenant.splash360Id };
     return (await deps.loyalty.getProgram(ref)) ? { provider: deps.loyalty, ref } : null;
   }
+
+  // ——— Ambassadeur (lot 15, ADR 0019) ———
+  app.get('/ambassador', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    if (!deps.ambassador) return apiError(c, 'not_found', 'Fonction indisponible');
+    const s = await deps.ambassador.getSettings(tenantId(c));
+    const body: AmbassadorSettingsDto = s;
+    return c.json(body);
+  });
+
+  app.put('/ambassador', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    if (!deps.ambassador) return apiError(c, 'not_found', 'Fonction indisponible');
+    const parsed = ambassadorSettingsSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success)
+      return apiError(c, 'invalid_request', parsed.error.issues[0]?.message ?? 'Réglage invalide');
+    await deps.ambassador.saveSettings(tenantId(c), parsed.data);
+    await audit(c, 'ambassador.settings', null, { enabled: parsed.data.enabled });
+    return c.body(null, 204);
+  });
+
+  app.get('/ambassador/entries', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    if (!deps.ambassador) return apiError(c, 'not_found', 'Fonction indisponible');
+    const entries = await deps.ambassador.listEntries(tenantId(c), 200);
+    return c.json({
+      entries: entries.map((e) => ({
+        ...toEntryDto(e),
+        memberId: e.memberId,
+        instagramHandle: e.instagramHandle,
+        decidedAt: e.decidedAt?.toISOString() ?? null,
+      })),
+    });
+  });
 
   app.get('/loyalty/members', async (c) => {
     const denied = allow(c, 'loyalty');

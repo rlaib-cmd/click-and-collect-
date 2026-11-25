@@ -130,3 +130,8 @@ select '00000000-0000-4000-8000-000000000005', r.id, 'equipier@billsburger.test'
 from public.restaurants r where r.tenant_id = '00000000-0000-4000-8000-000000000005'
   and not exists (select 1 from public.staff_users where email = 'equipier@billsburger.test')
 order by r.created_at limit 1;
+
+-- Lot 15 : ambassadeur Bills Burger (compte à taguer, 50 points par story, une fois par ticket).
+insert into public.ambassador_settings (tenant_id, enabled, instagram_handle, bonus_points)
+values ('00000000-0000-4000-8000-000000000005', true, 'billsburgerfr', 50)
+on conflict (tenant_id) do nothing;

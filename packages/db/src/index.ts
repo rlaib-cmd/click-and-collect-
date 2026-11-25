@@ -9,3 +9,4 @@ export * from './loyalty-demo';
 export * from './otp';
 export * from './promos';
 export * from './pos';
+export * from './ambassador';

@@ -3,6 +3,7 @@ import type { AuthInviter } from './admin/invite';
 import type { MenuCache } from '@splash360/api-menu';
 import type {
   AdminStore,
+  AmbassadorStore,
   PromoAdminStore,
   OperationsStore,
   OrderingStore,
@@ -81,6 +82,8 @@ export interface AppDeps {
   readonly trustProxy?: boolean;
   /** Club fidélité Splash360 (lot 8) ; absent = pas de fidélité. */
   readonly loyalty?: LoyaltyProvider;
+  /** Ambassadeur (lot 15, ADR 0019) ; absent = fonction désactivée. */
+  readonly ambassador?: AmbassadorStore;
   /** Connexion au club par simple e-mail : données de test uniquement (ADR 0009). */
   readonly loyaltyDemoLogin?: boolean;
   /** Connexion du client par code SMS ou e-mail (lot 10) ; absent = désactivée. */
@@ -148,6 +151,7 @@ export function createApp(deps: AppDeps) {
     '/v1/tenants/:s/loyalty/login',
     '/v1/tenants/:s/loyalty/otp/start',
     '/v1/tenants/:s/loyalty/otp/verify',
+    '/v1/tenants/:s/ambassador/entries',
   ]) {
     app.on('POST', path, strict);
   }
@@ -227,6 +231,7 @@ export function createApp(deps: AppDeps) {
       gateway: deps.gateway,
       menus: deps.menus,
       loyalty: deps.loyalty,
+      ambassador: deps.ambassador,
       adminUrl: deps.adminUrl ?? 'http://localhost:3000',
       inviter: deps.inviter ?? null,
       previewSecret,

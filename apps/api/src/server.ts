@@ -12,6 +12,7 @@ import {
 } from '@splash360/api-menu';
 import {
   createPostgresAdminStore,
+  createPostgresAmbassadorStore,
   createPostgresPromoStore,
   createPostgresDemoLoyaltyStore,
   createPostgresOperationsStore,
@@ -118,6 +119,7 @@ const app = createApp({
   posWebhookSecret: env.POS_WEBHOOK_SECRET ?? null,
   admin: createPostgresAdminStore(sql),
   promos: createPostgresPromoStore(sql),
+  ambassador: createPostgresAmbassadorStore(sql),
   verifier: createSupabaseVerifier({
     jwksUrl: env.SUPABASE_JWKS_URL,
     secret: env.SUPABASE_JWT_SECRET,

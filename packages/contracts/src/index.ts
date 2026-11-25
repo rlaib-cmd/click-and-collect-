@@ -1,4 +1,5 @@
 export * from './admin';
+export * from './ambassador';
 export * from './errors';
 export * from './loyalty';
 export * from './menu';
