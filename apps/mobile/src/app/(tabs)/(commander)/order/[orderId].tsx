@@ -123,7 +123,9 @@ export default function OrderScreen() {
                 ) : null}
               </Text>
               <View style={styles.price}>
-                <Text style={{ color: palette.text }}>{formatPrice(l.totalCents)}</Text>
+                <Text style={{ color: palette.text }}>
+                  {l.gift && l.quantity === 1 ? messages.gift.offered : formatPrice(l.totalCents)}
+                </Text>
                 {l.gift ? (
                   <Text style={{ color: palette.loyalty, fontWeight: '800', fontSize: 13 }}>
                     {messages.gift.offeredOne(l.quantity)}

@@ -70,7 +70,9 @@ export function ProfileForm({ welcome, onDone }: { welcome: boolean; onDone: () 
       >
         {welcome ? t.title : t.menuTitle}
       </Text>
-      <Text style={{ color: palette.textMuted, fontSize: 15 }}>{t.intro}</Text>
+      <Text style={{ color: palette.textMuted, fontSize: 15 }}>
+        {welcome ? t.intro : t.editIntro}
+      </Text>
 
       <Text style={[styles.label, { color: palette.text }]}>{t.firstName}</Text>
       <TextInput

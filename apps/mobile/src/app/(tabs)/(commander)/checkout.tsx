@@ -230,7 +230,13 @@ export default function CheckoutScreen() {
                 ) : null}
               </Text>
               <View style={styles.price}>
-                <Text style={{ color: palette.text }}>{formatPrice(l.totalCents)}</Text>
+                <Text style={{ color: palette.text }}>
+                  {cart.reward?.productId === l.productId &&
+                  q.totals.discountCents > 0 &&
+                  l.quantity === 1
+                    ? messages.gift.offered
+                    : formatPrice(l.totalCents)}
+                </Text>
                 {cart.reward?.productId === l.productId && q.totals.discountCents > 0 ? (
                   <Text style={{ color: palette.loyalty, fontWeight: '800', fontSize: 13 }}>
                     {messages.gift.offeredOne(l.quantity)}
