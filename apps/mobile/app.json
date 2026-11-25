@@ -62,6 +62,19 @@
         }
       ],
       "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Ta position sert uniquement à repérer les restaurants proches de toi, si tu actives « Bons plans à proximité » dans Compte.",
+          "locationAlwaysAndWhenInUsePermission": "Si tu actives « Bons plans à proximité », ton téléphone détecte ton arrivée près d’un de nos restaurants, même application fermée, pour t’envoyer un bon plan. Aucun historique de tes déplacements n’est enregistré. Désactivable à tout moment dans Compte.",
+          "locationAlwaysPermission": "Si tu actives « Bons plans à proximité », ton téléphone détecte ton arrivée près d’un de nos restaurants, même application fermée, pour t’envoyer un bon plan. Aucun historique de tes déplacements n’est enregistré.",
+          "motionUsagePermission": false,
+          "locationFullAccuracyPermission": false,
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ],
       "./plugins/with-android-release-lint"
     ],
     "experiments": {

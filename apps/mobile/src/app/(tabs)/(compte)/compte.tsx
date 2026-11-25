@@ -10,6 +10,7 @@ import { JoinForm } from '@/components/JoinForm';
 import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { TenantLogo } from '@/components/TenantLogo';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
+import { proximitySupported } from '@/proximity/geofence';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const t = messages.account;
@@ -30,6 +31,17 @@ export default function AccountScreen() {
             hint: messages.profile.menuHint,
             href: '/mes-informations' as const,
           },
+          // Bons plans à proximité (lot 22) : application iOS et Android seulement.
+          ...(proximitySupported
+            ? [
+                {
+                  icon: 'store' as const,
+                  title: messages.proximity.menuTitle,
+                  hint: messages.proximity.menuHint,
+                  href: '/bons-plans' as const,
+                },
+              ]
+            : []),
         ]
       : []),
     { icon: 'receipt', title: t.orders, hint: t.ordersHint, href: '/mes-commandes' },

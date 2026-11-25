@@ -4,6 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { CartProvider } from '@/cart/CartProvider';
 import { LoyaltyProvider } from '@/loyalty/LoyaltyProvider';
+// Importé au chargement : définit la tâche de zones (TaskManager) en portée globale (lot 22).
+import { ProximitySync } from '@/proximity/ProximitySync';
 import { TenantProvider, useTenant } from '@/tenant/TenantProvider';
 
 function ThemedStack() {
@@ -11,6 +13,7 @@ function ThemedStack() {
   return (
     <LoyaltyProvider>
       <CartProvider>
+        <ProximitySync />
         <Stack
           screenOptions={{
             headerShown: false,

@@ -572,6 +572,38 @@ export const fr = {
     menuTitle: 'Mes informations',
     menuHint: 'Prénom, e-mail, date de naissance',
   },
+  proximity: {
+    menuTitle: 'Bons plans à proximité',
+    menuHint: 'Une notification quand tu passes près d’un restaurant',
+    title: 'Bons plans à proximité',
+    intro:
+      'Quand tu passes à moins de quelques centaines de mètres d’un de nos restaurants, on peut t’envoyer une notification : une offre, un rappel de tes points, de quoi commander en avance.',
+    howTitle: 'Comment ça marche',
+    how: [
+      'Ton téléphone surveille seulement l’entrée dans la zone de nos restaurants ; il nous dit lequel, jamais où tu es.',
+      'Nous n’enregistrons aucun historique de tes déplacements.',
+      'Au plus une notification par jour, jamais la nuit, en général seulement quand le restaurant est ouvert.',
+      'Tu peux désactiver à tout moment, ici même : tout s’arrête et ton téléphone est effacé de la liste.',
+    ],
+    permissionsTitle: 'Autorisations nécessaires',
+    permissions:
+      'Les notifications, et ta position « Toujours » (iOS) ou « Toujours autoriser » (Android) : sans elle, le téléphone ne peut pas détecter ton arrivée près d’un restaurant quand l’application est fermée.',
+    toggle: 'Recevoir les bons plans à proximité',
+    on: 'Activé sur ce téléphone.',
+    off: 'Désactivé. Rien n’est surveillé.',
+    enabling: 'Activation…',
+    disabling: 'Désactivation…',
+    notificationsDenied:
+      'Les notifications sont refusées pour cette application. Autorise-les dans les réglages du téléphone, puis réessaie.',
+    locationDenied:
+      'La position est refusée pour cette application. Tu peux l’autoriser dans les réglages du téléphone, puis réessayer.',
+    backgroundDenied:
+      'Il faut autoriser la position « Toujours » pour être prévenu application fermée. Tu peux le faire dans les réglages du téléphone, puis réessayer.',
+    disabledByTenant: 'Cette fonction n’est pas encore proposée par le restaurant.',
+    unavailable: 'Cette fonction n’est pas disponible sur ce téléphone.',
+    error: 'Activation impossible pour le moment, réessaie plus tard.',
+    openSettings: 'Ouvrir les réglages',
+  },
   admin: adminFr,
 } as const;
 
