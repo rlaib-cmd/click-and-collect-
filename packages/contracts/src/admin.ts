@@ -169,6 +169,11 @@ export const menuOverrideSchema = z.object({
   itemId: z.string().min(1).max(100),
   hidden: z.boolean(),
   position: z.number().int().min(0).max(10_000).nullable(),
+  /**
+   * Produit mis en avant sur l'accueil. Absent d'une écriture : la valeur enregistrée est gardée
+   * (les écrans qui ne règlent que pause/ordre ne l'effacent pas). Toujours présent en lecture.
+   */
+  featured: z.boolean().optional(),
 });
 
 export const adminMenuSchema = menuSchema.extend({

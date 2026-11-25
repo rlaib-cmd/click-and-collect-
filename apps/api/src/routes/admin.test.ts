@@ -259,6 +259,48 @@ describe('design, carte et réglages', () => {
     expect(admin.warnings.length).toBeGreaterThan(0); // produits sans photo
   });
 
+  it('met des produits en avant sur l’accueil, jamais un produit masqué ou indisponible', async () => {
+    const setup = testSetup();
+    const headers = await as('gerant@bella.test');
+    const put = (overrides: unknown[]) =>
+      setup.app.request(`/v1/admin/restaurants/${BELLA_RESTO}/menu/overrides`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ overrides }),
+      });
+    expect(
+      (
+        await put([
+          {
+            kind: 'product',
+            itemId: 'p-margherita',
+            hidden: false,
+            position: null,
+            featured: true,
+          },
+          { kind: 'product', itemId: 'p-diavola', hidden: false, position: null, featured: true },
+          { kind: 'product', itemId: 'p-tiramisu', hidden: true, position: null, featured: true },
+        ])
+      ).status,
+    ).toBe(204);
+    const featured = async () => {
+      const menu = menuSchema.parse(
+        await (await setup.app.request(`/v1/tenants/bella/restaurants/${BELLA_RESTO}/menu`)).json(),
+      );
+      return menu.categories.flatMap((c) => c.products.filter((p) => p.featured).map((p) => p.id));
+    };
+    // Diavola est indisponible, le tiramisu masqué : seule la margherita est mise en avant.
+    expect(await featured()).toEqual(['p-margherita']);
+
+    // Un réglage qui ne parle pas de mise en avant (pause, ordre) ne l'efface pas.
+    await put([{ kind: 'product', itemId: 'p-margherita', hidden: false, position: 3 }]);
+    expect(await featured()).toEqual(['p-margherita']);
+    await put([
+      { kind: 'product', itemId: 'p-margherita', hidden: false, position: 3, featured: false },
+    ]);
+    expect(await featured()).toEqual([]);
+  });
+
   it('valide les réglages avant de les enregistrer', async () => {
     const setup = testSetup();
     const headers = await as('gerant@bella.test');

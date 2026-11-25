@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckerBand, titleStyle } from '@/components/brand';
 import { OrderShortcuts } from '@/components/CurrentOrder';
+import { FeaturedProducts } from '@/components/FeaturedProducts';
 import { FidelityCard, JoinCard } from '@/components/loyalty';
 import { TenantLogo } from '@/components/TenantLogo';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
@@ -96,6 +97,9 @@ export default function HomeScreen() {
             ))}
           </View>
         </View>
+
+        {/* Membre du club (bonus de bienvenue déjà reçu) : les produits que la marque pousse. */}
+        {member ? <FeaturedProducts /> : null}
 
         {club ? (
           member ? (

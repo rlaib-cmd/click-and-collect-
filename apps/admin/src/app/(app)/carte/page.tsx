@@ -22,6 +22,30 @@ export default function MenuPage() {
   const isHidden = (kind: 'category' | 'product', id: string) =>
     m?.overrides.some((o) => o.kind === kind && o.itemId === id && o.hidden) ?? false;
 
+  const isFeatured = (id: string) =>
+    m?.overrides.some((o) => o.kind === 'product' && o.itemId === id && o.featured === true) ??
+    false;
+
+  const toggleFeatured = async (id: string) => {
+    if (!restaurant) return;
+    const current = m?.overrides.find((o) => o.kind === 'product' && o.itemId === id);
+    await api(auth, `/restaurants/${restaurant.id}/menu/overrides`, z.undefined(), {
+      method: 'PUT',
+      body: {
+        overrides: [
+          {
+            kind: 'product',
+            itemId: id,
+            hidden: current?.hidden ?? false,
+            position: current?.position ?? null,
+            featured: !isFeatured(id),
+          },
+        ],
+      },
+    });
+    await menu.reload();
+  };
+
   const toggle = async (kind: 'category' | 'product', id: string) => {
     if (!restaurant) return;
     await api(auth, `/restaurants/${restaurant.id}/menu/overrides`, z.undefined(), {
@@ -53,6 +77,7 @@ export default function MenuPage() {
         </div>
       </header>
       <p className="muted">{t.readOnly}</p>
+      <p className="muted">{t.featuredHint}</p>
       {m?.stale ? <p className="banner warning">{t.stale}</p> : null}
       {m && m.warnings.length > 0 ? (
         <p className="banner warning">
@@ -98,9 +123,21 @@ export default function MenuPage() {
                     {!p.available ? (
                       <span className="badge">{messages.menu.unavailable}</span>
                     ) : null}
+                    {isFeatured(p.id) ? <span className="badge ok">★ {t.featured}</span> : null}
                   </td>
                   <td className="num">{euros(p.priceCents)}</td>
-                  <td className="num">
+                  <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                    <button
+                      type="button"
+                      aria-pressed={isFeatured(p.id)}
+                      aria-label={
+                        isFeatured(p.id) ? t.unfeatureLabel(p.name) : t.featureLabel(p.name)
+                      }
+                      onClick={() => void toggleFeatured(p.id)}
+                      style={{ marginRight: 8 }}
+                    >
+                      {isFeatured(p.id) ? t.unfeature : t.feature}
+                    </button>
                     <button
                       type="button"
                       aria-label={`${isHidden('product', p.id) ? t.resume : t.pause} : ${p.name}`}

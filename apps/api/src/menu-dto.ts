@@ -6,6 +6,7 @@ export interface MenuOverride {
   readonly itemId: string;
   readonly hidden: boolean;
   readonly position: number | null;
+  readonly featured?: boolean;
 }
 
 /**
@@ -42,6 +43,8 @@ export function toMenuDto(
           priceCents: p.priceCents,
           imageUrl: p.imageUrl,
           available: p.available,
+          // Mis en avant sur l'accueil : jamais un produit masqué (déjà filtré) ou indisponible.
+          featured: p.available && find('product', p.id)?.featured === true,
           allergens: [...p.allergens],
           optionGroups: p.optionGroups.map((g) => ({
             id: g.id,

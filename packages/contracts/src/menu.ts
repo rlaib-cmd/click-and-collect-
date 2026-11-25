@@ -39,6 +39,8 @@ export const productSchema = z.object({
   available: z.boolean(),
   allergens: z.array(z.string()),
   optionGroups: z.array(optionGroupSchema),
+  /** Mis en avant par la marque sur l'accueil (jamais vrai pour un produit indisponible). */
+  featured: z.boolean().default(false),
 });
 
 export const menuSchema = z.object({

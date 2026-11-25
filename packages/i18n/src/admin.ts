@@ -412,6 +412,13 @@ export const adminFr = {
     pause: 'Mettre en pause',
     resume: 'Remettre en vente',
     paused: 'En pause',
+    feature: '☆ Mettre en avant',
+    unfeature: '★ Retirer de l’accueil',
+    featureLabel: (name: string) => `Mettre en avant sur l’accueil : ${name}`,
+    unfeatureLabel: (name: string) => `Retirer de l’accueil : ${name}`,
+    featured: 'Sur l’accueil',
+    featuredHint:
+      'Les produits mis en avant (★) s’affichent sur l’accueil de l’application, dans « En ce moment », pour les membres du club.',
     warnings: (n: number) => `${n} produit(s) sans photo ou sans prix.`,
     readOnly:
       'La carte se modifie dans Splash360. Ici, seuls l’affichage et l’ordre sont réglables.',

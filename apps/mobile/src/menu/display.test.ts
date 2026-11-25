@@ -19,6 +19,7 @@ const menu: MenuDto = {
           imageUrl: null,
           available: true,
           allergens: [],
+          featured: false,
           optionGroups: [
             {
               id: 'g',

@@ -288,7 +288,8 @@ code {
   background: var(--danger-bg);
   color: #9f1239;
 }
-.pill.success {
+.pill.success,
+.badge.ok {
   background: var(--success-bg);
   color: var(--success);
 }

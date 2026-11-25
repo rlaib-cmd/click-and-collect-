@@ -16,6 +16,7 @@ const product: ProductDto = {
   imageUrl: null,
   available: true,
   allergens: [],
+  featured: false,
   optionGroups: [
     {
       id: 'taille',

@@ -62,6 +62,48 @@ describe.skipIf(!url)('AdminStore Postgres', () => {
     await admin.saveSettings(BELLA, id, before);
   });
 
+  it('met un produit en avant et garde ce choix quand seul l’ordre ou la pause change', async () => {
+    const [r] = await restaurants.listByTenant(BELLA);
+    const id = r?.id ?? '';
+    const item = `test-${run}-produit`;
+    const featured = async () =>
+      (await admin.listMenuOverrides(BELLA, id)).find((o) => o.itemId === item)?.featured;
+    try {
+      await admin.setMenuOverride(BELLA, id, {
+        kind: 'product',
+        itemId: item,
+        hidden: false,
+        position: null,
+      });
+      expect(await featured()).toBe(false);
+      await admin.setMenuOverride(BELLA, id, {
+        kind: 'product',
+        itemId: item,
+        hidden: false,
+        position: null,
+        featured: true,
+      });
+      expect(await featured()).toBe(true);
+      await admin.setMenuOverride(BELLA, id, {
+        kind: 'product',
+        itemId: item,
+        hidden: true,
+        position: 2,
+      });
+      expect(await featured()).toBe(true);
+      await admin.setMenuOverride(BELLA, id, {
+        kind: 'product',
+        itemId: item,
+        hidden: true,
+        position: 2,
+        featured: false,
+      });
+      expect(await featured()).toBe(false);
+    } finally {
+      await sql`delete from public.menu_overrides where item_id = ${item}`;
+    }
+  });
+
   it('calcule le tableau de bord et cloisonne la liste des commandes', async () => {
     const stats = await admin.dashboard(BELLA, new Date('2000-01-01'), new Date('2100-01-01'));
     expect(stats.orders).toBe(stats.byMode.pickup + stats.byMode.delivery);

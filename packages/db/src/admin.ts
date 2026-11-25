@@ -222,12 +222,25 @@ export interface AdminStore {
     tenantId: string,
     restaurantId: string,
   ): Promise<
-    { kind: 'category' | 'product'; itemId: string; hidden: boolean; position: number | null }[]
+    {
+      kind: 'category' | 'product';
+      itemId: string;
+      hidden: boolean;
+      position: number | null;
+      featured: boolean;
+    }[]
   >;
+  /** `featured` absent : la mise en avant enregistrée est conservée. */
   setMenuOverride(
     tenantId: string,
     restaurantId: string,
-    o: { kind: 'category' | 'product'; itemId: string; hidden: boolean; position: number | null },
+    o: {
+      kind: 'category' | 'product';
+      itemId: string;
+      hidden: boolean;
+      position: number | null;
+      featured?: boolean | undefined;
+    },
   ): Promise<void>;
 
   dashboard(tenantId: string, from: Date, to: Date, restaurantId?: string): Promise<DashboardStats>;
@@ -557,22 +570,26 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
           item_id: string;
           hidden: boolean;
           position: number | null;
+          featured: boolean;
         }[]
       >`
-        select item_kind, item_id, hidden, position from public.menu_overrides
+        select item_kind, item_id, hidden, position, featured from public.menu_overrides
         where tenant_id = ${tenantId} and restaurant_id = ${restaurantId}`;
       return rows.map((r) => ({
         kind: r.item_kind,
         itemId: r.item_id,
         hidden: r.hidden,
         position: r.position,
+        featured: r.featured,
       }));
     },
 
     async setMenuOverride(tenantId, restaurantId, o) {
-      await sql`insert into public.menu_overrides (tenant_id, restaurant_id, item_kind, item_id, hidden, position)
-                values (${tenantId}, ${restaurantId}, ${o.kind}, ${o.itemId}, ${o.hidden}, ${o.position})
-                on conflict (restaurant_id, item_kind, item_id) do update set hidden = excluded.hidden, position = excluded.position`;
+      const featured = o.featured ?? null;
+      await sql`insert into public.menu_overrides (tenant_id, restaurant_id, item_kind, item_id, hidden, position, featured)
+                values (${tenantId}, ${restaurantId}, ${o.kind}, ${o.itemId}, ${o.hidden}, ${o.position}, coalesce(${featured}::boolean, false))
+                on conflict (restaurant_id, item_kind, item_id) do update set hidden = excluded.hidden, position = excluded.position,
+                  featured = coalesce(${featured}::boolean, public.menu_overrides.featured)`;
     },
 
     async dashboard(tenantId, from, to, restaurantId) {

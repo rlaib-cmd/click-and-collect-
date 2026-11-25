@@ -278,6 +278,8 @@ export const fr = {
   loyalty: {
     hello: (name: string) => `Salut ${name},`,
     hungry: 'T’as faim ?',
+    featuredTitle: (brand: string) => `En ce moment chez ${brand}`,
+    featuredOrder: (name: string) => `${name} : commander`,
     orderOnline: 'Commander en ligne',
     orderHint: 'À emporter ou en livraison, prêt en quelques minutes.',
     pickup: 'À emporter',

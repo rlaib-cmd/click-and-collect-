@@ -35,6 +35,7 @@ export function createMemoryAdminStore(input: {
     itemId: string;
     hidden: boolean;
     position: number | null;
+    featured: boolean;
   }[] = [];
   const drafts = new Map<string, { draft: unknown; updatedAt: string }>();
   const themes = new Map(
@@ -193,8 +194,17 @@ export function createMemoryAdminStore(input: {
       const i = overrides.findIndex(
         (x) => x.restaurantId === restaurantId && x.kind === o.kind && x.itemId === o.itemId,
       );
+      const previous = i >= 0 ? overrides[i] : undefined;
       if (i >= 0) overrides.splice(i, 1);
-      overrides.push({ tenantId, restaurantId, ...o });
+      overrides.push({
+        tenantId,
+        restaurantId,
+        kind: o.kind,
+        itemId: o.itemId,
+        hidden: o.hidden,
+        position: o.position,
+        featured: o.featured ?? previous?.featured ?? false,
+      });
       return Promise.resolve();
     },
     dashboard(tenantId) {
