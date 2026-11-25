@@ -75,6 +75,7 @@ export const adminFr = {
     promos: 'Codes promo',
     loyalty: 'Club fidélité et cadeaux',
     'loyalty.validate': 'Valider tout de suite une story ambassadeur',
+    proximity: 'Notifications « Bons plans à proximité »',
     dashboard: 'Chiffre d’affaires',
     customers: 'Fichier clients',
     audit: 'Journal des actions',

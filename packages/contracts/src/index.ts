@@ -6,3 +6,4 @@ export * from './loyalty';
 export * from './menu';
 export * from './ordering';
 export * from './tenant';
+export * from './proximity';

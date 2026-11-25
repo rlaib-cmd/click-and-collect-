@@ -11,3 +11,4 @@ export * from './otp';
 export * from './customer';
 export * from './promo';
 export * from './permissions';
+export * from './proximity';
