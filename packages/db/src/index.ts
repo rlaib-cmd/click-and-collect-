@@ -11,3 +11,4 @@ export * from './promos';
 export * from './pos';
 export * from './ambassador';
 export * from './member-sessions';
+export * from './stripe-customers';
