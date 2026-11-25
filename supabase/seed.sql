@@ -135,3 +135,10 @@ order by r.created_at limit 1;
 insert into public.ambassador_settings (tenant_id, enabled, instagram_handle, bonus_points)
 values ('00000000-0000-4000-8000-000000000005', true, 'billsburgerfr', 50)
 on conflict (tenant_id) do nothing;
+
+-- Lot 16 (ADR 0021) : paliers Bills Burger par catégories entières de la carte de démonstration.
+insert into public.loyalty_reward_settings (tenant_id, reward_id, category_ids) values
+  ('00000000-0000-4000-8000-000000000005', 'rw-bb-frites', '{bb-cat-sides}'),
+  ('00000000-0000-4000-8000-000000000005', 'rw-bb-boisson', '{bb-cat-boissons,bb-cat-desserts}'),
+  ('00000000-0000-4000-8000-000000000005', 'rw-bb-burger', '{bb-cat-smash}'),
+  ('00000000-0000-4000-8000-000000000005', 'rw-bb-tasty', '{bb-cat-bon-plan}');

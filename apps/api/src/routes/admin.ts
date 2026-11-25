@@ -13,6 +13,7 @@ import {
   inviteSchema,
   legalSchema,
   pointsAdjustSchema,
+  rewardCategoriesSchema,
   menuOverrideSchema,
   promoInputSchema,
   type AdminPromoDto,
@@ -933,6 +934,43 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       }),
     );
     return c.json({ members });
+  });
+
+  // ——— Paliers par catégories (lot 16, ADR 0021) ———
+  app.get('/loyalty/rewards', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    const cl = await club(c);
+    if (!cl) return apiError(c, 'not_found', 'Pas de club fidélité');
+    const program = await cl.provider.getProgram(cl.ref);
+    return c.json({
+      rewards: (program?.rewards ?? []).map((r) => ({
+        id: r.id,
+        name: r.name,
+        costPoints: r.costPoints,
+        productIds: [...r.productIds],
+        categoryIds: [...(r.categoryIds ?? [])],
+      })),
+    });
+  });
+
+  app.put('/loyalty/rewards', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    const input = await body(c, rewardCategoriesSchema);
+    if (!input) return apiError(c, 'invalid_request', 'Réglage des paliers invalide');
+    const cl = await club(c);
+    if (!cl) return apiError(c, 'not_found', 'Pas de club fidélité');
+    const program = await cl.provider.getProgram(cl.ref);
+    const known = new Set((program?.rewards ?? []).map((r) => r.id));
+    if (input.rewards.some((r) => !known.has(r.id)))
+      return apiError(c, 'invalid_request', 'Palier inconnu');
+    for (const r of input.rewards)
+      await deps.admin.setRewardCategories(tenantId(c), r.id, [...new Set(r.categoryIds)]);
+    await audit(c, 'loyalty.rewards', null, {
+      rewards: input.rewards.map((r) => ({ id: r.id, categories: r.categoryIds.length })),
+    });
+    return c.body(null, 204);
   });
 
   app.post('/loyalty/members/:id/adjust', async (c) => {

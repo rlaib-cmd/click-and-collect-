@@ -102,6 +102,7 @@ export async function memberView(
     points: member.points,
     reservedPoints,
     cardCode: member.cardCode,
+    birthDate: member.birthDate,
     nextReward: next
       ? {
           name: next.name,

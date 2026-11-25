@@ -1,5 +1,11 @@
 import type { OrderTracking, PaymentSession, PosReadiness } from '@splash360/contracts';
-import type { OperationsStore, OrderReader, PaymentStore, TenantWithTheme } from '@splash360/db';
+import type {
+  OperationsStore,
+  OrderDetail,
+  OrderReader,
+  PaymentStore,
+  TenantWithTheme,
+} from '@splash360/db';
 import { z } from 'zod';
 import type { Hono } from 'hono';
 import { apiError } from '../errors';
@@ -45,13 +51,7 @@ export function registerPaymentRoutes(app: Hono<Env>, deps: PaymentRoutesDeps) {
       scheduled: detail.requestedSlot !== null,
       totals: detail.totals,
       refundedCents: detail.refundedCents,
-      lines: detail.lines.map((l) => ({
-        name: l.name,
-        quantity: l.quantity,
-        totalCents: l.totalCents,
-        options: l.options.map((o) => o.name),
-        note: l.note,
-      })),
+      lines: giftLines(detail),
       history: detail.events.map((e) => ({ status: e.status, at: e.at })),
     };
     c.header('Cache-Control', 'no-store');
@@ -138,5 +138,26 @@ export function registerPaymentRoutes(app: Hono<Env>, deps: PaymentRoutesDeps) {
     };
     c.header('Cache-Control', 'no-store');
     return c.json(body);
+  });
+}
+
+/**
+ * Lignes du ticket de suivi (lot 16) : la première ligne du produit offert par le cadeau fidélité
+ * est marquée « gift » (une seule, même si le produit est commandé plusieurs fois).
+ */
+function giftLines(detail: OrderDetail) {
+  const giftId = detail.loyalty?.rewardId ? detail.loyalty.rewardProductId : null;
+  let given = false;
+  return detail.lines.map((l) => {
+    const gift = !given && giftId !== null && l.productId === giftId;
+    if (gift) given = true;
+    return {
+      name: l.name,
+      quantity: l.quantity,
+      totalCents: l.totalCents,
+      options: l.options.map((o) => o.name),
+      note: l.note,
+      gift,
+    };
   });
 }

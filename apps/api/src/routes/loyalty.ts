@@ -1,8 +1,14 @@
 import type { MemberSessionStore } from '@splash360/db';
-import type { LoyaltyMember, LoyaltyProvider, LoyaltyTenant } from '@splash360/api-loyalty';
+import type {
+  LoyaltyMember,
+  LoyaltyProvider,
+  LoyaltyTenant,
+  MemberProfileUpdate,
+} from '@splash360/api-loyalty';
 import { reservedRewardPoints } from '@splash360/core';
 import {
   loyaltyJoinRequestSchema,
+  memberProfileUpdateSchema,
   loyaltyLoginRequestSchema,
   otpStartRequestSchema,
   otpVerifyRequestSchema,
@@ -110,7 +116,11 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
           name: ctx.program.name,
           pointsPerEuro: ctx.program.pointsPerEuro,
           welcomePoints: ctx.program.welcomePoints,
-          rewards: ctx.program.rewards.map((r) => ({ ...r, productIds: [...r.productIds] })),
+          rewards: ctx.program.rewards.map((r) => ({
+            ...r,
+            productIds: [...r.productIds],
+            categoryIds: [...(r.categoryIds ?? [])],
+          })),
           demo: deps.loyaltyDemoLogin === true,
           otp: deps.otp !== undefined,
         }
@@ -228,6 +238,27 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
     if (!member) return apiError(c, 'unauthorized', 'Session fidélité invalide');
     c.header('Cache-Control', 'no-store');
     return c.json(await view(ctx, member));
+  });
+
+  /** Profil complété par le membre (lot 16) : prénom, e-mail, date de naissance, facultatifs. */
+  app.patch('/:subdomain/loyalty/me', async (c) => {
+    const memberId = await authenticateMember(deps, c.get('tenant').id, bearerMember(c));
+    if (!memberId) return apiError(c, 'unauthorized', 'Session fidélité invalide');
+    const parsed = memberProfileUpdateSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success)
+      return apiError(c, 'invalid_request', parsed.error.issues[0]?.message ?? 'Profil invalide');
+    const ctx = await context(c);
+    if (!ctx) return apiError(c, 'not_found', 'Pas de club fidélité');
+    const update = Object.fromEntries(
+      Object.entries(parsed.data).filter(([, v]) => v !== undefined),
+    ) as MemberProfileUpdate;
+    const result = await ctx.provider.updateProfile(ctx.tenant, memberId, update);
+    if (!result.ok)
+      return result.error === 'email_taken'
+        ? apiError(c, 'conflict', 'Cet e-mail est déjà utilisé par un autre compte')
+        : apiError(c, 'unauthorized', 'Session fidélité invalide');
+    c.header('Cache-Control', 'no-store');
+    return c.json(await view(ctx, result.member));
   });
 
   /** Historique « Mes commandes » (lot 11) : uniquement les commandes du membre connecté. */

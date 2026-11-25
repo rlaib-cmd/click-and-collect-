@@ -14,7 +14,7 @@ import {
   type PlaceOrderRequest,
 } from '@splash360/contracts';
 import { describe, expect, it } from 'vitest';
-import { BELLA_RESTO, sessionToken, testSetup } from '../test-fixtures';
+import { BELLA_ID, BELLA_RESTO, sessionToken, testSetup } from '../test-fixtures';
 
 const programs = new Map<string, LoyaltyProgram>([
   [
@@ -220,6 +220,99 @@ describe('club fidélité', () => {
     ).toEqual(['loyalty_session_invalid']);
   });
 
+  it('complète le profil après l’inscription, tout est facultatif (lot 16)', async () => {
+    const s = setup();
+    const { memberToken } = await join(s, 'profil@example.fr');
+    const patch = (body: unknown, token = memberToken) =>
+      s.app.request(`${base}/loyalty/me`, {
+        method: 'PATCH',
+        headers: { ...json, Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+    const done = loyaltyMemberSchema.parse(
+      await (
+        await patch({ name: 'Camille', email: 'camille.b@example.fr', birthDate: '1992-03-04' })
+      ).json(),
+    );
+    expect(done).toMatchObject({
+      name: 'Camille',
+      email: 'camille.b@example.fr',
+      birthDate: '1992-03-04',
+    });
+    // Rien à remplir : accepté, rien ne change.
+    expect(loyaltyMemberSchema.parse(await (await patch({})).json()).birthDate).toBe('1992-03-04');
+    // Vider la date de naissance.
+    expect(
+      loyaltyMemberSchema.parse(await (await patch({ birthDate: '' })).json()).birthDate,
+    ).toBeNull();
+    expect((await patch({ birthDate: '2999-01-01' })).status).toBe(400);
+    expect((await patch({ email: 'pas-un-email' })).status).toBe(400);
+    await join(s, 'pris@example.fr');
+    expect((await patch({ email: 'pris@example.fr' })).status).toBe(409);
+    expect((await patch({ name: 'X' }, 'jeton-invalide')).status).toBe(401);
+  });
+
+  it('palier par catégories (lot 16) : réglé au back-office, tous les produits de la catégorie au choix', async () => {
+    const s = setup();
+    const admin = async (method: string, body?: unknown) =>
+      s.app.request('/v1/admin/loyalty/rewards', {
+        method,
+        headers: {
+          ...json,
+          Authorization: `Bearer ${await sessionToken('gerant@bella.test')}`,
+          'X-Tenant-Id': BELLA_ID,
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+    // Le tiramisu (100 points) devient « un dessert ou une boisson » : catégories entières.
+    expect(
+      (await admin('PUT', { rewards: [{ id: 'rw-tiramisu', categoryIds: ['cat-boissons'] }] }))
+        .status,
+    ).toBe(204);
+    expect((await admin('PUT', { rewards: [{ id: 'rw-inconnu', categoryIds: [] }] })).status).toBe(
+      400,
+    );
+    const listed = (await (await admin('GET')).json()) as {
+      rewards: { id: string; categoryIds: string[] }[];
+    };
+    expect(listed.rewards.find((r) => r.id === 'rw-tiramisu')?.categoryIds).toEqual([
+      'cat-boissons',
+    ]);
+
+    // Le programme publié par l'app porte les catégories.
+    const program = loyaltyProgramSchema.parse(
+      await (await s.app.request(`${base}/loyalty/program`)).json(),
+    );
+    expect(
+      program.enabled && program.rewards.find((r) => r.id === 'rw-tiramisu')?.categoryIds,
+    ).toEqual(['cat-boissons']);
+
+    // Au devis : l'eau (catégorie boissons) est offerte ; la pizza (hors catégorie) refusée.
+    const { memberToken } = await join(s);
+    const quote = (rewardProductId: string) =>
+      s.app.request(`${base}/restaurants/${BELLA_RESTO}/quote`, {
+        method: 'POST',
+        headers: json,
+        body: JSON.stringify({
+          mode: 'pickup',
+          address: null,
+          requestedTime: { kind: 'scheduled', at: '2026-11-24T11:00:00.000Z' },
+          lines: [
+            { productId: 'p-margherita', quantity: 1, optionIds: ['opt-normale'] },
+            { productId: 'p-eau', quantity: 1, optionIds: [] },
+          ],
+          loyalty: { memberToken, rewardId: 'rw-tiramisu', rewardProductId },
+        }),
+      });
+    const ok = quoteSchema.parse(await (await quote('p-eau')).json());
+    expect(ok.totals).toMatchObject({ discountCents: 350 });
+    expect(ok.loyalty).toMatchObject({ rewardId: 'rw-tiramisu', rewardProductId: 'p-eau' });
+    const refused = (await (await quote('p-margherita')).json()) as {
+      error: { issues: { code: string }[] };
+    };
+    expect(refused.error.issues.map((i) => i.code)).toEqual(['reward_product_not_eligible']);
+  });
+
   it('« Mes commandes » : seulement les commandes du membre, avec un suivi utilisable', async () => {
     const s = setup();
     const { memberToken } = await join(s);
@@ -256,6 +349,18 @@ describe('club fidélité', () => {
     expect(res.status).toBe(201);
     const placed = placedOrderSchema.parse(await res.json());
     expect(placed.totals).toMatchObject({ discountCents: 650, totalCents: 1050 });
+    // Le ticket de suivi marque le produit offert (lot 16), une seule ligne.
+    const tracking = orderTrackingSchema.parse(
+      await (
+        await s.app.request(`${base}/orders/${placed.orderId}`, {
+          headers: { Authorization: `Bearer ${placed.accessToken}` },
+        })
+      ).json(),
+    );
+    expect(tracking.lines.map((l) => [l.name, l.gift])).toEqual([
+      ['Margherita', false],
+      ['Tiramisu maison', true],
+    ]);
 
     await s.app.request(`${base}/orders/${placed.orderId}/payment`, {
       method: 'POST',

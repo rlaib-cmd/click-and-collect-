@@ -11,6 +11,8 @@ export interface DemoMemberRecord {
   readonly phone: string | null;
   readonly points: number;
   readonly cardCode: string;
+  /** Date de naissance (AAAA-MM-JJ), facultative (lot 16). */
+  readonly birthDate: string | null;
 }
 
 export interface DemoMovementRecord {
@@ -27,6 +29,15 @@ interface MemberRow {
   phone: string | null;
   points: number;
   card_code: string;
+  birth_date: Date | string | null;
+}
+
+/** Date SQL → AAAA-MM-JJ, sans décalage de fuseau. */
+function isoDate(d: Date | string | null): string | null {
+  if (d === null) return null;
+  if (typeof d === 'string') return d.slice(0, 10);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 const toMember = (r: MemberRow): DemoMemberRecord => ({
@@ -36,6 +47,7 @@ const toMember = (r: MemberRow): DemoMemberRecord => ({
   phone: r.phone,
   points: r.points,
   cardCode: r.card_code,
+  birthDate: isoDate(r.birth_date),
 });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -57,7 +69,7 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
           insert into public.loyalty_demo_members (tenant_id, email, name, phone, points, card_code)
           values (${tenantId}, ${input.email}, ${input.name}, ${input.phone}, ${input.welcomePoints}, ${input.cardCode})
           on conflict do nothing
-          returning id, name, email, phone, points, card_code`;
+          returning id, name, email, phone, points, card_code, birth_date`;
         if (created) {
           if (input.welcomePoints > 0) {
             await tx`insert into public.loyalty_demo_movements (tenant_id, member_id, kind, points, label)
@@ -66,7 +78,7 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
           return { member: toMember(created), created: true };
         }
         const [existing] = await tx<MemberRow[]>`
-          select id, name, email, phone, points, card_code from public.loyalty_demo_members
+          select id, name, email, phone, points, card_code, birth_date from public.loyalty_demo_members
           where tenant_id = ${tenantId}
             and ((${input.phone}::text is not null and phone = ${input.phone})
               or (${input.email}::text is not null and email = ${input.email}))
@@ -78,14 +90,14 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
 
     async findByEmail(tenantId: string, email: string) {
       const [r] = await sql<MemberRow[]>`
-        select id, name, email, phone, points, card_code from public.loyalty_demo_members
+        select id, name, email, phone, points, card_code, birth_date from public.loyalty_demo_members
         where tenant_id = ${tenantId} and email = ${email}`;
       return r ? toMember(r) : null;
     },
 
     async findByPhone(tenantId: string, phone: string) {
       const [r] = await sql<MemberRow[]>`
-        select id, name, email, phone, points, card_code from public.loyalty_demo_members
+        select id, name, email, phone, points, card_code, birth_date from public.loyalty_demo_members
         where tenant_id = ${tenantId} and phone = ${phone}`;
       return r ? toMember(r) : null;
     },
@@ -93,7 +105,7 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
     async getMember(tenantId: string, memberId: string) {
       if (!UUID.test(memberId)) return null;
       const [r] = await sql<MemberRow[]>`
-        select id, name, email, phone, points, card_code from public.loyalty_demo_members
+        select id, name, email, phone, points, card_code, birth_date from public.loyalty_demo_members
         where tenant_id = ${tenantId} and id = ${memberId}`;
       return r ? toMember(r) : null;
     },
@@ -163,7 +175,7 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
     async listMembers(tenantId: string, search: string | null, limit: number) {
       const like = search ? `%${search.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%` : null;
       const rows = await sql<(MemberRow & { created_at: Date })[]>`
-        select id, name, email, phone, points, card_code, created_at from public.loyalty_demo_members
+        select id, name, email, phone, points, card_code, birth_date, created_at from public.loyalty_demo_members
         where tenant_id = ${tenantId}
           and (${like}::text is null or lower(name) like ${like} or email like ${like} or phone like ${like} or lower(card_code) like ${like})
         order by created_at desc, id desc limit ${limit}`;
@@ -192,10 +204,40 @@ export function createPostgresDemoLoyaltyStore(sql: Sql) {
                  values (${tenantId}, ${memberId}, 'adjust', ${delta}, ${label})`;
         const [r] = await tx<MemberRow[]>`
           update public.loyalty_demo_members set points = points + ${delta} where id = ${memberId}
-          returning id, name, email, phone, points, card_code`;
+          returning id, name, email, phone, points, card_code, birth_date`;
         if (!r) throw new Error('Membre introuvable');
         return { ok: true as const, member: toMember(r) };
       });
+    },
+
+    /** Profil complété par le membre (lot 16) : champs absents inchangés, null pour effacer. */
+    async updateProfile(
+      tenantId: string,
+      memberId: string,
+      input: {
+        readonly name?: string;
+        readonly email?: string | null;
+        readonly birthDate?: string | null;
+      },
+    ): Promise<
+      | { readonly ok: true; readonly member: DemoMemberRecord }
+      | { readonly ok: false; readonly error: 'unknown_member' | 'email_taken' }
+    > {
+      if (!UUID.test(memberId)) return { ok: false, error: 'unknown_member' };
+      try {
+        const [r] = await sql<MemberRow[]>`
+          update public.loyalty_demo_members set
+            name = coalesce(${input.name ?? null}, name),
+            email = case when ${input.email !== undefined} then ${input.email ?? null} else email end,
+            birth_date = case when ${input.birthDate !== undefined} then ${input.birthDate ?? null}::date else birth_date end
+          where tenant_id = ${tenantId} and id = ${memberId}
+          returning id, name, email, phone, points, card_code, birth_date`;
+        return r ? { ok: true, member: toMember(r) } : { ok: false, error: 'unknown_member' };
+      } catch (error) {
+        if ((error as { code?: string }).code === '23505')
+          return { ok: false, error: 'email_taken' };
+        throw error;
+      }
     },
 
     async deleteMember(tenantId: string, memberId: string) {

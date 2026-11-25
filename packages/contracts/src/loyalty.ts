@@ -4,9 +4,22 @@ export const loyaltyRewardSchema = z.object({
   id: z.string(),
   name: z.string(),
   costPoints: z.number().int().positive(),
-  /** Palier (lot 11) : produits de la carte au choix, au moins un. */
-  productIds: z.array(z.string()).min(1),
+  /** Palier (lot 11) : produits de la carte au choix. */
+  productIds: z.array(z.string()),
+  /** Catégories entières de la carte au choix (lot 16) : tous leurs produits sont offerts. */
+  categoryIds: z.array(z.string()).default([]),
 });
+
+/** Back-office (lot 16) : catégories de la carte offertes par chaque palier. */
+export const rewardCategoriesSchema = z.object({
+  rewards: z.array(
+    z.object({
+      id: z.string().min(1).max(100),
+      categoryIds: z.array(z.string().min(1).max(100)).max(30),
+    }),
+  ),
+});
+export type RewardCategoriesDto = z.infer<typeof rewardCategoriesSchema>;
 
 /** Réponse de GET /v1/tenants/{subdomain}/loyalty/program. */
 export const loyaltyProgramSchema = z.discriminatedUnion('enabled', [
@@ -88,6 +101,8 @@ export const loyaltyMemberSchema = z.object({
   reservedPoints: z.number().int().nonnegative().default(0),
   /** Contenu du QR code à présenter en caisse. */
   cardCode: z.string(),
+  /** Date de naissance AAAA-MM-JJ, facultative (lot 16). */
+  birthDate: z.iso.date().nullable().default(null),
   /** Prochaine récompense pas encore atteinte avec les points disponibles ; null si toutes le sont. */
   nextReward: z
     .object({ name: z.string(), costPoints: z.number().int(), missingPoints: z.number().int() })
@@ -140,6 +155,32 @@ export const memberOrdersSchema = z.object({
 });
 
 export type MemberOrdersDto = z.infer<typeof memberOrdersSchema>;
+/**
+ * PATCH /loyalty/me (lot 16) : le membre complète son profil après l'inscription. Tous les champs
+ * sont facultatifs ; absent = inchangé, null ou vide = effacé (sauf le prénom).
+ */
+export const memberProfileUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(100).optional(),
+  email: z
+    .union([z.email().max(200), z.literal(''), z.null()])
+    .optional()
+    .transform((v) => (v === '' ? null : v)),
+  birthDate: z
+    .union([z.iso.date(), z.literal(''), z.null()])
+    .optional()
+    .transform((v) => (v === '' ? null : v))
+    .refine(
+      (v) =>
+        v === undefined ||
+        v === null ||
+        (v >= '1900-01-01' && v <= new Date().toISOString().slice(0, 10)),
+      {
+        message: 'Date de naissance invalide',
+      },
+    ),
+});
+export type MemberProfileUpdateDto = z.input<typeof memberProfileUpdateSchema>;
+
 export type LoyaltyProgramDto = z.infer<typeof loyaltyProgramSchema>;
 export type LoyaltyRewardDto = z.infer<typeof loyaltyRewardSchema>;
 export type LoyaltyMemberDto = z.infer<typeof loyaltyMemberSchema>;

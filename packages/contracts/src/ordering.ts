@@ -211,6 +211,8 @@ export const orderTrackingSchema = z.object({
       totalCents: cents,
       options: z.array(z.string()),
       note: z.string().nullable(),
+      /** Produit offert par un cadeau fidélité (lot 16) : affiché « Offert » sur le ticket. */
+      gift: z.boolean().default(false),
     }),
   ),
   history: z.array(z.object({ status: z.string(), at: z.iso.datetime() })),

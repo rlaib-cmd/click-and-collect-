@@ -592,6 +592,8 @@ export interface OrderDetail {
     readonly memberId: string;
     readonly rewardId: string | null;
     readonly rewardPoints: number | null;
+    /** Produit offert par le cadeau, figé à la commande (lot 11) ; affiché « Offert » (lot 16). */
+    readonly rewardProductId: string | null;
     readonly settled: boolean;
   } | null;
 }
@@ -627,6 +629,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           loyalty_member_id: string | null;
           loyalty_reward_id: string | null;
           loyalty_reward_points: number | null;
+          loyalty_reward_product_id: string | null;
           loyalty_settled_at: Date | null;
           payment_method: 'online' | 'on_site';
           delivery_address: DeliveryAddressRecord | null;
@@ -698,6 +701,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
               memberId: o.loyalty_member_id,
               rewardId: o.loyalty_reward_id,
               rewardPoints: o.loyalty_reward_points,
+              rewardProductId: o.loyalty_reward_product_id,
               settled: o.loyalty_settled_at !== null,
             }
           : null,

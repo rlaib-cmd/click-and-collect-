@@ -38,6 +38,7 @@ export function createMemoryAdminStore(input: {
     featured: boolean;
   }[] = [];
   const drafts = new Map<string, { draft: unknown; updatedAt: string }>();
+  const rewardCategories = new Map<string, Map<string, readonly string[]>>();
   const themes = new Map(
     input.tenants.map((t) => [
       t.id,
@@ -194,6 +195,14 @@ export function createMemoryAdminStore(input: {
     getSettings: (_tenantId, restaurantId) => Promise.resolve(settings.get(restaurantId) ?? null),
     saveSettings(_tenantId, restaurantId, s) {
       settings.set(restaurantId, s);
+      return Promise.resolve();
+    },
+    listRewardCategories: (tenantId) =>
+      Promise.resolve(new Map(rewardCategories.get(tenantId) ?? [])),
+    setRewardCategories(tenantId, rewardId, categoryIds) {
+      const byTenant = rewardCategories.get(tenantId) ?? new Map<string, readonly string[]>();
+      byTenant.set(rewardId, [...categoryIds]);
+      rewardCategories.set(tenantId, byTenant);
       return Promise.resolve();
     },
     listMenuOverrides: (tenantId, restaurantId) =>

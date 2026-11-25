@@ -6,6 +6,8 @@ import type {
   LoyaltyMovement,
   LoyaltyProgram,
   LoyaltyProvider,
+  MemberProfileUpdate,
+  ProfileResult,
   SettleResult,
 } from './provider';
 
@@ -103,6 +105,11 @@ export interface DemoLoyaltyStore {
   ): Promise<LoyaltyMemberSummary[]>;
   adjust(tenantId: string, memberId: string, delta: number, label: string): Promise<AdjustResult>;
   deleteMember(tenantId: string, memberId: string): Promise<boolean>;
+  updateProfile(
+    tenantId: string,
+    memberId: string,
+    input: MemberProfileUpdate,
+  ): Promise<ProfileResult>;
   settle(
     tenantId: string,
     input: {
@@ -157,6 +164,14 @@ export function createDemoLoyaltyProvider(
       return store.adjust(tenant.id, memberId, delta, label.trim());
     },
     deleteMember: (tenant, memberId) => store.deleteMember(tenant.id, memberId),
+    updateProfile: (tenant, memberId, input) =>
+      store.updateProfile(tenant.id, memberId, {
+        ...input,
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+        ...(input.email !== undefined
+          ? { email: input.email ? input.email.trim().toLowerCase() : null }
+          : {}),
+      }),
     settleOrder: (tenant, s) =>
       store.settle(tenant.id, {
         memberId: s.memberId,
@@ -187,6 +202,7 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
     phone: r.phone,
     points: r.points,
     cardCode: r.cardCode,
+    birthDate: r.birthDate,
   });
   const find = (tenantId: string, id: string) =>
     members.find((m) => m.tenantId === tenantId && m.id === id);
@@ -208,6 +224,7 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
         phone: input.phone,
         points: input.welcomePoints,
         cardCode: input.cardCode,
+        birthDate: null,
         createdAt: now().toISOString(),
         movements: [],
       };
@@ -302,6 +319,21 @@ export function createMemoryDemoLoyaltyStore(now: () => Date = () => new Date())
         label,
         at: now().toISOString(),
         orderId: null,
+      });
+      return Promise.resolve({ ok: true, member: pub(r) });
+    },
+    updateProfile(tenantId, memberId, input) {
+      const r = find(tenantId, memberId);
+      if (!r) return Promise.resolve({ ok: false, error: 'unknown_member' });
+      if (
+        input.email &&
+        members.some((m) => m.tenantId === tenantId && m.id !== memberId && m.email === input.email)
+      )
+        return Promise.resolve({ ok: false, error: 'email_taken' });
+      Object.assign(r, {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.email !== undefined ? { email: input.email } : {}),
+        ...(input.birthDate !== undefined ? { birthDate: input.birthDate } : {}),
       });
       return Promise.resolve({ ok: true, member: pub(r) });
     },

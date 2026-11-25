@@ -341,6 +341,7 @@ export function createMemoryOrderBackend(
               memberId: o.loyalty.memberId,
               rewardId: o.loyalty.reward?.id ?? null,
               rewardPoints: o.loyalty.reward?.costPoints ?? null,
+              rewardProductId: o.loyalty.reward?.productId ?? null,
               settled: o.loyaltySettled ?? false,
             }
           : null,

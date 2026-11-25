@@ -68,6 +68,47 @@ describe.skipIf(!url)('Fidélité de démonstration Postgres', () => {
     expect(again).toMatchObject({ created: false, member: { id: member.id } });
   });
 
+  it('complète le profil après l’inscription : prénom, e-mail, date de naissance facultatifs (lot 16)', async () => {
+    const phone = `+3368${run.slice(-7)}`;
+    const { member } = await store.createMember(BILLS, {
+      name: 'Profil',
+      email: null,
+      phone,
+      cardCode: `S360-Q${run}`,
+      welcomePoints: 0,
+    });
+    expect(member.birthDate).toBeNull();
+    const updated = await store.updateProfile(BILLS, member.id, {
+      name: 'Camille',
+      email: `profil-${run}@example.fr`,
+      birthDate: '1990-05-17',
+    });
+    expect(updated).toMatchObject({
+      ok: true,
+      member: { name: 'Camille', email: `profil-${run}@example.fr`, birthDate: '1990-05-17' },
+    });
+    // Champ absent : inchangé ; null : effacé.
+    expect(await store.updateProfile(BILLS, member.id, { birthDate: null })).toMatchObject({
+      ok: true,
+      member: { name: 'Camille', birthDate: null },
+    });
+    // E-mail déjà pris par un autre membre de l'enseigne.
+    await store.createMember(BILLS, {
+      name: 'Autre',
+      email: `autre-${run}@example.fr`,
+      phone: null,
+      cardCode: `S360-R${run}`,
+      welcomePoints: 0,
+    });
+    expect(
+      await store.updateProfile(BILLS, member.id, { email: `autre-${run}@example.fr` }),
+    ).toEqual({ ok: false, error: 'email_taken' });
+    expect(await store.updateProfile(BILLS, 'pas-un-uuid', { name: 'X' })).toEqual({
+      ok: false,
+      error: 'unknown_member',
+    });
+  });
+
   it('administre un membre : recherche, correction sans solde négatif, suppression', async () => {
     const { member } = await store.createMember(BILLS, {
       name: 'Admin Test',

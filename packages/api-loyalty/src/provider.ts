@@ -24,7 +24,20 @@ export interface LoyaltyMember {
   readonly points: number;
   /** Contenu du QR code présenté en caisse. */
   readonly cardCode: string;
+  /** Date de naissance AAAA-MM-JJ, facultative (lot 16). */
+  readonly birthDate: string | null;
 }
+
+/** Profil complété par le membre (lot 16) : champ absent inchangé, null pour l'effacer. */
+export interface MemberProfileUpdate {
+  readonly name?: string;
+  readonly email?: string | null;
+  readonly birthDate?: string | null;
+}
+
+export type ProfileResult =
+  | { readonly ok: true; readonly member: LoyaltyMember }
+  | { readonly ok: false; readonly error: 'unknown_member' | 'email_taken' };
 
 /** Membre vu depuis le back-office. */
 export interface LoyaltyMemberSummary extends LoyaltyMember {
@@ -84,6 +97,12 @@ export interface LoyaltyProvider {
   /** Client reconnu par son mobile (E.164), l'identifiant principal en caisse. */
   findByPhone(tenant: LoyaltyTenant, phone: string): Promise<LoyaltyMember | null>;
   getMember(tenant: LoyaltyTenant, memberId: string): Promise<LoyaltyMember | null>;
+  /** Le membre complète ou corrige son profil (prénom, e-mail, date de naissance). */
+  updateProfile(
+    tenant: LoyaltyTenant,
+    memberId: string,
+    input: MemberProfileUpdate,
+  ): Promise<ProfileResult>;
   history(tenant: LoyaltyTenant, memberId: string): Promise<readonly LoyaltyMovement[]>;
   /**
    * Commande payée : crédite les points et consomme la récompense, une seule fois par commande

@@ -222,6 +222,14 @@ export interface AdminStore {
     settings: RestaurantSettingsRecord,
   ): Promise<void>;
 
+  /** Lot 16 : catégories de la carte offertes par chaque palier (identifiant du palier → catégories). */
+  listRewardCategories(tenantId: string): Promise<ReadonlyMap<string, readonly string[]>>;
+  setRewardCategories(
+    tenantId: string,
+    rewardId: string,
+    categoryIds: readonly string[],
+  ): Promise<void>;
+
   listMenuOverrides(
     tenantId: string,
     restaurantId: string,
@@ -573,6 +581,19 @@ export function createPostgresAdminStore(sql: Sql): AdminStore {
                    values (${tenantId}, ${restaurantId}, ${z.name}, ${z.kind}, ${z.radiusMeters}, ${[...z.postalCodes]}, ${z.feeCents})`;
         }
       });
+    },
+
+    async listRewardCategories(tenantId) {
+      const rows = await sql<{ reward_id: string; category_ids: string[] }[]>`
+        select reward_id, category_ids from public.loyalty_reward_settings where tenant_id = ${tenantId}`;
+      return new Map(rows.map((r) => [r.reward_id, r.category_ids]));
+    },
+
+    async setRewardCategories(tenantId, rewardId, categoryIds) {
+      await sql`insert into public.loyalty_reward_settings (tenant_id, reward_id, category_ids, updated_at)
+                values (${tenantId}, ${rewardId}, ${[...categoryIds]}, now())
+                on conflict (tenant_id, reward_id)
+                do update set category_ids = excluded.category_ids, updated_at = now()`;
     },
 
     async listMenuOverrides(tenantId, restaurantId) {

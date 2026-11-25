@@ -96,6 +96,19 @@ describe.skipIf(!url)('AdminStore Postgres', () => {
     await admin.saveSettings(BELLA, id, before);
   });
 
+  it('enregistre les catégories offertes par un palier, par enseigne (lot 16)', async () => {
+    const reward = `rw-test-${run}`;
+    await admin.setRewardCategories(BELLA, reward, ['cat-boissons', 'cat-desserts']);
+    expect((await admin.listRewardCategories(BELLA)).get(reward)).toEqual([
+      'cat-boissons',
+      'cat-desserts',
+    ]);
+    await admin.setRewardCategories(BELLA, reward, ['cat-boissons']);
+    expect((await admin.listRewardCategories(BELLA)).get(reward)).toEqual(['cat-boissons']);
+    expect((await admin.listRewardCategories(GREEN)).has(reward)).toBe(false);
+    await sql`delete from public.loyalty_reward_settings where reward_id = ${reward}`;
+  });
+
   it('met un produit en avant et garde ce choix quand seul l’ordre ou la pause change', async () => {
     const [r] = await restaurants.listByTenant(BELLA);
     const id = r?.id ?? '';

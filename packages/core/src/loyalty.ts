@@ -17,8 +17,23 @@ export interface LoyaltyReward {
   readonly id: string;
   readonly name: string;
   readonly costPoints: number;
-  /** Produits au choix (identifiants de la carte Splash360), au moins un. */
+  /** Produits au choix (identifiants de la carte Splash360). */
   readonly productIds: readonly string[];
+  /**
+   * Catégories entières de la carte (lot 16, ADR 0021) : tous leurs produits sont au choix
+   * (ex. 500 points : toutes les boissons). Réglées par l'enseigne au back-office.
+   */
+  readonly categoryIds?: readonly string[];
+}
+
+/** Le produit fait-il partie du palier, par son identifiant ou par sa catégorie ? */
+export function rewardIncludes(
+  reward: Pick<LoyaltyReward, 'productIds' | 'categoryIds'>,
+  productId: string,
+  categoryId: string | null,
+): boolean {
+  if (reward.productIds.includes(productId)) return true;
+  return categoryId !== null && (reward.categoryIds ?? []).includes(categoryId);
 }
 
 /**
@@ -58,10 +73,12 @@ export function applyReward(input: {
   readonly reward: LoyaltyReward;
   /** Produit choisi dans le palier. */
   readonly productId: string;
+  /** Catégorie de ce produit sur la carte (palier par catégories, lot 16). */
+  readonly productCategoryId?: string | null;
   readonly balance: number;
 }): RewardResult {
   const { totals, lines, reward, productId, balance } = input;
-  if (!reward.productIds.includes(productId))
+  if (!rewardIncludes(reward, productId, input.productCategoryId ?? null))
     return { ok: false, error: 'reward_product_not_eligible' };
   if (balance < reward.costPoints) return { ok: false, error: 'insufficient_points' };
   const line = lines.find((l) => l.productId === productId && l.quantity > 0);

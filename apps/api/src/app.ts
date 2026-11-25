@@ -17,6 +17,7 @@ import type {
 import type { NotificationSender } from './notifications/sender';
 import { notifyStatus, tenantNameResolver } from './notifications/service';
 import type { PaymentGateway } from './payments/gateway';
+import { withRewardCategories } from './loyalty/reward-settings';
 import { processDispatches } from './pos/dispatcher';
 import type { PosGateway } from './pos/gateway';
 import type { PosTiming } from './pos/handshake';
@@ -105,7 +106,11 @@ export interface AppDeps {
  * Serveur de la commande en ligne. Les dépendances sont injectées
  * pour tester les routes sans base (ADR 0003).
  */
-export function createApp(deps: AppDeps) {
+export function createApp(input: AppDeps) {
+  // Paliers de cadeaux complétés des catégories réglées par l'enseigne (lot 16).
+  const deps: AppDeps = input.loyalty
+    ? { ...input, loyalty: withRewardCategories(input.loyalty, input.admin) }
+    : input;
   const app = new Hono();
 
   const log = deps.logger ?? jsonLog;

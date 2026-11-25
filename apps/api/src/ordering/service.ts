@@ -9,6 +9,7 @@ import {
   availablePoints,
   reservedRewardPoints,
   pointsForAmount,
+  rewardIncludes,
   bookableDates,
   checkRequestedTime,
   computeTotals,
@@ -241,10 +242,16 @@ export async function quote(
       let reward: { id: string; costPoints: number; productId: string } | null = null;
       if (request.loyalty.rewardId) {
         const chosen = program.rewards.find((r) => r.id === request.loyalty?.rewardId);
-        // Sans choix explicite (anciennes versions), le premier produit du palier présent au panier.
+        const categoryOf = (id: string) =>
+          menu.products.find((p) => p.id === id)?.categoryId ?? null;
+        // Sans choix explicite (anciennes versions), le premier produit éligible présent au panier.
         const productId =
           request.loyalty.rewardProductId ??
-          chosen?.productIds.find((id) => request.lines.some((l) => l.productId === id)) ??
+          (chosen
+            ? request.lines.find((l) =>
+                rewardIncludes(chosen, l.productId, categoryOf(l.productId)),
+              )?.productId
+            : undefined) ??
           chosen?.productIds[0] ??
           '';
         if (!chosen) issues.push({ code: 'unknown_reward' });
@@ -256,6 +263,7 @@ export async function quote(
             lines: priced.lines,
             reward: chosen,
             productId,
+            productCategoryId: categoryOf(productId),
             balance: availablePoints(member.points, reservedRewardPoints(holds, now)),
           });
           if (applied.ok) {

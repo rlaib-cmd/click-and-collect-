@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeTotals } from './fees';
 import {
   applyReward,
+  rewardIncludes,
   nextReward,
   availablePoints,
   PENDING_PAYMENT_HOLD_MS,
@@ -229,5 +230,57 @@ describe('points réservés par les commandes en cours', () => {
   it('les points disponibles ne descendent jamais sous zéro', () => {
     expect(availablePoints(450, 400)).toBe(50);
     expect(availablePoints(300, 400)).toBe(0);
+  });
+});
+
+describe('palier par catégories (lot 16)', () => {
+  const drinks = { productIds: [], categoryIds: ['cat-boissons'] } as const;
+  it('inclut tout produit de la catégorie, et les produits listés', () => {
+    expect(rewardIncludes(drinks, 'pepsi', 'cat-boissons')).toBe(true);
+    expect(rewardIncludes(drinks, 'burger', 'cat-burgers')).toBe(false);
+    expect(rewardIncludes(drinks, 'pepsi', null)).toBe(false);
+    expect(rewardIncludes({ productIds: ['frites'] }, 'frites', null)).toBe(true);
+  });
+
+  it('accepte un produit de la catégorie dans applyReward', () => {
+    const totals = {
+      subtotalCents: cents(1500),
+      deliveryFeeCents: cents(0),
+      serviceFeeCents: cents(0),
+      discountCents: cents(0),
+      promoDiscountCents: cents(0),
+      totalCents: cents(1500),
+    };
+    const lines = [
+      { productId: 'pepsi', quantity: 1, basePriceCents: cents(250) },
+      { productId: 'burger', quantity: 1, basePriceCents: cents(1250) },
+    ] as unknown as Parameters<typeof applyReward>[0]['lines'];
+    const reward = {
+      id: 'r',
+      name: 'Boisson',
+      costPoints: 500,
+      productIds: [],
+      categoryIds: ['cat-boissons'],
+    };
+    expect(
+      applyReward({
+        totals,
+        lines,
+        reward,
+        productId: 'pepsi',
+        productCategoryId: 'cat-boissons',
+        balance: 600,
+      }).ok,
+    ).toBe(true);
+    expect(
+      applyReward({
+        totals,
+        lines,
+        reward,
+        productId: 'burger',
+        productCategoryId: 'cat-burgers',
+        balance: 600,
+      }),
+    ).toEqual({ ok: false, error: 'reward_product_not_eligible' });
   });
 });
