@@ -1,6 +1,6 @@
 /**
- * Extrait réel de la carte v2 Splash360 « TASTY CROUSTY » (exemple fourni par Splash360 le 25/11,
- * restaurant 164 du pilote à confirmer) : catalogue seulement, aucun identifiant ni donnée
+ * Extrait réel de la carte v2 Splash360 « TASTY CROUSTY », exemple de format fourni par Splash360
+ * le 25/11 (pas le restaurant du pilote, qui est Chicken Street Siège) : catalogue seulement, aucun identifiant ni donnée
  * personnelle. Champs inutiles à la traduction retirés ; `prixArray_c` réduit aux prix TTC.
  * Contient : un produit à étapes (sauce obligatoire, suppléments 0 à 6, boisson, dessert dont un
  * inactif), sa copie dans le catalogue DELIVERY, un produit inactif et une étape imbriquée

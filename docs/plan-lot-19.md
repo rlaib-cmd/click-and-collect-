@@ -3,7 +3,7 @@
 **Demande** (25 novembre, e-mail du CTO de Splash360) : jeton sur api2 (Basic + `scope=user`),
 carte v2 (`/api/export/v2/menus`) avec personnalisations et étapes, appels **séquentiels par
 identifiant client**, une minute entre deux collectes des ventes. Pilote : organisation 130,
-restaurant 164. Décisions : ADR 0024.
+restaurant 164 = Chicken Street Siège. Décisions : ADR 0024.
 
 ## Ce qui est construit
 
@@ -33,7 +33,7 @@ restaurant 164. Décisions : ADR 0024.
 | Carte | Catégories | Produits affichés | Avec options | Indisponibles |
 |---|---|---|---|---|
 | Chicken Street Siège (route menu-raw, 25/11) | 12 | 159 | 93 | 0 |
-| Tasty Crousty (exemple fourni par Splash360) | 9 | 78 | 16 | 18 (`active: 0`) |
+| Tasty Crousty (exemple de format fourni par Splash360, hors pilote) | 9 | 78 | 16 | 18 (`active: 0`) |
 
 ## Ce qui reste
 

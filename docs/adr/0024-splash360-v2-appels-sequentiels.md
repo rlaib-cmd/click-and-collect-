@@ -4,7 +4,7 @@ Date : 2026-11-25 · Statut : acceptée
 
 ## Contexte
 
-Consignes de Splash360 (CTO, 25/11) pour le pilote (organisation 130, restaurant 164) :
+Consignes de Splash360 (CTO, 25/11) pour le pilote (organisation 130, restaurant 164 = Chicken Street Siège) :
 
 - jeton OAuth2 `client_credentials` sur `https://api2.splash360.fr/oauth/v2/token`, identifiants en
   `Authorization: Basic base64(client_id:client_secret)`, corps `grant_type=client_credentials&scope=user`,
