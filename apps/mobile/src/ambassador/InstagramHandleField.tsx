@@ -81,6 +81,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   input: {
     flex: 1,
+    minWidth: 0,
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 14,

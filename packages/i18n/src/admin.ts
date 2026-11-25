@@ -589,6 +589,26 @@ export const adminFr = {
       rejected: 'Refusée',
     },
     by: (actor: string) => `par ${actor}`,
+    actorLabel: {
+      client: 'le client',
+      système: 'le système',
+      IA: 'l’IA',
+      manuel: 'vérification manuelle (sans IA)',
+    } as Readonly<Record<string, string>>,
+    detailLabel: {
+      ticketRef: 'ticket',
+      ticket: 'ticket',
+      instagram: 'Instagram',
+      verdict: 'verdict',
+      reason: 'motif',
+      checkDueAt: 'contrôle prévu',
+      creditDueAt: 'crédit prévu',
+      result: 'résultat',
+      points: 'points',
+    } as Readonly<Record<string, string>>,
+    resultLabel: { online: 'story en ligne', removed: 'story retirée' } as Readonly<
+      Record<string, string>
+    >,
   },
   audit: { action: 'Action', actor: 'Auteur', target: 'Cible', at: 'Date' },
   tenants: {

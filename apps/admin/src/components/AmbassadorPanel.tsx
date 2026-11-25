@@ -28,11 +28,23 @@ const settingsResponse = z.object({
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('fr-FR') : '—');
 
+const ISO = /^\d{4}-\d{2}-\d{2}T/;
+const verdicts: Readonly<Record<string, string>> = t.verdictLabel;
+
+/** Valeur lisible d'un détail d'événement (dates, verdicts, résultats du contrôle). */
+function detailValue(key: string, value: string | number | boolean | null): string {
+  if (typeof value === 'string' && ISO.test(value)) return when(value);
+  if (key === 'verdict' && typeof value === 'string') return verdicts[value] ?? value;
+  if (key === 'result' && typeof value === 'string') return t.resultLabel[value] ?? value;
+  return String(value);
+}
+
 function eventLine(e: AmbassadorEventDto): string {
   const detail = Object.entries(e.detail)
-    .map(([k, v]) => `${k} : ${String(v)}`)
+    .map(([k, v]) => `${t.detailLabel[k] ?? k} : ${detailValue(k, v)}`)
     .join(' · ');
-  return `${when(e.at)} — ${t.eventLabel[e.type]} ${t.by(e.actor)}${detail ? ` (${detail})` : ''}`;
+  const actor = t.actorLabel[e.actor] ?? e.actor;
+  return `${when(e.at)} — ${t.eventLabel[e.type]} ${t.by(actor)}${detail ? ` (${detail})` : ''}`;
 }
 
 /**
