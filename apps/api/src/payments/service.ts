@@ -105,6 +105,7 @@ export async function refundOrder(
     connectedAccountId: order.stripeAccountId,
     amountCents: input.amountCents,
     idempotencyKey: `refund-${input.orderId}-${input.requestId}`,
+    refundApplicationFee: order.applicationFeeCents > 0,
   });
   const recorded = await deps.payments.recordRefund(
     input.tenantId,

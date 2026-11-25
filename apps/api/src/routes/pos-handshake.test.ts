@@ -257,6 +257,8 @@ describe('après paiement : envoi du paiement puis confirmation', () => {
         amountCents: setup.backend.orders[0]?.totals.totalCents,
         idempotencyKey: `refund-${setup.backend.orders[0]?.id}-pos-failed`,
         connectedAccountId: expect.any(String) as string,
+        // Commission prélevée sur cette enseigne de test : elle est remboursée aussi.
+        refundApplicationFee: true,
       },
     ]);
     expect(setup.backend.orders[0]?.status).toBe('refunded');

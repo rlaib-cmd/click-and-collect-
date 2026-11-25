@@ -292,6 +292,9 @@ describe('expiration et remboursement', () => {
       `refund-${o.orderId}-r1`,
       `refund-${o.orderId}-r3`,
     ]);
+    // La commission n'est remboursée que si elle a été prélevée (sinon Stripe refuse tout).
+    const fee = setup.backend.orders[0]?.applicationFeeCents ?? 0;
+    expect(setup.stripe.refunds.every((r) => r.refundApplicationFee === fee > 0)).toBe(true);
     expect(setup.backend.orders[0]?.events.at(-1)).toMatchObject({
       status: 'refunded',
       actor: 'admin:42',

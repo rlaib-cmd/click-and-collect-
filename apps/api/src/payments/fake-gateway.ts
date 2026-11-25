@@ -10,7 +10,7 @@ export function createFakeGateway(secret = 'whsec_test') {
     account: string;
   }[] = [];
   const cancelled: string[] = [];
-  const refunds: { paymentIntentId: string; amountCents: number; idempotencyKey: string }[] = [];
+  const refunds: Parameters<PaymentGateway['refund']>[0][] = [];
   const accounts: string[] = [];
   const gateway: PaymentGateway = {
     publishableKey: 'pk_test_fake',

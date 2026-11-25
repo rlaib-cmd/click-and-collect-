@@ -48,6 +48,8 @@ export interface PaymentGateway {
     connectedAccountId: string;
     amountCents: number;
     idempotencyKey: string;
+    /** Rembourser aussi la commission Splash360 : seulement s'il y en a une (sinon Stripe refuse). */
+    refundApplicationFee: boolean;
   }): Promise<void>;
   /** Vérifie la signature et décode l'événement ; lève `InvalidWebhookSignature` sinon. */
   /**
@@ -152,7 +154,8 @@ export function createStripeGateway(options: {
         {
           payment_intent: input.paymentIntentId,
           amount: input.amountCents,
-          refund_application_fee: true,
+          // Sans commission prélevée, Stripe refuse `refund_application_fee` (constaté le 25/11).
+          ...(input.refundApplicationFee ? { refund_application_fee: true } : {}),
         },
         { stripeAccount: input.connectedAccountId, idempotencyKey: input.idempotencyKey },
       );
