@@ -117,6 +117,25 @@ const me = async (s: ReturnType<typeof setup>, token: string) =>
   );
 
 describe('fidélité YouFID dans l’application (lot 21)', () => {
+  it('secret YOUFID_ACCOUNTS illisible : YouFID désactivé, l’API démarre quand même', () => {
+    const logs: string[] = [];
+    const { loyalty, youfid } = configureLoyalty({
+      fallback: null,
+      accountsJson: '{chickenstreet: login mot-de-passe',
+      baseUrl: undefined,
+      deviceId: undefined,
+      environment: 'recette',
+      store: createMemoryYoufidStore(),
+      tenants: createMemoryTenantStore([]),
+      random: () => 'op',
+      log: (m, d) => logs.push(`${m} ${JSON.stringify(d ?? {})}`),
+    });
+    expect(loyalty).toBeNull();
+    expect(youfid).toBeNull();
+    expect(logs.join('\n')).toContain('Fidélité YouFID désactivée');
+    expect(logs.join('\n')).not.toContain('mot-de-passe');
+  });
+
   it('publie le programme YouFID avec les réglages de l’enseigne', async () => {
     const s = setup();
     const program = loyaltyProgramSchema.parse(

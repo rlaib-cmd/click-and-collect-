@@ -31,8 +31,17 @@ export function configureLoyalty(options: {
   readonly log: (message: string, data?: Record<string, unknown>) => void;
   readonly fetch?: typeof fetch;
 }): { readonly loyalty: LoyaltyProvider | null; readonly youfid: YoufidRegistry | null } {
-  // Erreur de configuration au démarrage, sans citer les identifiants.
-  const accounts = parseYoufidAccounts(options.accountsJson);
+  // Configuration illisible : YouFID désactivé, le reste de l'API démarre (erreur journalisée
+  // sans citer les identifiants).
+  let accounts: ReturnType<typeof parseYoufidAccounts>;
+  try {
+    accounts = parseYoufidAccounts(options.accountsJson);
+  } catch (error) {
+    options.log('Fidélité YouFID désactivée : configuration invalide', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { loyalty: options.fallback, youfid: null };
+  }
   if (accounts.size === 0) return { loyalty: options.fallback, youfid: null };
   const registry = createYoufidRegistry({
     accounts,

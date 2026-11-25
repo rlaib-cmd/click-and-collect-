@@ -415,6 +415,15 @@ describe('aiguillage par enseigne et configuration', () => {
     const ok = parseYoufidAccounts('{"chickenstreet":{"login":"l","password":"p4ss"}}');
     expect(ok.get('chickenstreet')).toEqual({ login: 'l', password: 'p4ss' });
     expect(() => parseYoufidAccounts('{pas du json p4ss')).toThrow('JSON invalide');
+    // Saisie depuis un iPhone : guillemets typographiques remplacés automatiquement.
+    const smart = parseYoufidAccounts(
+      '\u201C'
+        .concat(
+          '{\u201Cchickenstreet\u201D:{\u201Clogin\u201D:\u201Cl\u201D,\u201Cpassword\u201D:\u201Cp4ss\u201D}}',
+        )
+        .slice(1),
+    );
+    expect(smart.get('chickenstreet')).toEqual({ login: 'l', password: 'p4ss' });
     let message = '';
     try {
       parseYoufidAccounts(

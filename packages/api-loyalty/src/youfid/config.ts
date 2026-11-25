@@ -9,6 +9,14 @@ const accountsSchema = z.record(
 );
 
 /**
+ * Guillemets « intelligents » (“ ” „ ″) saisis depuis un téléphone remplacés par des
+ * guillemets droits : la saisie du secret sur iPhone les transforme sans prévenir.
+ */
+export function normalizeQuotes(raw: string): string {
+  return raw.trim().replace(/[\u201C\u201D\u201E\u201F\u2033\u00AB\u00BB]/g, '"');
+}
+
+/**
  * `YOUFID_ACCOUNTS` : objet JSON indexé par sous-domaine d'enseigne →
  * `{ "login": "…", "password": "…" }`. Les erreurs ne citent jamais les valeurs (secrets).
  * Absent ou vide : aucune enseigne branchée sur YouFID.
@@ -19,7 +27,7 @@ export function parseYoufidAccounts(
   if (!raw || !raw.trim()) return new Map();
   let json: unknown;
   try {
-    json = JSON.parse(raw);
+    json = JSON.parse(normalizeQuotes(raw));
   } catch {
     throw new Error('YOUFID_ACCOUNTS : JSON invalide');
   }
