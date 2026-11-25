@@ -521,6 +521,49 @@ export const adminFr = {
       `Supprimer le compte fidélité de ${name} ? Ses points et son historique sont effacés.`,
     noClub: 'Cette enseigne n’a pas de club fidélité.',
     demo: 'Données de test : la fidélité sera gérée par l’API Splash360.',
+    youfid:
+      'Données YouFID en direct : soldes, QR codes et cadeaux viennent de l’API fidélité Splash360. Sans recherche, la liste montre les clients liés à l’application.',
+    searchYoufid: 'Rechercher (nom, e-mail, ou téléphone d’un membre de l’application)',
+    confirmDeleteYoufid: (name: string) =>
+      `Retirer ${name} de l’application ? Son compte et ses points restent chez YouFID (effacement complet à demander à Splash360).`,
+  },
+  /** Lot 21 (ADR 0026) : réglages que l'API YouFID ne fournit pas. */
+  loyaltySettings: {
+    title: 'Règles de points',
+    intro:
+      'Utilisées pour annoncer le gain dans l’application et créditer la bienvenue. Le gain réel d’une commande est calculé par YouFID sur le montant payé.',
+    pointsPerEuro: 'Points par euro',
+    welcomePoints: 'Points de bienvenue',
+    save: 'Enregistrer',
+    saved: 'Règles enregistrées.',
+  },
+  /** Lot 21 (ADR 0026) : opérations envoyées à YouFID refusées ou à l'issue inconnue. */
+  loyaltyOperations: {
+    title: 'Opérations à vérifier',
+    intro:
+      'Points non confirmés par YouFID. « Issue inconnue » : la demande a pu être appliquée, vérifiez le solde du client avant de corriger à la main. Rien n’est renvoyé automatiquement.',
+    none: 'Aucune opération à vérifier.',
+    badge: (n: number) => `${n} à vérifier`,
+    status: { failed: 'Refusée', uncertain: 'Issue inconnue' } as Record<string, string>,
+    kind: {
+      earn: 'Gain commande',
+      redeem: 'Cadeau',
+      welcome: 'Bienvenue',
+      bonus: 'Bonus ambassadeur',
+      adjust: 'Correction',
+    } as Record<string, string>,
+    error: {
+      network: 'YouFID injoignable',
+      invalid_response: 'Réponse illisible',
+      interrupted: 'Serveur interrompu pendant l’envoi',
+      daily_limit: 'Passages du jour atteints',
+      insufficient_points: 'Solde insuffisant',
+      unknown_member: 'Client introuvable',
+    } as Record<string, string>,
+    member: (id: string) => `Client YouFID n° ${id}`,
+    attempts: (n: number) => `${n} essai(s)`,
+    resolve: 'Marquer comme vérifiée',
+    confirmResolve: 'Vous avez vérifié le solde chez YouFID et corrigé si besoin ?',
   },
   /** Lot 16 (ADR 0021) : catégories entières offertes par palier. */
   rewardTiers: {
@@ -659,6 +702,10 @@ export const adminFr = {
     open: 'Ouvrir',
     created: (email: string) =>
       `Enseigne créée. Invitation envoyée à ${email} pour choisir son mot de passe.`,
+    youfidTest: 'Tester YouFID',
+    youfidOk: (merchantId: number, rewards: number, secType: string) =>
+      `YouFID connecté : marchand n° ${merchantId}, ${rewards} cadeau(x), sécurité ${secType}.`,
+    youfidFail: (message: string) => `YouFID : ${message}`,
     createdNoInvite: (email: string) =>
       `Enseigne créée, mais l’invitation de ${email} n’a pas pu partir : renvoyez-la depuis la page Équipe de l’enseigne.`,
   },

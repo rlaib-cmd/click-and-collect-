@@ -156,6 +156,9 @@ export default function RewardsScreen() {
         {member ? (
           <View style={styles.list}>
             <Text style={[styles.h2, titleStyle(style), { color: palette.text }]}>{t.history}</Text>
+            {member.historyScope === 'app' ? (
+              <Text style={{ color: palette.textMuted, fontSize: 12 }}>{t.historyAppOnly}</Text>
+            ) : null}
             {member.history.length === 0 ? (
               <Text style={{ color: palette.textMuted }}>{t.noHistory}</Text>
             ) : null}

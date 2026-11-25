@@ -21,6 +21,16 @@ const c = messages.admin.console;
 
 type Filter = 'all' | 'live' | 'setup' | 'blocked';
 
+const youfidTestSchema = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    merchantId: z.number(),
+    rewards: z.number(),
+    secType: z.string(),
+  }),
+  z.object({ ok: z.literal(false), message: z.string() }),
+]);
+
 const PILL: Record<ConsoleState, string> = {
   live: 'pill success',
   draft: 'pill warning',
@@ -99,6 +109,19 @@ export default function ConsolePage() {
       await api(auth, `/tenants/${x.id}`, z.undefined(), { method: 'DELETE' });
       setError(null);
       await tenants.reload();
+    } catch (err) {
+      fail(err);
+    }
+  };
+
+  // Lot 21 : diagnostic YouFID (connexion du marchand, cadeaux), sans secret.
+  const testYoufid = async (x: TenantSummaryDto) => {
+    try {
+      const r = await api(auth, `/tenants/${x.id}/youfid/test`, youfidTestSchema, {
+        method: 'POST',
+      });
+      setError(null);
+      setNotice(r.ok ? t.youfidOk(r.merchantId, r.rewards, r.secType) : t.youfidFail(r.message));
     } catch (err) {
       fail(err);
     }
@@ -257,6 +280,9 @@ export default function ConsolePage() {
                   <span className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
                     <button type="button" className="dark" onClick={() => viewAs(x)}>
                       {c.viewAs}
+                    </button>
+                    <button type="button" onClick={() => void testYoufid(x)}>
+                      {t.youfidTest}
                     </button>
                     <button type="button" onClick={() => void toggleBlock(x)}>
                       {x.status === 'active' ? t.block : t.unblock}

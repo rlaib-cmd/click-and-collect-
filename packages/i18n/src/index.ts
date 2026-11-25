@@ -449,6 +449,9 @@ export const fr = {
     cardCode: (code: string) => `Code : ${code}`,
     history: 'Historique',
     noHistory: 'Pas encore de mouvement.',
+    /** Lot 21 : avec YouFID, l'historique ne montre que les opérations faites dans l'application. */
+    historyAppOnly:
+      'Mouvements faits dans l’application. Tes passages en magasin comptent dans ton solde.',
     joinTitle: 'Rejoins le club',
     joinIntro: (n: number) =>
       `${n} points offerts à l’inscription, puis des récompenses à chaque commande.`,

@@ -10,6 +10,11 @@ import { useApi } from '@/lib/use-api';
 import { AmbassadorPanel } from '@/components/AmbassadorPanel';
 import { LoadError } from '@/components/LoadError';
 import { RewardTiersPanel } from '@/components/RewardTiersPanel';
+import {
+  LoyaltyOperationsPanel,
+  LoyaltySettingsPanel,
+  useLoyaltySettings,
+} from '@/components/YoufidPanels';
 
 const t = messages.admin.club;
 const membersSchema = z.object({ members: z.array(clubMemberSchema) });
@@ -31,6 +36,9 @@ export default function ClubPage() {
     `/loyalty/members${q.trim().length >= 2 ? `?q=${encodeURIComponent(q.trim())}` : ''}`,
     membersSchema,
   );
+  // Lot 21 : fidélité YouFID (données en direct) ou fidélité de test.
+  const settings = useLoyaltySettings();
+  const youfid = settings.data?.source === 'youfid';
   const [editing, setEditing] = useState<ClubMemberDto | null>(null);
   const [form, setForm] = useState({ delta: '', reason: '' });
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +75,7 @@ export default function ClubPage() {
   };
 
   const remove = async (m: ClubMemberDto) => {
-    if (!window.confirm(t.confirmDelete(m.name))) return;
+    if (!window.confirm(youfid ? t.confirmDeleteYoufid(m.name) : t.confirmDelete(m.name))) return;
     try {
       await api(auth, `/loyalty/members/${m.id}`, z.undefined(), { method: 'DELETE' });
       await reload();
@@ -83,7 +91,13 @@ export default function ClubPage() {
         onRetry={() => void reload()}
       />
       <h1>{messages.admin.nav.club}</h1>
-      <p className="muted">{t.demo}</p>
+      <p className="muted">{youfid ? t.youfid : t.demo}</p>
+      {youfid && settings.data ? (
+        <>
+          <LoyaltyOperationsPanel />
+          <LoyaltySettingsPanel settings={settings.data} onSaved={settings.reload} />
+        </>
+      ) : null}
       <RewardTiersPanel />
       <AmbassadorPanel />
       {error ? (
@@ -93,8 +107,8 @@ export default function ClubPage() {
       ) : null}
       <input
         type="search"
-        placeholder={t.search}
-        aria-label={t.search}
+        placeholder={youfid ? t.searchYoufid : t.search}
+        aria-label={youfid ? t.searchYoufid : t.search}
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
