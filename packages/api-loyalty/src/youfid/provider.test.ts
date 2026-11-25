@@ -415,6 +415,13 @@ describe('aiguillage par enseigne et configuration', () => {
     const ok = parseYoufidAccounts('{"chickenstreet":{"login":"l","password":"p4ss"}}');
     expect(ok.get('chickenstreet')).toEqual({ login: 'l', password: 'p4ss' });
     expect(() => parseYoufidAccounts('{pas du json p4ss')).toThrow('JSON invalide');
+    // L'aide au diagnostic décrit la forme de la saisie sans citer son contenu.
+    try {
+      parseYoufidAccounts('{pas du json p4ss');
+    } catch (e) {
+      expect((e as Error).message).toContain('longueur 17');
+      expect((e as Error).message).not.toMatch(/p4ss|pas|json/);
+    }
     // Saisie depuis un iPhone : guillemets typographiques remplacés automatiquement.
     const smart = parseYoufidAccounts(
       '\u201C'

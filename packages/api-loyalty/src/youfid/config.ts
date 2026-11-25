@@ -17,6 +17,30 @@ export function normalizeQuotes(raw: string): string {
 }
 
 /**
+ * Forme d'une valeur illisible, pour aider à corriger la saisie sans rien révéler du contenu :
+ * longueur, premier et dernier caractère s'ils sont de la ponctuation, nombre de signes de
+ * structure. Aucune lettre ni aucun chiffre n'est cité.
+ */
+export function jsonShape(raw: string): string {
+  const v = raw.trim();
+  const punct = (c: string | undefined) => (c && !/[\p{L}\p{N}]/u.test(c) ? c : 'lettre/chiffre');
+  const count = (re: RegExp) => (v.match(re) ?? []).length;
+  return [
+    `longueur ${String(v.length)}`,
+    `début ${punct(v[0])}`,
+    `fin ${punct(v.at(-1))}`,
+    `{ ${String(count(/\{/g))}`,
+    `} ${String(count(/\}/g))}`,
+    `" ${String(count(/"/g))}`,
+    `' ${String(count(/['\u2018\u2019]/g))}`,
+    `typographiques ${String(count(/[\u201C\u201D\u201E\u201F\u00AB\u00BB]/g))}`,
+    `: ${String(count(/:/g))}`,
+    `, ${String(count(/,/g))}`,
+    `retours ${String(count(/[\r\n]/g))}`,
+  ].join(', ');
+}
+
+/**
  * `YOUFID_ACCOUNTS` : objet JSON indexé par sous-domaine d'enseigne →
  * `{ "login": "…", "password": "…" }`. Les erreurs ne citent jamais les valeurs (secrets).
  * Absent ou vide : aucune enseigne branchée sur YouFID.
@@ -29,7 +53,7 @@ export function parseYoufidAccounts(
   try {
     json = JSON.parse(normalizeQuotes(raw));
   } catch {
-    throw new Error('YOUFID_ACCOUNTS : JSON invalide');
+    throw new Error(`YOUFID_ACCOUNTS : JSON invalide (${jsonShape(raw)})`);
   }
   const parsed = accountsSchema.safeParse(json);
   if (!parsed.success) {
