@@ -22,6 +22,7 @@ import { registerCardRoutes, type CardRoutesDeps } from './cards';
 import { registerLoyaltyRoutes, type LoyaltyRoutesDeps } from './loyalty';
 import { registerOrderingRoutes, type OrderingRoutesDeps } from './ordering';
 import { registerPaymentRoutes, type PaymentRoutesDeps } from './payments';
+import { registerProximityRoutes, type ProximityRoutesDeps } from './proximity';
 
 export interface TenantRoutesDeps
   extends
@@ -29,7 +30,8 @@ export interface TenantRoutesDeps
     PaymentRoutesDeps,
     LoyaltyRoutesDeps,
     AmbassadorRoutesDeps,
-    CardRoutesDeps {
+    CardRoutesDeps,
+    ProximityRoutesDeps {
   readonly admin: AdminStore;
   readonly tenants: TenantStore;
   readonly restaurants: RestaurantStore;
@@ -144,6 +146,7 @@ export function tenantRoutes(deps: TenantRoutesDeps) {
   registerLoyaltyRoutes(app, deps);
   registerAmbassadorRoutes(app, deps);
   registerCardRoutes(app, deps);
+  registerProximityRoutes(app, deps);
 
   return app;
 }

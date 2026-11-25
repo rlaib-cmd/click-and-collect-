@@ -86,11 +86,16 @@ export function createNotificationSender(options: {
 }
 
 export function createFakeNotificationSender() {
-  const pushes: { tokens: readonly string[]; title: string; body: string }[] = [];
+  const pushes: {
+    tokens: readonly string[];
+    title: string;
+    body: string;
+    data: Record<string, string>;
+  }[] = [];
   const emails: { to: string; subject: string; text: string }[] = [];
   const sender: NotificationSender = {
     push(tokens, m) {
-      pushes.push({ tokens, title: m.title, body: m.body });
+      pushes.push({ tokens, title: m.title, body: m.body, data: m.data });
       return Promise.resolve();
     },
     email(to, m) {

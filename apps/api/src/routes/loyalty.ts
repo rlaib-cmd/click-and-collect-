@@ -53,7 +53,7 @@ const asLoyaltyTenant = (t: TenantWithTheme): LoyaltyTenant => ({
 });
 
 /** Lit « Authorization: Bearer <jeton de membre> ». */
-const bearerMember = (c: Context) =>
+export const bearerMember = (c: Context) =>
   /^Bearer (m2\.(?:[0-9a-f-]{36}|\d{1,18})\.[0-9a-z]{1,13}\.\d{1,6}\.[A-Za-z0-9_-]{20,100})$/i.exec(
     c.req.header('Authorization') ?? '',
   )?.[1];

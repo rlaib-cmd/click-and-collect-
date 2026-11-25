@@ -32,6 +32,7 @@ const PROBES: Record<
     method: 'POST',
     path: '/ambassador/entries/00000000-0000-4000-8000-0000000000ff/validate',
   },
+  proximity: { method: 'GET', path: '/proximity' },
   dashboard: { method: 'GET', path: '/dashboard' },
   customers: { method: 'GET', path: '/customers' },
   audit: { method: 'GET', path: '/audit' },

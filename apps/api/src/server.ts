@@ -29,6 +29,7 @@ import {
   createPostgresSplash360Gate,
   createPostgresOtpStore,
   createPostgresMemberSessionStore,
+  createPostgresProximityStore,
 } from '@splash360/db';
 import { createSupabaseVerifier } from './admin/auth';
 import { createSupabaseAssetStorage } from './admin/logo';
@@ -210,6 +211,7 @@ const app = createApp({
         loyalty,
         loyaltyLedger: youfidStore,
         memberSessions: createPostgresMemberSessionStore(sql),
+        proximity: createPostgresProximityStore(sql),
         loyaltyDemoLogin: env.LOYALTY_DEMO_LOGIN === '1' && env.APP_ENV !== 'production',
         ...(env.LOYALTY_OTP === '1'
           ? {
@@ -282,8 +284,21 @@ const ambassador = setInterval(() => {
     );
 }, 60_000);
 
+// Bons plans à proximité (lot 22) : événements de plus de 90 jours effacés, toutes les heures.
+const proximityPurge = setInterval(() => {
+  app
+    .runProximityPurge()
+    .then((n) => {
+      if (n > 0) jsonLog('info', 'Événements « à proximité » purgés', { count: n });
+    })
+    .catch((error: unknown) =>
+      jsonLog('error', 'Purge « à proximité » en échec', { error: String(error) }),
+    );
+}, 3_600_000);
+
 function shutdown() {
   clearInterval(expiry);
+  clearInterval(proximityPurge);
   clearInterval(dispatcher);
   clearInterval(ambassador);
   server.close();

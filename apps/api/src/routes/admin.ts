@@ -27,6 +27,8 @@ import {
   type AdminOrderDetail,
   type ClubMemberDto,
   loyaltySettingsSchema,
+  proximitySettingsSchema,
+  type AdminProximityDto,
   type LoyaltyOperationDto,
   type LoyaltySettingsResponse,
   type Dashboard,
@@ -40,6 +42,7 @@ import type {
   PromoAdminStore,
   OperationsStore,
   OrderReader,
+  ProximityStore,
   PaymentStore,
   RestaurantStore,
   TenantStore,
@@ -99,6 +102,8 @@ export interface AdminRoutesDeps extends NotifyDeps {
         'operationsToReview' | 'resolveOperation' | 'getProgramSettings' | 'saveProgramSettings'
       >
     | undefined;
+  /** Notifications à proximité (lot 22, ADR 0027) ; absent = page indisponible. */
+  readonly proximity?: ProximityStore | undefined;
   /** Comptes YouFID du serveur (lot 21) ; null : aucun compte configuré. */
   readonly youfid?: Pick<YoufidRegistry, 'has' | 'probe'> | null | undefined;
   /** URL publique du back-office (retours de l'inscription Stripe). */
@@ -1291,7 +1296,39 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     if (!cl) return apiError(c, 'not_found', 'Pas de club fidélité');
     if (!(await cl.provider.deleteMember(cl.ref, c.req.param('id'))))
       return apiError(c, 'not_found', 'Membre inconnu');
+    // Appareils et événements « à proximité » du membre effacés avec lui (lot 22).
+    await deps.proximity?.forgetMember(tenantId(c), c.req.param('id'));
     await audit(c, 'loyalty.member.delete', c.req.param('id'));
+    return c.body(null, 204);
+  });
+
+  // ——— Bons plans à proximité (lot 22, ADR 0027) : règles et statistiques ———
+  app.get('/proximity', async (c) => {
+    const denied = allow(c, 'proximity');
+    if (denied) return denied;
+    if (!deps.proximity) return apiError(c, 'not_found', 'Fonction indisponible');
+    const [settings, stats] = await Promise.all([
+      deps.proximity.getSettings(tenantId(c)),
+      deps.proximity.stats(tenantId(c), deps.now?.() ?? new Date()),
+    ]);
+    const body: AdminProximityDto = { settings, stats };
+    c.header('Cache-Control', 'no-store');
+    return c.json(body);
+  });
+
+  app.put('/proximity/settings', async (c) => {
+    const denied = allow(c, 'proximity');
+    if (denied) return denied;
+    if (!deps.proximity) return apiError(c, 'not_found', 'Fonction indisponible');
+    const parsed = proximitySettingsSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success)
+      return apiError(c, 'invalid_request', parsed.error.issues[0]?.message ?? 'Règles invalides');
+    await deps.proximity.saveSettings(tenantId(c), parsed.data);
+    await audit(c, 'proximity.settings', null, {
+      enabled: parsed.data.enabled,
+      radiusMeters: parsed.data.radiusMeters,
+      target: parsed.data.target,
+    });
     return c.body(null, 204);
   });
 

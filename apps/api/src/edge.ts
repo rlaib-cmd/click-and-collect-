@@ -39,6 +39,7 @@ import {
   type Sql,
   createPostgresOtpStore,
   createPostgresMemberSessionStore,
+  createPostgresProximityStore,
 } from '@splash360/db';
 import { Hono } from 'hono';
 import { corsOriginsFrom } from './http/cors';
@@ -293,6 +294,7 @@ function build() {
     loyaltyLedger: youfidStore,
     youfid,
     memberSessions: createPostgresMemberSessionStore(sql),
+    proximity: createPostgresProximityStore(sql),
     // Connexion de démonstration sans code : seulement si demandée explicitement, hors production
     // (désactivée par défaut, audit du 25/11).
     loyaltyDemoLogin: env('LOYALTY_DEMO_LOGIN') === '1' && appEnv !== 'production',
@@ -352,6 +354,7 @@ let inFlight = 0;
 let lastExpiry = 0;
 let lastDispatch = 0;
 let lastAmbassador = 0;
+let lastProximityPurge = 0;
 
 /**
  * Tâche de fond (envois en caisse, expirations) : comptée comme une requête en cours, pour que les
@@ -406,6 +409,11 @@ root.use('*', async (c, next) => {
   if (clientTraffic && now - lastAmbassador > 60_000) {
     lastAmbassador = now;
     background('ambassadeur', current.app.runAmbassador());
+  }
+  // Bons plans à proximité (lot 22) : purge des événements de plus de 90 jours, une fois par heure.
+  if (clientTraffic && now - lastProximityPurge > 3_600_000) {
+    lastProximityPurge = now;
+    background('proximité', current.app.runProximityPurge());
   }
   inFlight += 1;
   try {

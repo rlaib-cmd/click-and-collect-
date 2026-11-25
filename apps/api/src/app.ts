@@ -1,4 +1,9 @@
-import type { MemberSessionStore, PosSalesStore, StripeCustomerStore } from '@splash360/db';
+import type {
+  MemberSessionStore,
+  PosSalesStore,
+  ProximityStore,
+  StripeCustomerStore,
+} from '@splash360/db';
 import type { LoyaltyProvider } from '@splash360/api-loyalty';
 import type { AuthInviter } from './admin/invite';
 import type { MenuCache } from '@splash360/api-menu';
@@ -22,6 +27,7 @@ import { withRewardCategories } from './loyalty/reward-settings';
 import { processDispatches } from './pos/dispatcher';
 import type { PosGateway } from './pos/gateway';
 import type { PosTiming } from './pos/handshake';
+import { purgeProximityEvents } from './proximity/service';
 import { posRoutes } from './routes/pos';
 import type { TokenVerifier } from './admin/auth';
 import { adminRoutes, type AdminRoutesDeps, type Splash360Probe } from './routes/admin';
@@ -129,6 +135,8 @@ export interface AppDeps {
   readonly stripeCustomers?: StripeCustomerStore | undefined;
   /** Adresse de retour 3-D Secure de l'app web (paiement avec carte enregistrée). */
   readonly clientAppUrl?: string | undefined;
+  /** Notifications « Bons plans à proximité » (lot 22, ADR 0027) ; absent = désactivées. */
+  readonly proximity?: ProximityStore | undefined;
 }
 
 /**
@@ -215,6 +223,8 @@ export function createApp(input: AppDeps) {
     '/v1/tenants/:s/loyalty/otp/start',
     '/v1/tenants/:s/loyalty/otp/verify',
     '/v1/tenants/:s/ambassador/entries',
+    // Entrée dans la zone d'un restaurant (lot 22) : un appel par zone franchie, au plus.
+    '/v1/tenants/:s/proximity/enter',
   ]) {
     app.on('POST', path, strict);
   }
@@ -334,6 +344,7 @@ export function createApp(input: AppDeps) {
       loyalty: deps.loyalty,
       ambassador: deps.ambassador,
       loyaltyLedger: deps.loyaltyLedger,
+      proximity: deps.proximity,
       youfid: deps.youfid ?? null,
       adminUrl: deps.adminUrl ?? 'http://localhost:3000',
       inviter: deps.inviter ?? null,
@@ -375,6 +386,7 @@ export function createApp(input: AppDeps) {
         log: warn,
       },
       previewSecret,
+      proximityLog: warn,
       now: deps.now ?? (() => new Date()),
     }),
   );
@@ -430,5 +442,14 @@ export function createApp(input: AppDeps) {
     );
     return { ...processed, tickets };
   };
-  return Object.assign(app, { runDispatches: () => processDispatches(dispatch), runAmbassador });
+  // Bons plans à proximité (lot 22) : événements effacés au bout de 90 jours (pas de pg_cron).
+  const runProximityPurge = () =>
+    deps.proximity
+      ? purgeProximityEvents(deps.proximity, deps.now?.() ?? new Date())
+      : Promise.resolve(0);
+  return Object.assign(app, {
+    runDispatches: () => processDispatches(dispatch),
+    runAmbassador,
+    runProximityPurge,
+  });
 }
