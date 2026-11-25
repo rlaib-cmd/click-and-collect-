@@ -151,7 +151,8 @@ const sms = createSmsSender({ brevoApiKey: brevoKey, log });
 const appEnv = env('APP_ENV') ?? 'recette';
 
 function build() {
-  const sql = createSql(databaseUrl, { max: 3, idleTimeout: 10 });
+  // 2 connexions par copie de la fonction : la base directe n'en accepte que 60 au total.
+  const sql = createSql(databaseUrl, { max: 2, idleTimeout: 10 });
   const payments = createPostgresPaymentStore(sql);
   const app = createApp({
     tenants: createPostgresTenantStore(sql),
@@ -246,18 +247,21 @@ function background(task: Promise<unknown>) {
 }
 
 const root = new Hono();
-root.use('*', async (_c, next) => {
+root.use('*', async (c, next) => {
   const now = Date.now();
+  // Les tâches de fond (envoi en caisse, expirations) ne partent que du trafic client : une
+  // requête du back-office, même en boucle, ne doit pas déclencher de travail sur la base.
+  const clientTraffic = !new URL(c.req.url).pathname.includes('/v1/admin/');
   if (inFlight === 0 && now - lastActivity > IDLE_RESET_MS) {
     const old = current.sql;
     current = build();
     void old.end({ timeout: 5 }).catch(() => undefined);
   }
-  if (now - lastExpiry > 60_000) {
+  if (clientTraffic && now - lastExpiry > 60_000) {
     lastExpiry = now;
     background(expireUnpaidOrders({ payments: current.payments, gateway, log }, new Date()));
   }
-  if (now - lastDispatch > 10_000) {
+  if (clientTraffic && now - lastDispatch > 10_000) {
     lastDispatch = now;
     background(current.app.runDispatches());
   }

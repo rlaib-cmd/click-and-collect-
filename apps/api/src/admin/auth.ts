@@ -57,11 +57,23 @@ export function requireStaff(deps: {
   admin: AdminStore;
   tenants: TenantStore;
 }): MiddlewareHandler<AdminEnv> {
+  // Comptes du back-office gardés 30 s par copie du serveur : un onglet qui recharge en boucle
+  // ne relit pas la base à chaque requête pour savoir qui il est.
+  const cache = new Map<string, { at: number; value: StaffUser[] }>();
   return async (c, next) => {
     const token = /^Bearer (.+)$/.exec(c.req.header('Authorization') ?? '')?.[1];
     const user = token ? await deps.verifier.verify(token) : null;
     if (!user) return apiError(c, 'unauthorized', 'Connexion requise');
-    const memberships = await deps.admin.resolveStaff(user.userId, user.email);
+    const now = Date.now();
+    const hit = cache.get(user.userId);
+    let memberships: StaffUser[];
+    if (hit && now - hit.at < 30_000) {
+      memberships = hit.value;
+    } else {
+      memberships = [...(await deps.admin.resolveStaff(user.userId, user.email))];
+      if (cache.size > 1000) cache.clear();
+      cache.set(user.userId, { at: now, value: memberships });
+    }
     if (memberships.length === 0)
       return apiError(c, 'forbidden', "Ce compte n'a pas accès au back-office");
 
