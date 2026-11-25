@@ -73,6 +73,9 @@ const envSchema = z.object({
   SPLASH360_ORDERS_API_URL: z.url().optional(),
   SPLASH360_ORDERS_CLIENT_ID: z.string().min(1).optional(),
   SPLASH360_ORDERS_CLIENT_SECRET: z.string().min(1).optional(),
+  /** Identifiants propres à la carte, si Splash360 en fournit (les deux ou aucun). */
+  SPLASH360_MENU_CLIENT_ID: z.string().min(1).optional(),
+  SPLASH360_MENU_CLIENT_SECRET: z.string().min(1).optional(),
   /** Taux de TVA des frais envoyés à la caisse (à confirmer avec Splash360). */
   SPLASH360_FEE_VAT_RATE: z.coerce.number().min(0).max(1).default(0.2),
   /** Attente maximale de la caisse avant paiement, puis après paiement. */

@@ -160,6 +160,25 @@ describe('client Splash360', () => {
     expect(server.calls.at(-1)?.headers.Authorization).toBe('Bearer tok-v');
   });
 
+  it('utilise les identifiants dédiés à la carte quand ils sont fournis, et les principaux pour la caisse', async () => {
+    const server = fakeServer({
+      '/oauth/v2/token': (c) =>
+        token(c.headers.Authorization === `Basic ${btoa('carte:s3')}` ? 'tok-c' : 'tok-m')(),
+      '/api/export/v2/menus': () => ({ status: 200, body: {} }),
+      '/api/export/cmdstatus/T1': () => ({ status: 200, body: { ccstatus: 'pending' } }),
+    });
+    const client = createSplash360Client({
+      ...creds,
+      menuClientId: 'carte',
+      menuClientSecret: 's3',
+      fetch: server.fetch,
+    });
+    await client.getMenus();
+    expect(server.calls.at(-1)?.headers.Authorization).toBe('Bearer tok-c');
+    await client.getCommandeStatus('T1');
+    expect(server.calls.at(-1)?.headers.Authorization).toBe('Bearer tok-m');
+  });
+
   it('refuse un second export des ventes dans la minute, puis l’autorise', async () => {
     let clock = 1_000_000;
     const server = fakeServer({

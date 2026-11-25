@@ -28,6 +28,12 @@ export interface Splash360Credentials {
    * (SPLASH360_ORDERS_CLIENT_ID / _SECRET), repli sur les identifiants principaux.
    */
   readonly ordersClientId?: string;
+  /**
+   * Carte (`/api/export/v2/menus`) : identifiants distincts possibles, fournis par Splash360
+   * pour le restaurant (SPLASH360_MENU_CLIENT_ID / _SECRET), repli sur les identifiants principaux.
+   */
+  readonly menuClientId?: string;
+  readonly menuClientSecret?: string;
   readonly ordersClientSecret?: string;
   /** Serveur de l'export des ventes (défaut https://api2.splash360.fr). */
   readonly ordersBaseUrl?: string;
@@ -315,6 +321,10 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
     ordersClientId && ordersClientSecret
       ? tokenSource(ordersClientId, ordersClientSecret)
       : mainToken;
+  const menuClientId = options.menuClientId?.trim();
+  const menuClientSecret = options.menuClientSecret?.trim();
+  const menuToken =
+    menuClientId && menuClientSecret ? tokenSource(menuClientId, menuClientSecret) : mainToken;
   const ordersBase = (options.ordersBaseUrl?.trim() || SPLASH360_DEFAULT_ORDERS_URL).replace(
     /\/+$/,
     '',
@@ -367,12 +377,12 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
   }
 
   return {
-    getMenus: () => authorized(menuPath),
+    getMenus: () => authorized(menuPath, {}, menuToken),
     getMenusAt: (path) => {
       if (!/^\/api\/export\/[a-z0-9/_-]+$/i.test(path)) {
         return Promise.reject(new Splash360Error('Chemin de carte refusé', null, false));
       }
-      return authorized(path);
+      return authorized(path, {}, menuToken);
     },
 
     async submitCommande(commande) {
@@ -439,6 +449,8 @@ export function splash360CredentialsFrom(
   const ordersClientId = optional('SPLASH360_ORDERS_CLIENT_ID');
   const ordersClientSecret = optional('SPLASH360_ORDERS_CLIENT_SECRET');
   const ordersBaseUrl = optional('SPLASH360_ORDERS_API_URL');
+  const menuClientId = optional('SPLASH360_MENU_CLIENT_ID');
+  const menuClientSecret = optional('SPLASH360_MENU_CLIENT_SECRET');
   return {
     baseUrl: optional('SPLASH360_API_URL') ?? 'https://api.splash360.fr',
     clientId,
@@ -448,5 +460,6 @@ export function splash360CredentialsFrom(
     ...(menuPath ? { menuPath } : {}),
     ...(ordersClientId && ordersClientSecret ? { ordersClientId, ordersClientSecret } : {}),
     ...(ordersBaseUrl ? { ordersBaseUrl } : {}),
+    ...(menuClientId && menuClientSecret ? { menuClientId, menuClientSecret } : {}),
   };
 }
