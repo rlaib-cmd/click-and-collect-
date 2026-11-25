@@ -1,4 +1,4 @@
-import type { MemberSessionStore, StripeCustomerStore } from '@splash360/db';
+import type { MemberSessionStore, PosSalesStore, StripeCustomerStore } from '@splash360/db';
 import type { LoyaltyProvider } from '@splash360/api-loyalty';
 import type { AuthInviter } from './admin/invite';
 import type { MenuCache } from '@splash360/api-menu';
@@ -40,6 +40,11 @@ import { settleLoyalty } from './loyalty/settle';
 import { processAmbassadorEntries, type StoryChecker } from './loyalty/ambassador';
 import type { PhotoAnalyzer } from './loyalty/photo-check';
 import type { TicketReader } from './loyalty/ticket-read';
+import {
+  verifyAmbassadorTickets,
+  type SalesSource,
+  type TicketCheckRun,
+} from './loyalty/ticket-check';
 import { MAX_PHOTO_BYTES } from '@splash360/contracts';
 import { tenantRoutes } from './routes/tenants';
 import { webhookRoutes } from './routes/webhooks';
@@ -101,6 +106,10 @@ export interface AppDeps {
   readonly photoAnalyzer?: PhotoAnalyzer;
   /** Lecture du ticket photographié (lot 20) ; absente = le client tape le numéro. */
   readonly ticketReader?: TicketReader;
+  /** Copie des ventes Splash360 pour l'« achat vérifié » (lot 20) ; absente = non vérifié. */
+  readonly posSales?: PosSalesStore;
+  /** Export des ventes Splash360 (lot 20) ; null = identifiants absents, tickets « à vérifier ». */
+  readonly salesSource?: SalesSource | null;
   /** Contrôle « story toujours en ligne » (lot 17) ; absent = réputée en ligne (en attendant Meta). */
   readonly storyChecker?: StoryChecker;
   /** Connexion au club par simple e-mail : données de test uniquement (ADR 0009). */
@@ -376,18 +385,44 @@ export function createApp(input: AppDeps) {
   });
 
   // Tâches périodiques (serveur Node) ou au fil des requêtes (Edge) : suite des envois en caisse,
-  // contrôles et crédits « Ambassadeur » échus (lot 17).
-  const runAmbassador = () =>
-    deps.ambassador && deps.loyalty
-      ? processAmbassadorEntries(
-          {
-            ambassador: deps.ambassador,
-            loyalty: deps.loyalty,
-            ...(deps.storyChecker ? { storyChecker: deps.storyChecker } : {}),
-            log: warn,
-          },
-          deps.now?.() ?? new Date(),
-        )
-      : Promise.resolve({ checked: 0, credited: 0, rejected: 0 });
+  // contrôles et crédits « Ambassadeur » échus (lot 17), précédés du rapprochement des tickets
+  // photographiés avec les ventes Splash360 (lot 20).
+  const noTickets: TicketCheckRun = {
+    fetched: false,
+    verified: 0,
+    unpaid: 0,
+    notFound: 0,
+    flagged: 0,
+  };
+  const runAmbassador = async () => {
+    const ambassador = deps.ambassador;
+    const loyalty = deps.loyalty;
+    if (!ambassador || !loyalty)
+      return { checked: 0, credited: 0, rejected: 0, tickets: noTickets };
+    const now = deps.now?.() ?? new Date();
+    const tickets = await verifyAmbassadorTickets(
+      {
+        ambassador,
+        restaurants: deps.restaurants,
+        sales: deps.posSales,
+        source: deps.salesSource,
+        log: warn,
+      },
+      now,
+    ).catch((error: unknown) => {
+      warn('Vérification des tickets ambassadeur en échec', { error: String(error) });
+      return noTickets;
+    });
+    const processed = await processAmbassadorEntries(
+      {
+        ambassador,
+        loyalty,
+        ...(deps.storyChecker ? { storyChecker: deps.storyChecker } : {}),
+        log: warn,
+      },
+      now,
+    );
+    return { ...processed, tickets };
+  };
   return Object.assign(app, { runDispatches: () => processDispatches(dispatch), runAmbassador });
 }

@@ -4,11 +4,12 @@ import type {
   AmbassadorEntryDto,
   AmbassadorStage,
 } from '@splash360/contracts';
-import type {
-  AmbassadorEntry,
-  AmbassadorEvent,
-  AmbassadorStore,
-  StoryCheckResult,
+import {
+  TICKET_CHECKS_BLOCKING_CREDIT,
+  type AmbassadorEntry,
+  type AmbassadorEvent,
+  type AmbassadorStore,
+  type StoryCheckResult,
 } from '@splash360/db';
 
 export interface AmbassadorDeps {
@@ -203,6 +204,9 @@ export async function processAmbassadorEntries(
           continue;
         }
       }
+      // Ticket photographié pas encore vérifié, introuvable ou impayé : jamais de crédit
+      // automatique (lot 20) ; l'équipe garde « Valider maintenant » et « Refuser ».
+      if (TICKET_CHECKS_BLOCKING_CREDIT.includes(current.ticketCheck)) continue;
       if (current.checkedAt && current.creditDueAt && current.creditDueAt <= now) {
         const r = await confirmAmbassadorEntry(
           deps,

@@ -13,6 +13,7 @@ import {
 import {
   createPostgresAdminStore,
   createPostgresAmbassadorStore,
+  createPostgresPosSalesStore,
   createPostgresPromoStore,
   createPostgresDemoLoyaltyStore,
   createPostgresOperationsStore,
@@ -42,7 +43,7 @@ import { createNotificationSender } from './notifications/sender';
 import { createStripeCardGateway } from './payments/cards';
 import { createStripeGateway } from './payments/gateway';
 import { createDemoPosGateway, createRoutingPosGateway } from './pos/gateway';
-import { createSplash360PosGateway, splash360Probe } from './pos/splash360';
+import { createSplash360PosGateway, splash360Probe, splash360SalesSource } from './pos/splash360';
 import { expireUnpaidOrders } from './payments/service';
 
 const env = loadEnv();
@@ -137,6 +138,9 @@ const app = createApp({
   admin: createPostgresAdminStore(sql),
   promos: createPostgresPromoStore(sql),
   ambassador: createPostgresAmbassadorStore(sql),
+  // Achat vérifié (lot 20) : copie des ventes et export Splash360 (sans identifiants : à vérifier).
+  posSales: createPostgresPosSalesStore(sql),
+  salesSource: splash360Client ? splash360SalesSource(splash360Client) : null,
   // Sans clé : la photo est « à vérifier » par l'équipe (aucune clé dans le dépôt).
   ...(env.ANTHROPIC_API_KEY
     ? {
@@ -247,7 +251,9 @@ const ambassador = setInterval(() => {
   app
     .runAmbassador()
     .then((r) => {
-      if (r.checked + r.credited + r.rejected > 0) jsonLog('info', 'Ambassadeur traité', { ...r });
+      const t = r.tickets;
+      if (r.checked + r.credited + r.rejected + t.verified + t.unpaid + t.notFound + t.flagged > 0)
+        jsonLog('info', 'Ambassadeur traité', { ...r });
     })
     .catch((error: unknown) =>
       jsonLog('error', 'Tâche ambassadeur en échec', { error: String(error) }),

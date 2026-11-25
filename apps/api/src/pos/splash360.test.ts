@@ -4,7 +4,13 @@ import { cents } from '@splash360/core';
 import type { OrderDetail, Restaurant } from '@splash360/db';
 import { describe, expect, it } from 'vitest';
 import { PosRejectedError } from './gateway';
-import { createSplash360PosGateway, euros, splitName, toSplash360Commande } from './splash360';
+import {
+  createSplash360PosGateway,
+  euros,
+  splash360SalesSource,
+  splitName,
+  toSplash360Commande,
+} from './splash360';
 
 const restaurant = { id: 'r1', splash360Live: true } as Restaurant;
 
@@ -211,5 +217,57 @@ describe('caisse Splash360', () => {
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(PosRejectedError);
     expect(error).toMatchObject({ retryable: false });
+  });
+});
+
+describe('export des ventes pour l’achat vérifié (lot 20)', () => {
+  const base: Splash360Client = {
+    getMenus: () => Promise.resolve({}),
+    getMenusAt: () => Promise.resolve({}),
+    listSales: () => Promise.resolve({}),
+    submitCommande: () => Promise.resolve({ ticketId: 't' }),
+    getCommandeStatus: () => Promise.resolve({}),
+    submitPaiement: () => Promise.resolve(),
+  };
+
+  it('demande une journée entière, ventes encaissées et annulées, 100 par page', async () => {
+    const queries: unknown[] = [];
+    const source = splash360SalesSource({
+      ...base,
+      listSales(q) {
+        queries.push(q);
+        return Promise.resolve({ data: [], pagination: { hasNextPage: false } });
+      },
+    });
+    expect(await source.fetchPage('2026-11-24', 2)).toEqual({
+      ok: true,
+      page: { sales: [], hasNextPage: false, skipped: 0 },
+    });
+    expect(queries).toEqual([
+      {
+        fromDate: '2026-11-24',
+        toDate: '2026-11-24',
+        status: 'confirmed,deleted',
+        page: 2,
+        pageSize: 100,
+      },
+    ]);
+  });
+
+  it('pause d’une minute (429) distinguée d’une panne ou d’un format inconnu', async () => {
+    const failing = (error: Error) =>
+      splash360SalesSource({ ...base, listSales: () => Promise.reject(error) });
+    const wait = new Splash360Error('un export par minute', 429, true, 30_000);
+    expect(await failing(wait).fetchPage('2026-11-24', 0)).toMatchObject({
+      ok: false,
+      reason: 'rate_limited',
+    });
+    const down = new Splash360Error('HTTP 500', 500, true);
+    expect(await failing(down).fetchPage('2026-11-24', 0)).toMatchObject({
+      ok: false,
+      reason: 'error',
+    });
+    const odd = splash360SalesSource({ ...base, listSales: () => Promise.resolve({ x: 1 }) });
+    expect(await odd.fetchPage('2026-11-24', 0)).toMatchObject({ ok: false, reason: 'error' });
   });
 });

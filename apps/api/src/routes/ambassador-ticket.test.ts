@@ -12,10 +12,15 @@ import {
   loyaltySessionSchema,
   ticketPhotoResponseSchema,
 } from '@splash360/contracts';
-import { createMemoryAmbassadorStore } from '@splash360/db';
+import {
+  createMemoryAmbassadorStore,
+  createMemoryPosSalesStore,
+  createMemoryRestaurantStore,
+} from '@splash360/db';
 import { describe, expect, it } from 'vitest';
+import type { SalesFetchResult, SalesSource } from '../loyalty/ticket-check';
 import type { TicketReader, TicketReading } from '../loyalty/ticket-read';
-import { BELLA_ID, sessionToken, testSetup } from '../test-fixtures';
+import { BELLA_ID, BELLA_RESTO, NOW, restaurants, sessionToken, testSetup } from '../test-fixtures';
 
 /** Lot 20 (ADR 0025) : « Achat vérifié », ticket de caisse photographié et lu par l'IA. */
 const programs = new Map<string, LoyaltyProgram>([
@@ -42,7 +47,7 @@ function fakeReader(result: Partial<TicketReading> = {}) {
   return { reader, seen };
 }
 
-function setup(reader?: TicketReader) {
+function setup(reader?: TicketReader, extra: { salesSource?: SalesSource; now?: () => Date } = {}) {
   let n = 0;
   const loyalty = createDemoLoyaltyProvider(
     createMemoryDemoLoyaltyStore(),
@@ -59,6 +64,15 @@ function setup(reader?: TicketReader) {
     ambassador,
     ...(reader ? { ticketReader: reader } : {}),
     rateLimits: { orders: 50, reads: 5000, photos: 50 },
+    // Bella branchée sur Splash360 (restaurant 164) : ses ventes servent au rapprochement.
+    restaurants: createMemoryRestaurantStore(
+      restaurants.map((r) =>
+        r.id === BELLA_RESTO ? { ...r, splash360Id: '164', splash360Live: true } : r,
+      ),
+    ),
+    posSales: createMemoryPosSalesStore(),
+    ...(extra.salesSource ? { salesSource: extra.salesSource } : {}),
+    ...(extra.now ? { now: extra.now } : {}),
   });
   return { ...s, loyalty, ambassador };
 }
@@ -253,5 +267,121 @@ describe('achat vérifié : participation avec le ticket photographié (lot 20)'
       ticketRef: 'BB4002',
       ticketCheck: 'unverified',
     });
+  });
+});
+
+describe('achat vérifié : crédit des points (lot 20)', () => {
+  const HOUR = 3600_000;
+  /** Export simulé : une vente du 24/11 (numéro, statut), ou une réponse imposée. */
+  function source(numero: string | null, status: 'confirmed' | 'deleted' = 'confirmed') {
+    let forced: SalesFetchResult | null = null;
+    const calls: number[] = [];
+    const salesSource: SalesSource = {
+      fetchPage(_jour, page) {
+        calls.push(page);
+        if (forced) return Promise.resolve(forced);
+        const sales = numero
+          ? [
+              {
+                ticketId: 'v-1',
+                restaurantId: '164',
+                jourComptable: '2026-11-24',
+                numero,
+                status,
+                totalCents: 1230,
+              },
+            ]
+          : [];
+        return Promise.resolve({ ok: true, page: { sales, hasNextPage: false, skipped: 0 } });
+      },
+    };
+    return {
+      salesSource,
+      calls,
+      force(r: SalesFetchResult | null) {
+        forced = r;
+      },
+    };
+  }
+
+  /** Ticket photographié le 24/11, puis « Mention reçue » : contrôle à +20 h, crédit à +24 h. */
+  async function participate(src: ReturnType<typeof source>) {
+    let clock = NOW;
+    const s = setup(fakeReader().reader, { salesSource: src.salesSource, now: () => clock });
+    const token = await join(s);
+    const photo = ticketPhotoResponseSchema.parse(await (await ticketPhoto(s, token)).json());
+    const res = await enter(s, token, { ticketPhoto: photo.token });
+    const id = ambassadorEntrySchema.parse(await res.json()).id;
+    const mention = await s.app.request(`/v1/admin/ambassador/entries/${id}/mention`, {
+      method: 'POST',
+      headers: {
+        ...json,
+        Authorization: `Bearer ${await sessionToken('manager@bella.test')}`,
+        'X-Tenant-Id': BELLA_ID,
+      },
+      body: '{}',
+    });
+    expect(mention.status).toBe(200);
+    const memberId = s.ambassador.entries[0]?.memberId ?? '';
+    const points = async () =>
+      (await s.loyalty.getMember({ id: BELLA_ID, splash360Id: 'S360-DEMO-BELLA' }, memberId))
+        ?.points ?? 0;
+    const before = await points();
+    return {
+      s,
+      gained: async () => (await points()) - before,
+      at: (hours: number) => {
+        clock = new Date(NOW.getTime() + hours * HOUR);
+      },
+    };
+  }
+
+  it('achat vérifié : points crédités à l’échéance', async () => {
+    const src = source('6');
+    const p = await participate(src);
+    p.at(25);
+    const r = await p.s.app.runAmbassador();
+    expect(r.tickets).toMatchObject({ verified: 1, fetched: true });
+    expect(r.credited).toBe(1);
+    expect(await p.gained()).toBe(50);
+    expect(p.s.ambassador.entries[0]).toMatchObject({
+      ticketCheck: 'verified',
+      status: 'confirmed',
+    });
+  });
+
+  it('jamais de crédit automatique tant que le ticket est à vérifier ou introuvable', async () => {
+    const src = source(null);
+    src.force({ ok: false, reason: 'rate_limited', message: '429' });
+    const p = await participate(src);
+    p.at(25);
+    const r1 = await p.s.app.runAmbassador();
+    expect(r1).toMatchObject({ checked: 1, credited: 0 });
+    expect(p.s.ambassador.entries[0]?.ticketCheck).toBe('pending');
+    p.at(30);
+    expect((await p.s.app.runAmbassador()).credited).toBe(0);
+    // Journée lue en entier, la commande n'y est pas : introuvable, l'équipe tranche.
+    src.force(null);
+    const r3 = await p.s.app.runAmbassador();
+    expect(r3.tickets.notFound).toBe(1);
+    expect(r3.credited).toBe(0);
+    p.at(48);
+    expect((await p.s.app.runAmbassador()).credited).toBe(0);
+    expect(await p.gained()).toBe(0);
+    expect(p.s.ambassador.entries[0]).toMatchObject({
+      ticketCheck: 'not_found',
+      needsReview: true,
+      status: 'pending',
+    });
+  });
+
+  it('commande annulée en caisse : participation refusée, aucun point', async () => {
+    const p = await participate(source('6', 'deleted'));
+    p.at(25);
+    const r = await p.s.app.runAmbassador();
+    expect(r.tickets.unpaid).toBe(1);
+    expect(r.credited).toBe(0);
+    expect(await p.gained()).toBe(0);
+    expect(p.s.ambassador.entries[0]).toMatchObject({ ticketCheck: 'unpaid', status: 'rejected' });
   });
 });

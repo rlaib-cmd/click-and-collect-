@@ -1,5 +1,6 @@
 import {
   readCommandeStatus,
+  readSalesPage,
   Splash360Error,
   SPLASH360_DEFAULT_MENU_PATH,
   toMenu,
@@ -8,6 +9,7 @@ import {
 } from '@splash360/api-menu';
 import type { OrderDetail, Restaurant } from '@splash360/db';
 import type { Splash360Probe } from '../routes/admin';
+import type { SalesSource } from '../loyalty/ticket-check';
 import { PosRejectedError, type PosGateway } from './gateway';
 
 export interface Splash360PosOptions {
@@ -186,5 +188,31 @@ export function splash360Probe(client: Splash360Client, baseUrl: string): Splash
     rawMenu: () => client.getMenusAt(SPLASH360_DEFAULT_MENU_PATH),
     rawSales: (date) =>
       client.listSales({ fromDate: date, toDate: date, status: 'confirmed,deleted', pageSize: 5 }),
+  };
+}
+
+/**
+ * Export des ventes pour l'« achat vérifié » (lot 20, ADR 0025) : une page d'une journée,
+ * ventes encaissées et annulées. La pause d'une minute (429) n'est pas une panne.
+ */
+export function splash360SalesSource(client: Splash360Client): SalesSource {
+  return {
+    async fetchPage(jour, page) {
+      try {
+        const body = await client.listSales({
+          fromDate: jour,
+          toDate: jour,
+          status: 'confirmed,deleted',
+          page,
+          pageSize: 100,
+        });
+        return { ok: true, page: readSalesPage(body) };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (error instanceof Splash360Error && error.status === 429)
+          return { ok: false, reason: 'rate_limited', message };
+        return { ok: false, reason: 'error', message };
+      }
+    },
   };
 }

@@ -22,6 +22,7 @@ import {
 import {
   createPostgresAdminStore,
   createPostgresAmbassadorStore,
+  createPostgresPosSalesStore,
   createPostgresPromoStore,
   createPostgresDemoLoyaltyStore,
   createPostgresOperationsStore,
@@ -54,7 +55,7 @@ import { createStripeCardGateway } from './payments/cards';
 import { createStripeGateway } from './payments/gateway';
 import { expireUnpaidOrders } from './payments/service';
 import { createDemoPosGateway, createRoutingPosGateway } from './pos/gateway';
-import { createSplash360PosGateway, splash360Probe } from './pos/splash360';
+import { createSplash360PosGateway, splash360Probe, splash360SalesSource } from './pos/splash360';
 
 declare const Deno: {
   env: { get(name: string): string | undefined };
@@ -243,6 +244,9 @@ function build() {
     admin: createPostgresAdminStore(sql),
     promos: createPostgresPromoStore(sql),
     ambassador: createPostgresAmbassadorStore(sql),
+    // Achat vérifié (lot 20) : copie des ventes et export Splash360 (sans identifiants : à vérifier).
+    posSales: createPostgresPosSalesStore(sql),
+    salesSource: splash360Client ? splash360SalesSource(splash360Client) : null,
     // Sans clé : la photo est « à vérifier » par l'équipe (aucune clé dans le dépôt).
     ...(anthropicKey
       ? {
