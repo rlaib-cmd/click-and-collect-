@@ -56,9 +56,16 @@ export function createMemoryAdminStore(input: {
   const paused = new Set<string>();
 
   const store: AdminStore = {
-    resolveStaff(authUserId, email) {
+    resolveStaff(authUserId, email, attachPending = true) {
       for (const s of staff)
-        if (!s.authUserId && s.email === email.toLowerCase() && !s.disabled)
+        if (
+          attachPending &&
+          !s.authUserId &&
+          s.email === email.toLowerCase() &&
+          !s.disabled &&
+          // Un rattachement par enseigne (comme l'index unique de Postgres).
+          !staff.some((o) => o.authUserId === authUserId && o.tenantId === s.tenantId)
+        )
           s.authUserId = authUserId;
       return Promise.resolve(staff.filter((s) => s.authUserId === authUserId && !s.disabled));
     },
@@ -79,6 +86,9 @@ export function createMemoryAdminStore(input: {
     inviteStaff(i) {
       if (staff.some((s) => s.email === i.email.toLowerCase() && s.tenantId === i.tenantId))
         return Promise.reject(new Error('doublon'));
+      // Adresse d'un super-administrateur : jamais invitée dans une enseigne (audit H1).
+      if (staff.some((s) => s.email === i.email.toLowerCase() && s.role === 'super_admin'))
+        return Promise.reject(new Error('adresse réservée'));
       const s = {
         id: randomUUID(),
         email: i.email.toLowerCase(),

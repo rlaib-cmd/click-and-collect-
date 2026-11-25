@@ -255,7 +255,9 @@ export function adminRoutes(deps: AdminRoutesDeps) {
 
   // ——— Caisse et carte Splash360 (lot 14, ADR 0018) ———
   app.post('/restaurants/:id/splash360', async (c) => {
-    const denied = allow(c, 'payments');
+    // Les accès Splash360 du serveur appartiennent à un restaurant réel : seul le super-administrateur
+    // choisit le restaurant branché (audit du 25/11, M3).
+    const denied = allow(c, 'platform');
     if (denied) return denied;
     const input = await body(c, z.object({ live: z.boolean() }));
     const restaurant = await restaurantFor(c, c.req.param('id'));
@@ -289,9 +291,10 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       await audit(c, 'splash360.test', restaurant.id, { ok: true });
       return c.json({ ok: true, ...result });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await audit(c, 'splash360.test', restaurant.id, { ok: false });
-      return c.json({ ok: false, message });
+      // Détail technique gardé au journal d'audit, jamais renvoyé tel quel (audit du 25/11).
+      const detail = error instanceof Error ? error.message : String(error);
+      await audit(c, 'splash360.test', restaurant.id, { ok: false, detail: detail.slice(0, 300) });
+      return c.json({ ok: false, message: 'Connexion à Splash360 impossible' });
     }
   });
 

@@ -6,7 +6,18 @@ import { apiError } from '../errors';
 
 /** Vérifie un jeton de session Supabase Auth et renvoie l'utilisateur. */
 export interface TokenVerifier {
-  verify(token: string): Promise<{ userId: string; email: string } | null>;
+  verify(token: string): Promise<VerifiedUser | null>;
+}
+
+export interface VerifiedUser {
+  readonly userId: string;
+  readonly email: string;
+  /**
+   * Adresse confirmée (audit du 25/11, M1) : faux pour un compte anonyme ou si Supabase indique
+   * `user_metadata.email_verified: false`. Les projets exigent la confirmation d'e-mail et ont les
+   * inscriptions publiques fermées : c'est la protection principale, ceci en est une seconde.
+   */
+  readonly emailVerified: boolean;
 }
 
 /**
@@ -32,7 +43,9 @@ export function createSupabaseVerifier(options: {
           ...(options.issuer ? { issuer: options.issuer } : {}),
         });
         const email = typeof payload.email === 'string' ? payload.email : null;
-        return payload.sub && email ? { userId: payload.sub, email } : null;
+        const meta = payload.user_metadata as { email_verified?: unknown } | undefined;
+        const emailVerified = payload.is_anonymous !== true && meta?.email_verified !== false;
+        return payload.sub && email ? { userId: payload.sub, email, emailVerified } : null;
       } catch {
         return null;
       }
@@ -74,14 +87,18 @@ export function requireStaff(deps: {
     const user = token ? await deps.verifier.verify(token) : null;
     if (!user) return apiError(c, 'unauthorized', 'Connexion requise');
     const now = Date.now();
-    const hit = cache.get(user.userId);
+    const cacheKey = `${user.userId}:${user.emailVerified ? 'v' : 'n'}`;
+    const hit = cache.get(cacheKey);
     let memberships: StaffUser[];
     if (hit && now - hit.at < 30_000) {
       memberships = hit.value;
     } else {
-      memberships = [...(await deps.admin.resolveStaff(user.userId, user.email))];
+      memberships = [
+        ...(await deps.admin.resolveStaff(user.userId, user.email, user.emailVerified)),
+      ];
       if (cache.size > 1000) cache.clear();
-      cache.set(user.userId, { at: now, value: memberships });
+      // Un compte sans accès n'est pas mis en cache : une invitation fraîche marche tout de suite.
+      if (memberships.length > 0) cache.set(cacheKey, { at: now, value: memberships });
     }
     if (memberships.length === 0)
       return apiError(c, 'forbidden', "Ce compte n'a pas accès au back-office");

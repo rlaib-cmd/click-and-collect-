@@ -44,6 +44,7 @@ describe('caisse Splash360 au back-office', () => {
     const res = await admin(testSetup(), `/restaurants/${BELLA_RESTO}/splash360`, {
       method: 'POST',
       body: { live: true },
+      email: 'admin@splash360.test',
     });
     expect(res.status).toBe(409);
   });
@@ -53,6 +54,7 @@ describe('caisse Splash360 au back-office', () => {
     const on = await admin(setup, `/restaurants/${BELLA_RESTO}/splash360`, {
       method: 'POST',
       body: { live: true },
+      email: 'admin@splash360.test',
     });
     expect(on.status).toBe(204);
     expect((await setup.deps.restaurants.findById(BELLA_ID, BELLA_RESTO))?.splash360Live).toBe(
@@ -61,6 +63,7 @@ describe('caisse Splash360 au back-office', () => {
     await admin(setup, `/restaurants/${BELLA_RESTO}/splash360`, {
       method: 'POST',
       body: { live: false },
+      email: 'admin@splash360.test',
     });
     expect((await setup.deps.restaurants.findById(BELLA_ID, BELLA_RESTO))?.splash360Live).toBe(
       false,
@@ -75,6 +78,7 @@ describe('caisse Splash360 au back-office', () => {
     const res = await admin(setup, `/restaurants/${BELLA_RESTO}/splash360`, {
       method: 'POST',
       body: { live: true },
+      email: 'admin@splash360.test',
     });
     expect(res.status).toBe(409);
     expect((await setup.deps.restaurants.findById(BELLA_ID, BELLA_RESTO))?.splash360Live).toBe(
@@ -84,13 +88,16 @@ describe('caisse Splash360 au back-office', () => {
     expect(await setup.deps.restaurants.setSplash360Live(BELLA_ID, BELLA_RESTO, true)).toBe(true);
   });
 
-  it('réserve le branchement au propriétaire et à Splash360', async () => {
-    const res = await admin(testSetup(), `/restaurants/${BELLA_RESTO}/splash360`, {
-      method: 'POST',
-      body: { live: true },
-      email: 'manager@bella.test',
-    });
-    expect(res.status).toBe(403);
+  it('réserve le branchement au super-administrateur (audit M3), pas au propriétaire', async () => {
+    const setup = testSetup(probe(() => Promise.resolve({ products: 3, categories: 1 })));
+    for (const email of ['manager@bella.test', 'gerant@bella.test']) {
+      const res = await admin(setup, `/restaurants/${BELLA_RESTO}/splash360`, {
+        method: 'POST',
+        body: { live: true },
+        email,
+      });
+      expect(res.status).toBe(403);
+    }
   });
 
   it('teste la connexion et rapporte le résultat ou l’erreur', async () => {
@@ -108,7 +115,7 @@ describe('caisse Splash360 au back-office', () => {
       await (
         await admin(ko, `/restaurants/${BELLA_RESTO}/splash360/test`, { method: 'POST' })
       ).json(),
-    ).toEqual({ ok: false, message: 'Jeton Splash360 refusé (HTTP 400)' });
+    ).toEqual({ ok: false, message: 'Connexion à Splash360 impossible' });
 
     expect(
       await (

@@ -13,7 +13,9 @@ import { LoadError } from '@/components/LoadError';
 const t = messages.admin.payments;
 
 export default function PaymentsPage() {
-  const { auth } = useSession();
+  const { auth, me } = useSession();
+  // Branchement de la vraie caisse : réservé à Splash360 (audit du 25/11, M3).
+  const platform = me.role === 'super_admin';
   const { data, error: loadError, reload } = useApi('/restaurants', restaurantsSchema);
   const [error, setError] = useState<string | null>(null);
   const [tests, setTests] = useState<Record<string, string>>({});
@@ -137,7 +139,7 @@ export default function PaymentsPage() {
                 >
                   {t.pos.test}
                 </button>
-                {r.splash360Live ? (
+                {!platform ? null : r.splash360Live ? (
                   <button type="button" onClick={() => void setLive(r.id, false)}>
                     {t.pos.disconnect}
                   </button>

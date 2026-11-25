@@ -156,8 +156,12 @@ export interface ThemeRecord {
 }
 
 export interface AdminStore {
-  /** Retrouve le compte d'un utilisateur connecté ; le rattache à son identifiant Auth à la première connexion. */
-  resolveStaff(authUserId: string, email: string): Promise<StaffUser[]>;
+  /**
+   * Retrouve les comptes d'un utilisateur connecté. À la première connexion, rattache les
+   * invitations en attente à son identifiant Auth, seulement si son adresse est confirmée
+   * (`attachPending`). Un conflit de rattachement n'empêche jamais la connexion (audit H1).
+   */
+  resolveStaff(authUserId: string, email: string, attachPending?: boolean): Promise<StaffUser[]>;
   listStaff(tenantId: string): Promise<TeamMember[]>;
   /** Change le rôle (et le restaurant) d'un compte de l'enseigne ; jamais un super-administrateur. */
   updateStaffRole(
@@ -273,10 +277,18 @@ export interface AdminStore {
 
 export function createPostgresAdminStore(sql: Sql): AdminStore {
   return {
-    async resolveStaff(authUserId, email) {
+    async resolveStaff(authUserId, email, attachPending = true) {
       const normalized = email.toLowerCase();
-      await sql`update public.staff_users set auth_user_id = ${authUserId}
-                where email = ${normalized} and auth_user_id is null and not disabled`;
+      if (attachPending) {
+        // Une invitation par enseigne : rattachées une à une, un conflit n'en bloque aucune autre.
+        const pending = await sql<{ id: string }[]>`
+          select id from public.staff_users
+          where email = ${normalized} and auth_user_id is null and not disabled`;
+        for (const p of pending) {
+          await sql`update public.staff_users set auth_user_id = ${authUserId}
+                    where id = ${p.id} and auth_user_id is null`.catch(() => undefined);
+        }
+      }
       const rows = await sql<Parameters<typeof toStaff>[0][]>`
         select id, email, name, role, tenant_id, restaurant_id from public.staff_users
         where auth_user_id = ${authUserId} and not disabled

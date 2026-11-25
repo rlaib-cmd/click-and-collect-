@@ -30,6 +30,40 @@ describe.skipIf(!url)('AdminStore Postgres', () => {
     await sql`update public.staff_users set auth_user_id = null where email = 'gerant@bella.test'`;
   });
 
+  it('rattache un compte invité dans deux enseignes, sans erreur, et seulement si l’adresse est confirmée', async () => {
+    const email = `multi-${run}@example.fr`;
+    await admin.inviteStaff({
+      tenantId: BELLA,
+      email,
+      name: null,
+      role: 'manager',
+      restaurantId: null,
+    });
+    await admin.inviteStaff({
+      tenantId: GREEN,
+      email,
+      name: null,
+      role: 'manager',
+      restaurantId: null,
+    });
+    const authId = randomUUID();
+    // Adresse non confirmée : rien n'est rattaché.
+    expect(await admin.resolveStaff(authId, email, false)).toEqual([]);
+    const both = await admin.resolveStaff(authId, email);
+    expect(both.map((s) => s.tenantId).sort()).toEqual([BELLA, GREEN].sort());
+    // Super-administrateur : son adresse ne peut pas être invitée dans une enseigne.
+    await expect(
+      admin.inviteStaff({
+        tenantId: BELLA,
+        email: 'admin@splash360.test',
+        name: null,
+        role: 'manager',
+        restaurantId: null,
+      }),
+    ).rejects.toThrow();
+    await sql`delete from public.staff_users where email = ${email}`;
+  });
+
   it('enregistre et relit les réglages ; archive une zone utilisée', async () => {
     const [r] = await restaurants.listByTenant(BELLA);
     const id = r?.id ?? '';
