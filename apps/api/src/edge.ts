@@ -262,6 +262,7 @@ function build() {
  * donc d'un pool neuf ; l'ancien est fermé une fois ses requêtes en cours terminées.
  */
 const IDLE_RESET_MS = 3_000;
+const viaPooler = poolerSource !== 'directe';
 let current = build();
 let lastActivity = Date.now();
 let inFlight = 0;
@@ -301,7 +302,9 @@ root.use('*', async (c, next) => {
   // requête du back-office, même en boucle, ne doit pas déclencher de travail sur la base.
   const clientTraffic =
     c.req.method !== 'OPTIONS' && !new URL(c.req.url).pathname.includes('/v1/admin/');
-  if (inFlight === 0 && now - lastActivity > IDLE_RESET_MS) {
+  // Par le pooler (Supavisor), les connexions sont gérées côté Supabase : pas de pool neuf après
+  // chaque silence (chacun relisait le catalogue des types, 753 fois pendant le test de charge).
+  if (!viaPooler && inFlight === 0 && now - lastActivity > IDLE_RESET_MS) {
     const old = current.sql;
     current = build();
     void old.end({ timeout: 5 }).catch(() => undefined);
