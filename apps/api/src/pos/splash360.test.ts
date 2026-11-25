@@ -160,6 +160,8 @@ describe('caisse Splash360', () => {
     };
     const client: Splash360Client = {
       getMenus: () => Promise.resolve({}),
+      getMenusAt: () => Promise.resolve({}),
+      listSales: () => Promise.resolve({}),
       submitCommande(c) {
         sent.commandes.push(c);
         return Promise.resolve({ ticketId: 'ticket-1' });

@@ -1,4 +1,10 @@
-import { cents, type Menu, type MenuCategory, type MenuProduct } from '@splash360/core';
+import {
+  cents,
+  type Menu,
+  type MenuCategory,
+  type MenuProduct,
+  type OptionGroup,
+} from '@splash360/core';
 import { z } from 'zod';
 import { MenuUnavailableError, type MenuProvider } from '../provider';
 import type { Splash360Client } from './client';
@@ -13,11 +19,14 @@ import type { Splash360Client } from './client';
  * - prix TTC en centimes : `prix_c`, sinon `prix` (« 12.50 ») ; un produit sans prix ou à 0 € est
  *   ignoré : ce sont les cadeaux fidélité de la caisse (groupes « 30 POINTS »…), qui ne doivent pas
  *   pouvoir être commandés gratuitement ;
- * - photo : `image.location`, rendue absolue par rapport à l'URL de l'API.
+ * - photo : `image.location`, rendue absolue par rapport à l'URL de l'API ;
+ * - libellé affiché : `legende` (texte client, avec ses pictos), sinon `nom` (libellé du ticket de
+ *   caisse : « ###   S   ### » pour « Sauce Sucrée » dans la carte réelle Tasty Crousty) ;
+ * - options et formules : étapes v2 (`steps`/`regles`, `buildOptionGroups`, lot 19, ADR 0024).
  *
- * Non traduit tant que Splash360 ne l'a pas documenté (questions-en-attente.md, n° 16) :
- * `composition`/`compo` et `steps`/`regles` (options et formules), `prixArray_c` (prix par mode),
- * `groupes_alt` (produit dans plusieurs groupes). Les produits sont donc proposés sans options.
+ * Non traduit tant que Splash360 ne l'a pas documenté (questions-en-attente.md) :
+ * `composition`/`compo`, `prixArray_c` (prix par mode), `groupes_alt`, `max_par_produit` > 1,
+ * étapes imbriquées (étape d'un ingrédient choisi dans une formule) et `reglescatalogue`.
  */
 const id = z.union([z.string(), z.number()]).transform(String);
 const flag = z.union([z.number(), z.boolean(), z.string()]).optional();
@@ -60,6 +69,46 @@ const schema = z
           .loose(),
       )
       .default([]),
+    // Carte v2 (lot 19) : personnalisations, leurs ingrédients et les étapes de chaque produit.
+    types: z.array(z.object({ type_id: id, nom: z.string().optional() }).loose()).default([]),
+    ingredients: z
+      .array(
+        z
+          .object({
+            ingredient_id: id,
+            type: id.optional(),
+            nom: z.string().optional(),
+            legende: z.string().nullish(),
+            supplement_c: z.coerce.number().nullish(),
+            supplement: z.union([z.string(), z.number()]).nullish(),
+            active: flag,
+            visible: flag,
+            weight: z.coerce.number().optional(),
+          })
+          .loose(),
+      )
+      .default([]),
+    steps: z
+      .array(
+        z
+          .object({
+            produit: id,
+            regles: z
+              .array(
+                z
+                  .object({
+                    type: id,
+                    min: z.coerce.number().int().nonnegative().optional(),
+                    max: z.coerce.number().int().nonnegative().optional(),
+                    supplement_c: z.coerce.number().nullish(),
+                  })
+                  .loose(),
+              )
+              .default([]),
+          })
+          .loose(),
+      )
+      .default([]),
   })
   .loose();
 
@@ -93,7 +142,8 @@ function imageUrl(location: string | undefined, baseUrl: string): string | null 
 export function toMenu(raw: unknown, restaurantId: string, baseUrl: string): Menu {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) throw new MenuUnavailableError('Carte Splash360 illisible', parsed.error);
-  const { categories, groupes, produits } = parsed.data;
+  const { categories, groupes, produits, types, ingredients, steps } = parsed.data;
+  const optionGroupsOf = buildOptionGroups(types, ingredients, steps);
 
   const parentRank = new Map(categories.map((c, i) => [c.categorie_id, i]));
   const shown = groupes
@@ -122,18 +172,18 @@ export function toMenu(raw: unknown, restaurantId: string, baseUrl: string): Men
       if (!p.groupe || !known.has(p.groupe) || seen.has(p.produit_id)) return [];
       if (!truthy(p.visible, true) || price === null || price <= 0) return [];
       seen.add(p.produit_id);
-      const description = p.description?.trim() || p.legende?.trim() || null;
+      const description = p.description?.trim() || null;
       return [
         {
           id: p.produit_id,
           categoryId: p.groupe,
-          name: p.nom?.trim() || p.produit_id,
+          name: p.legende?.trim() || p.nom?.trim() || p.produit_id,
           description,
           priceCents: cents(price),
           imageUrl: imageUrl(p.image?.location, baseUrl),
-          available: truthy(p.active, true),
+          available: truthy(p.active, true) && optionGroupsOf(p.produit_id).every(satisfiable),
           allergens: [],
-          optionGroups: [],
+          optionGroups: optionGroupsOf(p.produit_id),
         },
       ];
     });
@@ -146,6 +196,58 @@ export function toMenu(raw: unknown, restaurantId: string, baseUrl: string): Men
       .filter((c) => used.has(c.id))
       .map((c, index) => ({ ...c, position: index + 1 })),
     products,
+  };
+}
+
+type Parsed = z.infer<typeof schema>;
+
+/** Un choix obligatoire sans assez d'options disponibles rend le produit indisponible. */
+function satisfiable(g: OptionGroup): boolean {
+  return g.options.filter((o) => o.available).length >= g.min;
+}
+
+/**
+ * Étapes Splash360 → groupes d'options (consignes Splash360 du 25/11, ADR 0024) :
+ * chaque règle d'une étape vise une personnalisation (`types`) ; ses options sont les ingrédients
+ * de ce type, dans l'ordre des règles ; min/max viennent de la règle. Prix d'une option : son
+ * supplément en centimes, plus celui de la règle (nul partout dans la carte réelle du 25/11).
+ * Une même option ne se choisit qu'une fois (les quantités `max_par_produit` > 1 ne sont pas encore
+ * proposées : questions-en-attente). Identifiant d'option : `ingredient_id` complet, tel que reçu.
+ */
+function buildOptionGroups(
+  types: Parsed['types'],
+  ingredients: Parsed['ingredients'],
+  steps: Parsed['steps'],
+): (productId: string) => OptionGroup[] {
+  const typeName = new Map(types.map((t) => [t.type_id, t.nom?.trim() || 'Choix']));
+  const byType = new Map<string, Parsed['ingredients']>();
+  for (const i of ingredients) {
+    if (!i.type || !truthy(i.visible, true)) continue;
+    const list = byType.get(i.type) ?? [];
+    if (!list.some((x) => x.ingredient_id === i.ingredient_id)) list.push(i);
+    byType.set(i.type, list);
+  }
+  const byProduct = new Map(steps.map((st) => [st.produit, st]));
+  return (productId) => {
+    const step = byProduct.get(productId);
+    if (!step) return [];
+    return step.regles.flatMap((r) => {
+      const options = (byType.get(r.type) ?? [])
+        .map((i, index) => ({ i, index }))
+        .sort((a, b) => (a.i.weight ?? 0) - (b.i.weight ?? 0) || a.index - b.index)
+        .map(({ i }) => ({
+          id: i.ingredient_id,
+          name: i.legende?.trim() || i.nom?.trim() || i.ingredient_id,
+          priceCents: cents(
+            (priceCents(i.supplement_c, i.supplement) ?? 0) + Math.max(0, r.supplement_c ?? 0),
+          ),
+          available: truthy(i.active, true),
+        }));
+      if (options.length === 0) return [];
+      const min = Math.min(r.min ?? 0, options.length);
+      const max = Math.max(min, Math.min(r.max ?? options.length, options.length));
+      return [{ id: r.type, name: typeName.get(r.type) ?? 'Choix', min, max, options }];
+    });
   };
 }
 

@@ -124,3 +124,62 @@ describe('caisse Splash360 au back-office', () => {
     ).toEqual({ ok: false, message: 'Identifiants Splash360 absents du serveur' });
   });
 });
+
+describe('diagnostic Splash360 réservé au super-administrateur (lot 19)', () => {
+  const raw = (rawSales: (date: string) => Promise<unknown>) =>
+    ({
+      splash360: {
+        probe: () => Promise.resolve({ products: 0, categories: 0 }),
+        rawMenu: () => Promise.resolve({ produits: [] }),
+        rawSales,
+      },
+    }) satisfies Partial<AppDeps>;
+
+  it('refuse la carte et les ventes brutes à un gérant', async () => {
+    const setup = testSetup(raw(() => Promise.resolve([])));
+    for (const path of ['menu-raw', 'sales-raw?date=2026-11-25']) {
+      const res = await admin(setup, `/restaurants/${BELLA_RESTO}/splash360/${path}`);
+      expect(res.status).toBe(403);
+    }
+  });
+
+  it('renvoie quelques ventes brutes d’une journée, sans cache', async () => {
+    const dates: string[] = [];
+    const setup = testSetup(
+      raw((date) => {
+        dates.push(date);
+        return Promise.resolve({ orders: [{ id: 1 }] });
+      }),
+    );
+    const res = await admin(
+      setup,
+      `/restaurants/${BELLA_RESTO}/splash360/sales-raw?date=2026-11-25`,
+      {
+        email: 'admin@splash360.test',
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect(await res.json()).toEqual({ orders: [{ id: 1 }] });
+    expect(dates).toEqual(['2026-11-25']);
+    const bad = await admin(setup, `/restaurants/${BELLA_RESTO}/splash360/sales-raw?date=25-11`, {
+      email: 'admin@splash360.test',
+    });
+    expect(bad.status).toBe(400);
+  });
+
+  it('répond 429 avec Retry-After quand l’export a déjà été appelé dans la minute', async () => {
+    const setup = testSetup(
+      raw(() => Promise.reject(Object.assign(new Error('pause'), { retryAfterMs: 41_500 }))),
+    );
+    const res = await admin(
+      setup,
+      `/restaurants/${BELLA_RESTO}/splash360/sales-raw?date=2026-11-25`,
+      {
+        email: 'admin@splash360.test',
+      },
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('42');
+  });
+});

@@ -105,9 +105,23 @@ export interface AdminRoutesDeps extends NotifyDeps {
 /** Test de connexion à Splash360 depuis le back-office : jeton, puis lecture de la carte. */
 export interface Splash360Probe {
   probe(): Promise<{ products: number; categories: number }>;
+  /** Carte brute renvoyée par Splash360 (catalogue, sans donnée personnelle), pour le diagnostic. */
+  rawMenu?(): Promise<unknown>;
+  /**
+   * Quelques ventes brutes d'une journée (export des ventes, lot 19), pour découvrir leur format.
+   * Rejette avec `retryAfterMs` si l'export a déjà été appelé dans la minute.
+   */
+  rawSales?(date: string): Promise<unknown>;
 }
 
 type C = Context<AdminEnv>;
+
+/** Attente imposée par Splash360 (export des ventes), lue sans dépendre de la classe d'erreur. */
+function retryAfterMsOf(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null || !('retryAfterMs' in error)) return null;
+  const wait = error.retryAfterMs;
+  return typeof wait === 'number' && wait > 0 ? wait : null;
+}
 
 async function body<T extends z.ZodType>(c: C, schema: T): Promise<z.infer<T> | null> {
   const parsed = schema.safeParse(await c.req.json().catch(() => null));
@@ -301,6 +315,57 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       const detail = error instanceof Error ? error.message : String(error);
       await audit(c, 'splash360.test', restaurant.id, { ok: false, detail: detail.slice(0, 300) });
       return c.json({ ok: false, message: 'Connexion à Splash360 impossible' });
+    }
+  });
+
+  // Diagnostic de la carte Splash360 (lot 19) : réponse brute, réservée au super-administrateur.
+  app.get('/restaurants/:id/splash360/menu-raw', async (c) => {
+    const denied = allow(c, 'platform', false);
+    if (denied) return denied;
+    if (!deps.splash360?.rawMenu) return apiError(c, 'not_found', 'Identifiants Splash360 absents');
+    try {
+      const raw = await deps.splash360.rawMenu();
+      await audit(c, 'splash360.menu_raw', c.req.param('id'));
+      c.header('Cache-Control', 'no-store');
+      return c.json(raw);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      await audit(c, 'splash360.menu_raw', c.req.param('id'), {
+        ok: false,
+        detail: detail.slice(0, 300),
+      });
+      return apiError(c, 'menu_unavailable', 'Carte Splash360 indisponible');
+    }
+  });
+
+  // Diagnostic de l'export des ventes Splash360 (lot 19) : 5 ventes au plus, super-administrateur.
+  // Splash360 n'accepte qu'un appel par minute et par identifiant client (ADR 0024).
+  app.get('/restaurants/:id/splash360/sales-raw', async (c) => {
+    const denied = allow(c, 'platform', false);
+    if (denied) return denied;
+    if (!deps.splash360?.rawSales)
+      return apiError(c, 'not_found', 'Identifiants Splash360 absents');
+    const date = c.req.query('date') ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return apiError(c, 'invalid_request', 'Date attendue au format AAAA-MM-JJ');
+    }
+    try {
+      const raw = await deps.splash360.rawSales(date);
+      await audit(c, 'splash360.sales_raw', c.req.param('id'), { date });
+      c.header('Cache-Control', 'no-store');
+      return c.json(raw);
+    } catch (error) {
+      const wait = retryAfterMsOf(error);
+      if (wait !== null) {
+        c.header('Retry-After', String(Math.ceil(wait / 1000)));
+        return apiError(c, 'rate_limited', 'Export des ventes : un appel par minute');
+      }
+      const detail = error instanceof Error ? error.message : String(error);
+      await audit(c, 'splash360.sales_raw', c.req.param('id'), {
+        ok: false,
+        detail: detail.slice(0, 300),
+      });
+      return apiError(c, 'menu_unavailable', 'Export des ventes Splash360 indisponible');
     }
   });
 
