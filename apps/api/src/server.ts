@@ -170,6 +170,8 @@ const app = createApp({
   corsOrigins: origins,
   log: true,
   trustProxy: env.TRUST_PROXY === '1',
+  // Fly.io : adresse réelle du client, posée par le proxy de Fly.
+  clientIpHeader: env.CLIENT_IP_HEADER,
   ready: () =>
     sql`select 1`.then(
       () => true,

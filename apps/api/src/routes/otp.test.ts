@@ -23,7 +23,12 @@ const programs = new Map<string, LoyaltyProgram>([
 ]);
 
 function setup(
-  options: { debugEcho?: boolean; environment?: string; smsConfigured?: boolean } = {},
+  options: {
+    debugEcho?: boolean;
+    environment?: string;
+    smsConfigured?: boolean;
+    tenantHourlyLimit?: number;
+  } = {},
 ) {
   let clock = new Date('2026-11-23T10:00:00Z');
   const now = () => clock;
@@ -56,6 +61,9 @@ function setup(
     randomBytes: () => new Uint8Array([0, 1, (seed += 7), 64]),
     log: () => undefined,
     now,
+    ...(options.tenantHourlyLimit !== undefined
+      ? { tenantHourlyLimit: options.tenantHourlyLimit }
+      : {}),
   });
   let n = 0;
   const loyalty = createDemoLoyaltyProvider(
@@ -177,6 +185,24 @@ describe('connexion par code (lot 10)', () => {
       code: good,
     });
     expect(late.status).toBe(410);
+  });
+
+  it('plafonne les envois de codes de l’enseigne par heure, tous numéros confondus (audit M2)', async () => {
+    const s = setup({ tenantHourlyLimit: 3 });
+    for (const n of ['0611111111', '0622222222', '0633333333'])
+      expect((await post(s, '/loyalty/otp/start', { channel: 'sms', identifier: n })).status).toBe(
+        202,
+      );
+    const blocked = await post(s, '/loyalty/otp/start', {
+      channel: 'sms',
+      identifier: '0644444444',
+    });
+    expect(blocked.status).toBe(429);
+    expect(s.sent).toHaveLength(3);
+    s.advance(61 * 60_000);
+    expect(
+      (await post(s, '/loyalty/otp/start', { channel: 'sms', identifier: '0644444444' })).status,
+    ).toBe(202);
   });
 
   it('code expiré après 10 minutes', async () => {

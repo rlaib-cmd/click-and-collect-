@@ -5,14 +5,22 @@ export interface RateLimitOptions {
   /** Requêtes autorisées par fenêtre. */
   readonly limit: number;
   readonly windowMs: number;
-  /** Faire confiance à X-Forwarded-For (derrière un proxy de confiance uniquement). */
+  /**
+   * Derrière un proxy de confiance : `true` lit l'en-tête `ipHeader` posé par l'hébergeur (sinon
+   * la DERNIÈRE entrée d'X-Forwarded-For, ajoutée par le proxy). Jamais la première entrée, que le
+   * client peut écrire lui-même (audit du 25/11, M2).
+   */
   readonly trustProxy: boolean;
+  /** En-tête posé par l'hébergeur et non falsifiable : `cf-connecting-ip` (Supabase Edge), `fly-client-ip` (Fly). */
+  readonly ipHeader?: string | undefined;
   readonly now?: () => number;
 }
 
-export function clientIp(c: Context, trustProxy: boolean): string {
+export function clientIp(c: Context, trustProxy: boolean, ipHeader?: string): string {
   if (trustProxy) {
-    const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+    const fromHost = ipHeader ? c.req.header(ipHeader)?.trim() : undefined;
+    if (fromHost) return fromHost;
+    const forwarded = c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim();
     if (forwarded) return forwarded;
   }
   const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
@@ -30,7 +38,7 @@ export function rateLimit(options: RateLimitOptions): MiddlewareHandler {
   return async (c, next) => {
     const t = now();
     if (hits.size > 50_000) for (const [k, v] of hits) if (v.resetAt <= t) hits.delete(k);
-    const key = clientIp(c, options.trustProxy);
+    const key = clientIp(c, options.trustProxy, options.ipHeader);
     const entry = hits.get(key);
     if (!entry || entry.resetAt <= t) {
       hits.set(key, { count: 1, resetAt: t + options.windowMs });

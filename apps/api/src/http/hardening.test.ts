@@ -86,6 +86,25 @@ describe('durcissement de l’API', () => {
     expect(durations.filter((d) => d < 250)).toHaveLength(5);
   });
 
+  it('compte les requêtes par adresse réelle, pas par un X-Forwarded-For forgé (audit M2)', async () => {
+    const app = testSetup({
+      trustProxy: true,
+      clientIpHeader: 'cf-connecting-ip',
+      rateLimits: { orders: 1, reads: 1000 },
+    }).app;
+    const order = (forged: string, real: string) =>
+      app.request('/v1/tenants/bella/orders', {
+        method: 'POST',
+        headers: { ...json, 'X-Forwarded-For': `${forged}, 10.0.0.1`, 'cf-connecting-ip': real },
+        body: '{}',
+      });
+    expect((await order('1.1.1.1', '203.0.113.7')).status).toBe(400);
+    // Même client réel, autre adresse inventée : toujours limité.
+    expect((await order('2.2.2.2', '203.0.113.7')).status).toBe(429);
+    // Autre client réel : servi.
+    expect((await order('2.2.2.2', '203.0.113.8')).status).toBe(400);
+  });
+
   it('refuse un corps de requête trop volumineux', async () => {
     const res = await testApp().request(`/v1/tenants/bella/restaurants/${BELLA_RESTO}/quote`, {
       method: 'POST',

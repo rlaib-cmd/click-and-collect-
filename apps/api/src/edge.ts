@@ -190,7 +190,8 @@ const inviter = createSupabaseInviter({
 
 // Connexion du client par code (lot 10) : SMS Brevo, sinon journalisé ; recette = aide au test.
 const sms = createSmsSender({ brevoApiKey: brevoKey, log });
-const appEnv = env('APP_ENV') ?? 'recette';
+// Sans APP_ENV explicite, on se comporte comme en production (aucun raccourci de test, audit du 25/11).
+const appEnv = env('APP_ENV') ?? 'production';
 
 function build() {
   // 2 connexions par copie de la fonction : la base directe n'en accepte que 60 au total.
@@ -220,7 +221,9 @@ function build() {
     tokenSecret,
     // Aperçu : fidélité de test, connexion par e-mail (ADR 0009).
     loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
-    loyaltyDemoLogin: env('LOYALTY_DEMO_LOGIN') !== '0' && appEnv !== 'production',
+    // Connexion de démonstration sans code : seulement si demandée explicitement, hors production
+    // (désactivée par défaut, audit du 25/11).
+    loyaltyDemoLogin: env('LOYALTY_DEMO_LOGIN') === '1' && appEnv !== 'production',
     ...(env('LOYALTY_OTP') === '1'
       ? {
           otp: createOtpDeps({
@@ -233,6 +236,9 @@ function build() {
             environment: appEnv,
             randomBytes: (n) => randomBytes(n),
             log,
+            ...(env('OTP_TENANT_HOURLY_LIMIT')
+              ? { tenantHourlyLimit: Number(env('OTP_TENANT_HOURLY_LIMIT')) }
+              : {}),
           }),
         }
       : {}),
@@ -247,6 +253,8 @@ function build() {
     corsOrigins: '*',
     log: true,
     trustProxy: true,
+    // Posé par Cloudflare devant Supabase Edge, qui écrase toute valeur envoyée par le client.
+    clientIpHeader: 'cf-connecting-ip',
     ready: () =>
       sql`select 1`.then(
         () => true,

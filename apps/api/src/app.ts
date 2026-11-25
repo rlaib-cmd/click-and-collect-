@@ -82,6 +82,8 @@ export interface AppDeps {
   /** Attente imposée à un back-office obsolète avant de lui répondre (défaut 60 s). */
   readonly outdatedClientHoldMs?: number;
   readonly trustProxy?: boolean;
+  /** En-tête d'adresse client posé par l'hébergeur (voir `RateLimitOptions.ipHeader`). */
+  readonly clientIpHeader?: string;
   /** Club fidélité Splash360 (lot 8) ; absent = pas de fidélité. */
   readonly loyalty?: LoyaltyProvider;
   /** Ambassadeur (lot 15, ADR 0019) ; absent = fonction désactivée. */
@@ -144,7 +146,8 @@ export function createApp(deps: AppDeps) {
   // 300/min, cinq clients en attente en même temps suffisaient à être bloqués.
   const limits = deps.rateLimits ?? { orders: 20, reads: 1200 };
   const trustProxy = deps.trustProxy ?? false;
-  const strict = rateLimit({ limit: limits.orders, windowMs: 60_000, trustProxy });
+  const ipHeader = deps.clientIpHeader;
+  const strict = rateLimit({ limit: limits.orders, windowMs: 60_000, trustProxy, ipHeader });
   for (const path of [
     '/v1/tenants/:s/orders',
     '/v1/tenants/:s/orders/:id/payment',
@@ -157,10 +160,16 @@ export function createApp(deps: AppDeps) {
   ]) {
     app.on('POST', path, strict);
   }
-  app.use('/v1/tenants/*', rateLimit({ limit: limits.reads, windowMs: 60_000, trustProxy }));
+  app.use(
+    '/v1/tenants/*',
+    rateLimit({ limit: limits.reads, windowMs: 60_000, trustProxy, ipHeader }),
+  );
   // Back-office : plafond par adresse, vérifié en premier, avant toute lecture en base et avant
   // le garde ci-dessous (audit du 25/11, M6). Un onglet qui boucle est arrêté ici.
-  app.use('/v1/admin/*', rateLimit({ limit: limits.admin ?? 600, windowMs: 60_000, trustProxy }));
+  app.use(
+    '/v1/admin/*',
+    rateLimit({ limit: limits.admin ?? 600, windowMs: 60_000, trustProxy, ipHeader }),
+  );
   // Back-office obsolète (onglet resté ouvert sur la version qui bouclait, 24/11) : il n'annonce
   // pas sa version. On le fait patienter avant de répondre « rechargez » : l'ancien code ne relance
   // qu'après une réponse, sa boucle ralentit fortement. Au plus `maxHeld` requêtes retenues en même

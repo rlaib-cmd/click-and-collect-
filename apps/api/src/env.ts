@@ -37,6 +37,8 @@ const envSchema = z.object({
   ADMIN_URL: z.url().default('http://localhost:3000'),
   /** Derrière un proxy de confiance (hébergeur) : adresse client lue dans X-Forwarded-For. */
   TRUST_PROXY: z.enum(['0', '1']).default('0'),
+  /** En-tête d'adresse client de l'hébergeur (Fly : fly-client-ip). */
+  CLIENT_IP_HEADER: z.string().min(1).default('fly-client-ip'),
   /** Remontée des erreurs (facultatif). */
   SENTRY_DSN: z.url().optional(),
   SENTRY_ENVIRONMENT: z.string().default('development'),

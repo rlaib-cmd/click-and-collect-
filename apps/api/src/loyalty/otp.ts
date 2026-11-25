@@ -84,6 +84,11 @@ export interface OtpDeps {
   /** OTP_DEBUG_ECHO=1 et environnement (voir otpDebugEchoAllowed). */
   readonly debugEcho: boolean;
   readonly environment: string;
+  /**
+   * Plafond d'envoi de codes par enseigne et par heure, tous numéros confondus, compté en base
+   * (partagé entre les instances) : empêche l'envoi massif de SMS facturés (audit M2). Défaut 300.
+   */
+  readonly tenantHourlyLimit?: number;
   readonly log: (m: string, d?: Record<string, unknown>) => void;
 }
 
@@ -130,6 +135,11 @@ export async function startOtp(
     identifier,
     new Date(now.getTime() - 3_600_000),
   );
+  const hourAgo = new Date(now.getTime() - 3_600_000);
+  if ((await deps.store.countTenantSends(tenant.id, hourAgo)) >= (deps.tenantHourlyLimit ?? 300)) {
+    deps.log('Plafond horaire de codes atteint pour l’enseigne', { tenantId: tenant.id });
+    return { ok: false, error: 'rate_limited', retryAfterSeconds: 600 };
+  }
   const decision = canSendOtp(sends, now);
   if (!decision.ok) {
     return {
@@ -224,6 +234,7 @@ export function createOtpDeps(options: {
   readonly randomBytes: (n: number) => Uint8Array;
   readonly log: (m: string, d?: Record<string, unknown>) => void;
   readonly now?: () => Date;
+  readonly tenantHourlyLimit?: number;
 }): OtpDeps {
   return {
     store: options.store,
@@ -236,5 +247,8 @@ export function createOtpDeps(options: {
     debugEcho: options.debugEcho,
     environment: options.environment,
     log: options.log,
+    ...(options.tenantHourlyLimit !== undefined
+      ? { tenantHourlyLimit: options.tenantHourlyLimit }
+      : {}),
   };
 }

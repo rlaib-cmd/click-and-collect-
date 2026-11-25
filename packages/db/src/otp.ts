@@ -13,6 +13,8 @@ export interface OtpChallengeRecord {
 export interface OtpStore {
   /** Dates d'envoi au même identifiant depuis `since` (limite d'envois). */
   recentSends(tenantId: string, identifier: string, since: Date): Promise<Date[]>;
+  /** Codes envoyés par l'enseigne depuis `since`, tous destinataires (plafond global, audit M2). */
+  countTenantSends(tenantId: string, since: Date): Promise<number>;
   create(
     tenantId: string,
     input: {
@@ -48,6 +50,13 @@ interface Row {
 
 export function createPostgresOtpStore(sql: Sql): OtpStore {
   return {
+    async countTenantSends(tenantId, since) {
+      const [r] = await sql<{ n: number }[]>`
+        select count(*)::int as n from public.customer_otp_challenges
+        where tenant_id = ${tenantId} and created_at > ${since}`;
+      return r?.n ?? 0;
+    },
+
     async recentSends(tenantId, identifier, since) {
       const rows = await sql<{ created_at: Date }[]>`
         select created_at from public.customer_otp_challenges
@@ -117,6 +126,11 @@ export function createMemoryOtpStore(now: () => Date = () => new Date()): OtpSto
   let seq = 0;
   return {
     rows,
+    countTenantSends(tenantId, since) {
+      return Promise.resolve(
+        rows.filter((r) => r.tenantId === tenantId && r.createdAt > since).length,
+      );
+    },
     recentSends(tenantId, identifier, since) {
       return Promise.resolve(
         rows
