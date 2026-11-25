@@ -1,3 +1,4 @@
+import { trackingInterval } from '@/lib/polling';
 import {
   availabilitySchema,
   deliveryCheckSchema,
@@ -125,9 +126,7 @@ export function usePlaceOrder() {
   });
 }
 
-const TERMINAL = new Set(['completed', 'cancelled', 'refunded']);
-
-/** Suivi de commande : rafraîchi toutes les 4 s tant que la commande n'est pas terminée. */
+/** Suivi de commande, rafraîchi selon `trackingInterval`. */
 export function useOrderTracking(orderId: string, accessToken: string | null) {
   const { config } = useTenant();
   const sub = config.tenant.subdomain;
@@ -138,8 +137,7 @@ export function useOrderTracking(orderId: string, accessToken: string | null) {
         fetch(input, { ...init, headers: { Authorization: `Bearer ${accessToken ?? ''}` } }),
       ),
     enabled: accessToken !== null,
-    refetchInterval: (query) =>
-      query.state.data && TERMINAL.has(query.state.data.status) ? false : 4000,
+    refetchInterval: (query) => trackingInterval(query.state.data?.status),
   });
 }
 

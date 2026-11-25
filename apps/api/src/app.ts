@@ -130,7 +130,10 @@ export function createApp(deps: AppDeps) {
     .digest('base64url');
 
   // Limitation de débit des routes publiques sensibles (par adresse IP).
-  const limits = deps.rateLimits ?? { orders: 20, reads: 300 };
+  // Lectures : 1 200/min par adresse. Les clients d'un même wifi (restaurant, bureau) partagent
+  // une adresse, et chacun interroge la caisse chaque seconde avant de payer (ADR 0018) : à
+  // 300/min, cinq clients en attente en même temps suffisaient à être bloqués.
+  const limits = deps.rateLimits ?? { orders: 20, reads: 1200 };
   const trustProxy = deps.trustProxy ?? false;
   const strict = rateLimit({ limit: limits.orders, windowMs: 60_000, trustProxy });
   for (const path of [
