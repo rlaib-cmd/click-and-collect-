@@ -152,6 +152,43 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
     expect(results.filter((r) => !r.ok)).toHaveLength(4);
   });
 
+  it('ne laisse pas deux commandes simultanées prendre le même cadeau (audit du 25/11)', async () => {
+    const restaurantId = await bellaId();
+    const slot = '2030-01-17T11:00:00.000Z';
+    const memberId = `membre-course-${run}`;
+    const withReward = (key: string): NewOrder => {
+      const base = newOrder(restaurantId, key, slot, null);
+      return {
+        ...base,
+        totals: { ...base.totals, discountCents: cents(1050), totalCents: cents(1850) },
+        paymentMethod: 'on_site',
+        // 1 000 points : un seul cadeau à 900 possible.
+        loyalty: {
+          memberId,
+          balance: 1000,
+          reward: { id: 'rw-pizza', costPoints: 900, productId: 'p-margherita' },
+        },
+      };
+    };
+    const results = await Promise.all([
+      store.createOrder(withReward('course-a')),
+      store.createOrder(withReward('course-b')),
+    ]);
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.find((r) => !r.ok)).toEqual({ ok: false, error: 'insufficient_points' });
+  });
+
+  it('refuse de rejouer une clé d’idempotence pour un autre client', async () => {
+    const restaurantId = await bellaId();
+    const first = newOrder(restaurantId, 'cle-partagee', '2030-01-18T11:00:00.000Z', null);
+    expect((await store.createOrder(first)).ok).toBe(true);
+    const other: NewOrder = {
+      ...first,
+      customer: { ...first.customer, email: `autre-${run}@example.fr`, phone: '0699999999' },
+    };
+    expect(await store.createOrder(other)).toEqual({ ok: false, error: 'idempotency_conflict' });
+  });
+
   it('réservations de points : commandes avec cadeau non réglées, hors rejeu de la même clé', async () => {
     const restaurantId = await bellaId();
     const slot = '2030-01-16T11:00:00.000Z';

@@ -188,13 +188,19 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
       accessTokenHash: hashToken(orderAccessToken(deps.tokenSecret, orderId)),
       maxOrdersPerSlot: ctx.config.schedule.maxOrdersPerSlot,
       loyalty: result.loyalty
-        ? { memberId: result.loyalty.memberId, reward: result.loyalty.reward }
+        ? {
+            memberId: result.loyalty.memberId,
+            reward: result.loyalty.reward,
+            balance: result.loyalty.balance,
+          }
         : null,
       paymentMethod: request.paymentMethod,
       promo: result.promo,
     });
     if (!created.ok) {
       // Code promo épuisé ou déjà utilisé par ce client, constaté sous verrou (ADR 0015).
+      if (created.error === 'idempotency_conflict')
+        return apiError(c, 'invalid_request', 'Clé de commande déjà utilisée');
       if (created.error !== 'slot_full') return orderInvalid(c, [{ code: created.error }]);
       return apiError(c, 'slot_full', 'Ce créneau vient d’être complété');
     }

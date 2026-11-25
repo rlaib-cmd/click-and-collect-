@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   checkTransition,
   customerContactKey,
+  reservedRewardPoints,
   type OperationalStatus,
   type OrderStatus,
   type SlotLoad,
@@ -142,7 +143,35 @@ export function createMemoryOrderBackend(
       const existing = orders.find(
         (x) => x.tenantId === o.tenantId && x.idempotencyKey === o.idempotencyKey,
       );
-      if (existing) return Promise.resolve({ ok: true, replayed: true, order: summary(existing) });
+      if (existing) {
+        const sameCustomer =
+          customerContactKey({ email: existing.customer.email, phone: existing.customer.phone }) ===
+          customerContactKey({ email: o.customer.email, phone: o.customer.phone });
+        if (existing.restaurantId !== o.restaurantId || !sameCustomer)
+          return Promise.resolve({ ok: false, error: 'idempotency_conflict' });
+        return Promise.resolve({ ok: true, replayed: true, order: summary(existing) });
+      }
+      if (o.loyalty?.reward && o.loyalty.balance !== undefined) {
+        const memberId = o.loyalty.memberId;
+        const reserved = reservedRewardPoints(
+          orders
+            .filter(
+              (x) =>
+                x.tenantId === o.tenantId &&
+                x.loyalty?.memberId === memberId &&
+                x.loyalty.reward !== null &&
+                !x.loyaltySettled,
+            )
+            .map((x) => ({
+              status: x.status as OrderStatus,
+              points: x.loyalty?.reward?.costPoints ?? 0,
+              createdAt: new Date(x.createdAt),
+            })),
+          new Date(),
+        );
+        if (reserved + o.loyalty.reward.costPoints > o.loyalty.balance)
+          return Promise.resolve({ ok: false, error: 'insufficient_points' });
+      }
       if (o.requestedSlot && o.maxOrdersPerSlot !== null) {
         const at = new Date(o.requestedSlot);
         if ((load(o.restaurantId, at, at)[o.requestedSlot] ?? 0) >= o.maxOrdersPerSlot) {

@@ -1,6 +1,7 @@
 import {
   cents,
   customerContactKey,
+  reservedRewardPoints,
   type DeliveryZone,
   type FeeSettings,
   type OrderMode,
@@ -81,6 +82,11 @@ export interface PromoRecord extends PromoCode {
 
 export interface OrderLoyalty {
   readonly memberId: string;
+  /**
+   * Solde du membre lu au devis : avec une récompense, les points réservés sont recontrôlés sous
+   * verrou du membre à la création (deux commandes simultanées ne prennent pas le même cadeau).
+   */
+  readonly balance?: number;
   readonly reward: {
     readonly id: string;
     readonly costPoints: number;
@@ -99,7 +105,15 @@ export interface OrderSummary {
 
 export type CreateOrderResult =
   | { readonly ok: true; readonly order: OrderSummary; readonly replayed: boolean }
-  | { readonly ok: false; readonly error: 'slot_full' | 'promo_exhausted' | 'promo_already_used' };
+  | {
+      readonly ok: false;
+      readonly error:
+        | 'slot_full'
+        | 'promo_exhausted'
+        | 'promo_already_used'
+        | 'insufficient_points'
+        | 'idempotency_conflict';
+    };
 
 export interface OrderingStore {
   getConfig(tenantId: string, restaurantId: string): Promise<OrderingConfig | null>;
@@ -372,11 +386,28 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
       return sql.begin(async (tx) => {
         // Rejeu idempotent : même clé → même commande (double clic, réseau instable).
         const [existing] = await tx<
-          { id: string; number: number; status: string; total_cents: number; created_at: Date }[]
+          {
+            id: string;
+            number: number;
+            status: string;
+            total_cents: number;
+            created_at: Date;
+            restaurant_id: string;
+            contact_key: string | null;
+          }[]
         >`
-          select id, number, status, total_cents, created_at from public.orders
-          where tenant_id = ${o.tenantId} and idempotency_key = ${o.idempotencyKey}`;
+          select o.id, o.number, o.status, o.total_cents, o.created_at, o.restaurant_id, c.contact_key
+          from public.orders o left join public.customers c on c.id = o.customer_id
+          where o.tenant_id = ${o.tenantId} and o.idempotency_key = ${o.idempotencyKey}`;
         if (existing) {
+          // Même clé mais autre restaurant ou autre client : pas de rejeu (le jeton de suivi de la
+          // commande existante n'est jamais remis à quelqu'un d'autre, audit du 25/11).
+          const replayKey = customerContactKey({
+            email: o.customer.email?.trim().toLowerCase() || null,
+            phone: o.customer.phone,
+          });
+          if (existing.restaurant_id !== o.restaurantId || existing.contact_key !== replayKey)
+            return { ok: false as const, error: 'idempotency_conflict' as const };
           return {
             ok: true as const,
             replayed: true,
@@ -392,6 +423,22 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
 
         // Verrou par restaurant : deux commandes ne peuvent pas prendre la dernière place d'un créneau.
         await tx`select id from public.restaurants where id = ${o.restaurantId} and tenant_id = ${o.tenantId} for update`;
+        // Récompense : points réservés recontrôlés sous verrou du membre (audit du 25/11).
+        if (o.loyalty?.reward && o.loyalty.balance !== undefined) {
+          await tx`select pg_advisory_xact_lock(hashtext(${`reward:${o.tenantId}:${o.loyalty.memberId}`}))`;
+          const holds = await tx<{ status: OrderStatus; points: number; created_at: Date }[]>`
+            select status, loyalty_reward_points as points, created_at from public.orders
+            where tenant_id = ${o.tenantId} and loyalty_member_id = ${o.loyalty.memberId}
+              and loyalty_reward_id is not null and loyalty_settled_at is null
+              and loyalty_reward_points is not null`;
+          const reserved = reservedRewardPoints(
+            holds.map((h) => ({ status: h.status, points: h.points, createdAt: h.created_at })),
+            new Date(),
+          );
+          if (reserved + o.loyalty.reward.costPoints > o.loyalty.balance)
+            return { ok: false as const, error: 'insufficient_points' as const };
+        }
+
         if (o.requestedSlot && o.maxOrdersPerSlot !== null) {
           const at = new Date(o.requestedSlot);
           const taken = (await load(tx, o.restaurantId, at, at))[at.toISOString()] ?? 0;

@@ -124,6 +124,8 @@ export type QuoteResult =
       /** Membre du club : points à gagner et récompense appliquée. */
       readonly loyalty: {
         readonly memberId: string;
+        /** Solde lu chez le fournisseur de fidélité (recontrôle des réservations sous verrou). */
+        readonly balance: number;
         readonly pointsEarned: number;
         readonly reward: {
           readonly id: string;
@@ -264,6 +266,7 @@ export async function quote(
       }
       loyalty = {
         memberId: member.id,
+        balance: member.points,
         pointsEarned: totals ? pointsForAmount(totals.totalCents, program) : 0,
         reward,
       };
