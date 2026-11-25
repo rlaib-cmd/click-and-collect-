@@ -172,6 +172,7 @@ fonction `api` qui les utilise) :
 | `20261125110000_ambassador_ticket_id.sql` | Ticket identifié par `ticket_id` (lot 20) |
 | `20261125120000_pos_sales_page_zero.sql` | Export des ventes paginé à partir de 0 (lot 20) |
 | `20261126000000_loyalty_youfid.sql` | Fidélité YouFID (lot 21) |
+| `20261127000000_proximity_push.sql` | Bons plans à proximité (lot 22) |
 
 **2. Secrets de la fonction `api` en production** (Supabase → Edge Functions → Secrets ; jamais
 dans le dépôt ni par message) :
@@ -311,3 +312,50 @@ qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS po
    messages « Fidélité YouFID : … » (sans donnée client).
 6. Attention : le compte marchand configuré en recette est réel ; chaque test crédite de vrais
    clients YouFID tant que Splash360 n'a pas fourni de compte de test.
+
+## Bons plans à proximité (lot 22, ADR 0027)
+
+1. Migration `20261127000000_proximity_push.sql` (recette puis production), **avant** l'API qui
+   l'utilise : tables `proximity_settings`, `proximity_devices`, `proximity_events` (RLS, accès
+   serveur). Aucune variable d'environnement nouvelle : l'envoi passe par le service push Expo
+   déjà utilisé (`EXPO_ACCESS_TOKEN` facultatif). La fonction n'existe que si le club fidélité est
+   actif pour l'enseigne ; elle reste **désactivée** tant que le gérant ne l'active pas
+   (back-office → « Bons plans à proximité »).
+2. Purge : les événements de plus de 90 jours sont effacés toutes les heures par l'API (serveur
+   Node et fonction Edge, au fil du trafic client). Pas de pg_cron nécessaire.
+3. **Nouveau build EAS obligatoire** (modules natifs `expo-location`, `expo-task-manager`) :
+   - augmenter `version` dans `apps/mobile/app.json` **avant** le build (`runtimeVersion` suit la
+     version : une mise à jour OTA contenant ce code ne doit jamais atteindre un ancien binaire,
+     qui n'a pas les modules natifs) ;
+   - `eas build --profile <enseigne>-production --platform all`, puis `eas submit` ;
+   - à tester sur un build de développement ou de prévisualisation (pas Expo Go) : iOS demande
+     d'abord « Pendant l'utilisation », puis propose « Toujours » ; Android 11+ renvoie vers les
+     réglages pour « Toujours autoriser ».
+4. Permissions ajoutées par la configuration (`app.json`, greffon `expo-location`) :
+   - iOS : `NSLocationWhenInUseUsageDescription`, `NSLocationAlwaysAndWhenInUseUsageDescription`,
+     `NSLocationAlwaysUsageDescription`, `UIBackgroundModes` = `location` (et `fetch`, ajouté
+     d'office par `expo-task-manager`, non utilisé) ;
+   - Android : `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`,
+     `RECEIVE_BOOT_COMPLETED` (zones réinscrites après redémarrage). Pas de service au premier
+     plan (`isAndroidForegroundServiceEnabled: false`) : le géorepérage n'en a pas besoin.
+5. Revue Apple (App Store Connect → Notes pour la revue), texte proposé :
+
+   > L'application propose une fonction facultative, « Bons plans à proximité » (Compte →
+   > Bons plans à proximité), désactivée par défaut et réservée aux membres du club fidélité.
+   > Quand le membre l'active, nous demandons l'autorisation de position « Toujours » pour
+   > surveiller, par la surveillance de régions de Core Location, l'entrée dans un rayon de
+   > 200 m autour de nos restaurants (20 régions au plus), même application fermée. À l'entrée
+   > dans une région, l'application envoie à notre serveur uniquement l'identifiant du
+   > restaurant ; aucune coordonnée n'est transmise ni enregistrée, et aucun historique de
+   > déplacement n'est constitué. Le serveur peut alors envoyer une notification (au plus une
+   > par jour, jamais la nuit). La fonction se désactive à tout moment depuis le même écran, ce
+   > qui arrête la surveillance et efface l'appareil de notre liste. Pour tester : se connecter
+   > au club, ouvrir Compte → Bons plans à proximité, activer, puis simuler une position proche
+   > d'un restaurant de l'enseigne.
+
+6. Google Play (Contenu de l'application → Autorisations de localisation) : déclarer la position
+   en arrière-plan pour « Bons plans à proximité » avec le même texte et une courte vidéo
+   montrant l'écran d'accord puis la demande d'autorisation.
+7. Non vérifié en intégration continue : comportement réel des zones sur appareil (délai de
+   détection, précision de 100 à 200 m, application terminée sur Android). À contrôler sur un
+   iPhone et un Android avant d'activer la fonction pour une enseigne.
