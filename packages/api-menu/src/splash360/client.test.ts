@@ -134,7 +134,7 @@ describe('client Splash360', () => {
     const url = new URL(sales?.url ?? '');
     expect(url.origin).toBe('https://api2.splash360.fr');
     expect(Object.fromEntries(url.searchParams)).toEqual({
-      page: '0',
+      page: '1',
       pageSize: '5',
       fromDate: '2026-11-24',
       toDate: '2026-11-25',
@@ -246,7 +246,7 @@ describe('client Splash360', () => {
     for (const q of [
       { fromDate: '25/11/2026', toDate: '2026-11-25' },
       { fromDate: '2026-11-25', toDate: '2026-11-25', pageSize: 101 },
-      { fromDate: '2026-11-25', toDate: '2026-11-25', page: -1 },
+      { fromDate: '2026-11-25', toDate: '2026-11-25', page: 0 },
     ]) {
       await expect(client.listSales(q)).rejects.toBeInstanceOf(Splash360Error);
     }

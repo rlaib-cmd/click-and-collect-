@@ -55,6 +55,7 @@ export interface Splash360SalesQuery {
   readonly fromDate: string;
   readonly toDate: string;
   readonly status?: 'confirmed' | 'deleted' | 'confirmed,deleted';
+  /** Première page = 1 (confirmé par Splash360 le 25/11). */
   readonly page?: number;
   /** 1 à 100 (maximum de l'API). */
   readonly pageSize?: number;
@@ -466,7 +467,7 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
     async listSales(query) {
       const date = /^\d{4}-\d{2}-\d{2}$/;
       const pageSize = query.pageSize ?? 100;
-      const page = query.page ?? 0;
+      const page = query.page ?? 1;
       if (
         !date.test(query.fromDate) ||
         !date.test(query.toDate) ||
@@ -474,7 +475,7 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
         pageSize < 1 ||
         pageSize > 100 ||
         !Number.isInteger(page) ||
-        page < 0
+        page < 1
       ) {
         throw new Splash360Error('Filtre des ventes invalide', null, false);
       }
