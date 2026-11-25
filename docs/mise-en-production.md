@@ -190,3 +190,12 @@ Vérification : `pg_stat_activity` ne montre que quelques connexions « Supaviso
 en recette le 25/11, **à appliquer en production** au prochain déploiement, avant la fonction `api`
 qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS pour le scan
 (module `expo-camera`, permission caméra) ; la version web l'a déjà.
+
+## À appliquer en production au prochain déploiement (audit de sécurité du 25/11, ADR 0020)
+
+1. Migrations, dans l'ordre : `20261125050000_staff_multi_tenant.sql` puis
+   `20261125060000_loyalty_member_sessions.sql` (en plus de `20261125040000`, déjà notée).
+2. Redéployer la fonction `api` (même code que la recette) : `APP_ENV=production` est déjà posé ;
+   ne pas poser `LOYALTY_DEMO_LOGIN` (désactivée par défaut).
+3. Option : `OTP_TENANT_HOURLY_LIMIT` (codes par enseigne et par heure, défaut 300).
+4. Les membres du club devront se reconnecter une fois (nouveau format de jeton).
