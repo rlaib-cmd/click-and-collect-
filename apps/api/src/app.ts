@@ -120,6 +120,10 @@ export function createApp(deps: AppDeps) {
       origin: origins === '*' ? '*' : [...origins],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
       allowHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id'],
+      // Préflight gardé 10 min par le navigateur : la moitié des requêtes de la rafale du 24/11
+      // étaient des OPTIONS. Retry-After et X-Request-Id lisibles pour la reprise et le diagnostic.
+      maxAge: 600,
+      exposeHeaders: ['Retry-After', 'X-Request-Id'],
     }),
   );
 
@@ -269,7 +273,11 @@ export function createApp(deps: AppDeps) {
 
   app.notFound((c) => apiError(c, 'not_found', 'Route inconnue'));
   app.onError((err, c) => {
-    log('error', 'Erreur non gérée', { error: err.message, path: c.req.path });
+    log('error', 'Erreur non gérée', {
+      error: err.message,
+      path: c.req.path,
+      requestId: c.res.headers.get('X-Request-Id') ?? undefined,
+    });
     deps.reportError?.(err);
     return apiError(c, 'internal_error', 'Erreur interne');
   });

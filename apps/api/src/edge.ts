@@ -233,10 +233,15 @@ let lastDispatch = 0;
  * pour que Supabase ne coupe pas l'instance avant la fin (sinon : ticket déposé chez Splash360
  * mais non enregistré chez nous, puis déposé une seconde fois).
  */
-function background(task: Promise<unknown>) {
+function background(name: string, task: Promise<unknown>) {
   inFlight += 1;
   const done = task
-    .catch(() => undefined)
+    .catch((error: unknown) =>
+      jsonLog('error', 'Tâche de fond en échec', {
+        task: name,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    )
     .finally(() => {
       inFlight -= 1;
       lastActivity = Date.now();
@@ -251,7 +256,8 @@ root.use('*', async (c, next) => {
   const now = Date.now();
   // Les tâches de fond (envoi en caisse, expirations) ne partent que du trafic client : une
   // requête du back-office, même en boucle, ne doit pas déclencher de travail sur la base.
-  const clientTraffic = !new URL(c.req.url).pathname.includes('/v1/admin/');
+  const clientTraffic =
+    c.req.method !== 'OPTIONS' && !new URL(c.req.url).pathname.includes('/v1/admin/');
   if (inFlight === 0 && now - lastActivity > IDLE_RESET_MS) {
     const old = current.sql;
     current = build();
@@ -259,11 +265,14 @@ root.use('*', async (c, next) => {
   }
   if (clientTraffic && now - lastExpiry > 60_000) {
     lastExpiry = now;
-    background(expireUnpaidOrders({ payments: current.payments, gateway, log }, new Date()));
+    background(
+      'expiration',
+      expireUnpaidOrders({ payments: current.payments, gateway, log }, new Date()),
+    );
   }
   if (clientTraffic && now - lastDispatch > 10_000) {
     lastDispatch = now;
-    background(current.app.runDispatches());
+    background('caisse', current.app.runDispatches());
   }
   inFlight += 1;
   try {
