@@ -226,6 +226,25 @@ let inFlight = 0;
 let lastExpiry = 0;
 let lastDispatch = 0;
 
+/**
+ * Tâche de fond (envois en caisse, expirations) : comptée comme une requête en cours, pour que les
+ * connexions à la base ne soient pas renouvelées sous elle, et confiée à `EdgeRuntime.waitUntil`
+ * pour que Supabase ne coupe pas l'instance avant la fin (sinon : ticket déposé chez Splash360
+ * mais non enregistré chez nous, puis déposé une seconde fois).
+ */
+function background(task: Promise<unknown>) {
+  inFlight += 1;
+  const done = task
+    .catch(() => undefined)
+    .finally(() => {
+      inFlight -= 1;
+      lastActivity = Date.now();
+    });
+  (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(
+    done,
+  );
+}
+
 const root = new Hono();
 root.use('*', async (_c, next) => {
   const now = Date.now();
@@ -236,13 +255,11 @@ root.use('*', async (_c, next) => {
   }
   if (now - lastExpiry > 60_000) {
     lastExpiry = now;
-    void expireUnpaidOrders({ payments: current.payments, gateway, log }, new Date()).catch(
-      () => undefined,
-    );
+    background(expireUnpaidOrders({ payments: current.payments, gateway, log }, new Date()));
   }
   if (now - lastDispatch > 10_000) {
     lastDispatch = now;
-    void current.app.runDispatches().catch(() => undefined);
+    background(current.app.runDispatches());
   }
   inFlight += 1;
   try {
