@@ -1,7 +1,11 @@
 import { readinessInterval, trackingInterval } from '@/lib/polling';
 import {
   ambassadorConfigSchema,
+  ambassadorEntriesSchema,
   ambassadorEntrySchema,
+  ambassadorProfileSchema,
+  photoCheckResponseSchema,
+  type PhotoCheckRequest,
   availabilitySchema,
   type AmbassadorEntryRequest,
   deliveryCheckSchema,
@@ -19,7 +23,7 @@ import {
   type QuoteRequest,
   memberOrdersSchema,
 } from '@splash360/contracts';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/tenant/TenantProvider';
 import { getPushToken } from '@/notifications/register';
 import { API_URL, apiGet, apiPost, ApiRequestError } from './client';
@@ -250,20 +254,97 @@ export function useAmbassador() {
   });
 }
 
+/** Requête authentifiée du membre (méthode imposée pour PUT). */
+const memberFetch =
+  (memberToken: string | null, method?: 'PUT'): typeof fetch =>
+  (input, init) =>
+    fetch(input, {
+      ...init,
+      ...(method ? { method } : {}),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${memberToken ?? ''}` },
+    });
+
 /** Participation « story » d'un membre : enregistrée en attente de vérification. */
 export function useAmbassadorEntry(memberToken: string | null) {
   const { config } = useTenant();
   const sub = config.tenant.subdomain;
+  const client = useQueryClient();
   return useMutation({
     mutationFn: (body: AmbassadorEntryRequest) =>
-      apiPost(`/v1/tenants/${sub}/ambassador/entries`, body, ambassadorEntrySchema, (input, init) =>
-        fetch(input, {
-          ...init,
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${memberToken ?? ''}`,
-          },
-        }),
+      apiPost(
+        `/v1/tenants/${sub}/ambassador/entries`,
+        body,
+        ambassadorEntrySchema,
+        memberFetch(memberToken),
+      ),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['ambassador-entries', sub] });
+      void client.invalidateQueries({ queryKey: ['ambassador-profile', sub] });
+    },
+  });
+}
+
+/** Participations du membre et leur étape (lot 17) : historique dans Compte. */
+export function useAmbassadorEntries(memberToken: string | null) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useQuery({
+    queryKey: ['ambassador-entries', sub, memberToken],
+    queryFn: () =>
+      apiGet(
+        `/v1/tenants/${sub}/ambassador/entries`,
+        ambassadorEntriesSchema,
+        memberFetch(memberToken),
+      ),
+    enabled: memberToken !== null,
+  });
+}
+
+/** Compte Instagram mémorisé du membre (lot 17) : saisi une fois, modifiable. */
+export function useAmbassadorProfile(memberToken: string | null) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useQuery({
+    queryKey: ['ambassador-profile', sub, memberToken],
+    queryFn: () =>
+      apiGet(
+        `/v1/tenants/${sub}/ambassador/profile`,
+        ambassadorProfileSchema,
+        memberFetch(memberToken),
+      ),
+    enabled: memberToken !== null,
+  });
+}
+
+export function useSaveAmbassadorProfile(memberToken: string | null) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (instagramHandle: string) =>
+      apiPost(
+        `/v1/tenants/${sub}/ambassador/profile`,
+        { instagramHandle },
+        ambassadorProfileSchema,
+        memberFetch(memberToken, 'PUT'),
+      ),
+    onSuccess: (data) => {
+      client.setQueryData(['ambassador-profile', sub, memberToken], data);
+    },
+  });
+}
+
+/** Analyse de la photo (lot 17) : la photo est envoyée pour vérification, jamais conservée. */
+export function usePhotoCheck(memberToken: string | null) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useMutation({
+    mutationFn: (body: PhotoCheckRequest) =>
+      apiPost(
+        `/v1/tenants/${sub}/ambassador/photo-check`,
+        body,
+        photoCheckResponseSchema,
+        memberFetch(memberToken),
       ),
   });
 }

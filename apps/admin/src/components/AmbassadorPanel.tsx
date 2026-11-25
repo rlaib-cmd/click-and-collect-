@@ -2,11 +2,15 @@
 
 import {
   adminAmbassadorEntriesSchema,
+  adminAmbassadorEntrySchema,
   ambassadorSettingsSchema,
-  type AmbassadorSettingsDto,
+  type AdminAmbassadorEntryDto,
+  type AmbassadorEventDto,
+  type AmbassadorSettingsInput,
 } from '@splash360/contracts';
+import { can } from '@splash360/core';
 import { messages } from '@splash360/i18n';
-import { useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { z } from 'zod';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -17,19 +21,42 @@ const settingsResponse = z.object({
   enabled: z.boolean(),
   instagramHandle: z.string().nullable(),
   bonusPoints: z.number().int(),
+  checkAfterHours: z.number().int().default(20),
+  creditAfterHours: z.number().int().default(24),
+  photoCategory: z.string().default('restaurant'),
 });
 
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('fr-FR') : '—');
+
+function eventLine(e: AmbassadorEventDto): string {
+  const detail = Object.entries(e.detail)
+    .map(([k, v]) => `${k} : ${String(v)}`)
+    .join(' · ');
+  return `${when(e.at)} — ${t.eventLabel[e.type]} ${t.by(e.actor)}${detail ? ` (${detail})` : ''}`;
+}
+
 /**
- * Réglages « Ambassadeur » et participations reçues (lot 15, ADR 0019). Lecture seule des
- * participations : leur vérification sera automatique (mention Instagram, ticket Splash360).
+ * Fidélité → Ambassadeur (lots 15 et 17, ADR 0019 et 0022) : réglages (bonus, délais, catégorie)
+ * et suivi des participations, avec « Mention reçue », « Refuser », « Valider maintenant »
+ * (propriétaire et Splash360) et l'historique complet de chacune.
  */
 export function AmbassadorPanel() {
-  const { auth } = useSession();
+  const { auth, me } = useSession();
   const settings = useApi('/ambassador', settingsResponse);
   const entries = useApi('/ambassador/entries', adminAmbassadorEntriesSchema);
-  const [form, setForm] = useState({ enabled: false, handle: '', bonus: '50' });
+  const [form, setForm] = useState({
+    enabled: false,
+    handle: '',
+    bonus: '50',
+    checkAfter: '20',
+    creditAfter: '24',
+    category: 'restaurant',
+  });
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const canValidate = can(me.role, 'loyalty.validate');
 
   useEffect(() => {
     if (!settings.data) return;
@@ -37,6 +64,9 @@ export function AmbassadorPanel() {
       enabled: settings.data.enabled,
       handle: settings.data.instagramHandle ?? '',
       bonus: String(settings.data.bonusPoints),
+      checkAfter: String(settings.data.checkAfterHours),
+      creditAfter: String(settings.data.creditAfterHours),
+      category: settings.data.photoCategory,
     });
   }, [settings.data]);
 
@@ -50,9 +80,12 @@ export function AmbassadorPanel() {
       enabled: form.enabled,
       instagramHandle: form.handle.trim() === '' ? null : form.handle,
       bonusPoints: Number(form.bonus),
+      checkAfterHours: Number(form.checkAfter),
+      creditAfterHours: Number(form.creditAfter),
+      photoCategory: form.category,
     });
     if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? t.title);
-    const body: AmbassadorSettingsDto = parsed.data;
+    const body: AmbassadorSettingsInput = parsed.data;
     try {
       await api(auth, '/ambassador', z.undefined(), { method: 'PUT', body });
       setError(null);
@@ -62,6 +95,47 @@ export function AmbassadorPanel() {
       setError(err instanceof Error ? err.message : messages.admin.common.error);
     }
   };
+
+  const act = async (
+    entry: AdminAmbassadorEntryDto,
+    verb: 'mention' | 'reject' | 'validate',
+    body: Record<string, string> = {},
+  ) => {
+    setBusy(entry.id);
+    try {
+      await api(auth, `/ambassador/entries/${entry.id}/${verb}`, adminAmbassadorEntrySchema, {
+        method: 'POST',
+        body,
+      });
+      setError(null);
+      await entries.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : messages.admin.common.error);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const reject = (entry: AdminAmbassadorEntryDto) => {
+    const reason = window.prompt(t.rejectReason);
+    if (reason === null) return;
+    void act(entry, 'reject', reason.trim() ? { reason: reason.trim() } : {});
+  };
+
+  const validate = (entry: AdminAmbassadorEntryDto) => {
+    if (window.confirm(t.confirmValidate(entry.bonusPoints))) void act(entry, 'validate');
+  };
+
+  const number = (key: 'bonus' | 'checkAfter' | 'creditAfter', label: string) => (
+    <label>
+      {label}
+      <input
+        inputMode="numeric"
+        value={form[key]}
+        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+      />
+    </label>
+  );
 
   return (
     <section className="card stack" aria-labelledby="ambassadeur">
@@ -85,12 +159,17 @@ export function AmbassadorPanel() {
               onChange={(e) => setForm({ ...form, handle: e.target.value })}
             />
           </label>
+          {number('bonus', t.bonus)}
+        </div>
+        <div className="row wrap">
+          {number('checkAfter', t.checkAfter)}
+          {number('creditAfter', t.creditAfter)}
           <label>
-            {t.bonus}
+            {t.category}
             <input
-              inputMode="numeric"
-              value={form.bonus}
-              onChange={(e) => setForm({ ...form, bonus: e.target.value })}
+              value={form.category}
+              placeholder={t.categoryHint}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
             />
           </label>
         </div>
@@ -119,27 +198,96 @@ export function AmbassadorPanel() {
               <th>{t.ticket}</th>
               <th>{t.instagram}</th>
               <th>{t.status}</th>
-              <th className="num">{t.bonus}</th>
+              <th>{t.photo}</th>
+              <th>{t.creditDue}</th>
               <th>{t.date}</th>
+              <th>{t.actions}</th>
             </tr>
           </thead>
           <tbody>
-            {entries.data.entries.map((e) => (
-              <tr key={e.id}>
-                <td>
-                  {e.ticketRef}
-                  {e.scanned ? (
-                    <span className="badge" title={t.scannedHint} style={{ marginLeft: 6 }}>
-                      {t.scanned}
-                    </span>
+            {entries.data.entries.map((e) => {
+              const pending = e.status === 'pending';
+              return (
+                <Fragment key={e.id}>
+                  <tr>
+                    <td>
+                      {e.ticketRef}
+                      {e.scanned ? (
+                        <span className="badge" title={t.scannedHint} style={{ marginLeft: 6 }}>
+                          {t.scanned}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>@{e.instagramHandle}</td>
+                    <td>
+                      {t.stageLabel[e.stage]}
+                      {pending && e.needsReview ? (
+                        <span className="badge warn" style={{ marginLeft: 6 }}>
+                          {t.toReview}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td title={e.photoReason ?? undefined}>
+                      {e.photoVerdict ? t.verdictLabel[e.photoVerdict] : t.notAnalyzed}
+                      {e.photoReason ? <div className="muted">{e.photoReason}</div> : null}
+                    </td>
+                    <td>{pending ? when(e.creditDueAt) : '—'}</td>
+                    <td>{when(e.createdAt)}</td>
+                    <td>
+                      <div className="row wrap">
+                        {pending && !e.mentionReceivedAt ? (
+                          <button
+                            type="button"
+                            disabled={busy === e.id}
+                            onClick={() => void act(e, 'mention')}
+                          >
+                            {t.mention}
+                          </button>
+                        ) : null}
+                        {pending ? (
+                          <button
+                            type="button"
+                            className="danger"
+                            disabled={busy === e.id}
+                            onClick={() => reject(e)}
+                          >
+                            {t.reject}
+                          </button>
+                        ) : null}
+                        {pending && canValidate ? (
+                          <button
+                            type="button"
+                            disabled={busy === e.id}
+                            onClick={() => validate(e)}
+                          >
+                            {t.validate}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="ghost"
+                          aria-expanded={open === e.id}
+                          onClick={() => setOpen(open === e.id ? null : e.id)}
+                        >
+                          {open === e.id ? t.hideHistory : t.history}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {open === e.id ? (
+                    <tr>
+                      <td colSpan={7}>
+                        <ol className="stack" aria-label={t.history}>
+                          {e.events.map((ev, i) => (
+                            <li key={`${ev.type}-${i}`}>{eventLine(ev)}</li>
+                          ))}
+                        </ol>
+                      </td>
+                    </tr>
                   ) : null}
-                </td>
-                <td>@{e.instagramHandle}</td>
-                <td>{t.statusLabel[e.status]}</td>
-                <td className="num">{e.bonusPoints}</td>
-                <td>{new Date(e.createdAt).toLocaleString('fr-FR')}</td>
-              </tr>
-            ))}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       ) : (

@@ -19,6 +19,7 @@ const EXPECTED: Record<Permission, Record<StaffRole, boolean>> = {
   design: { super_admin: true, tenant_admin: true, manager: true, staff: false },
   promos: { super_admin: true, tenant_admin: true, manager: true, staff: false },
   loyalty: { super_admin: true, tenant_admin: true, manager: true, staff: false },
+  'loyalty.validate': { super_admin: true, tenant_admin: true, manager: false, staff: false },
   dashboard: { super_admin: true, tenant_admin: true, manager: true, staff: false },
   customers: { super_admin: true, tenant_admin: true, manager: true, staff: false },
   audit: { super_admin: true, tenant_admin: true, manager: true, staff: false },

@@ -1,46 +1,69 @@
-import { instagramHandleSchema, ticketRefFromQr, ticketRefSchema } from '@splash360/contracts';
+import { ticketRefFromQr, ticketRefSchema, type AmbassadorEntryDto } from '@splash360/contracts';
 import { messages } from '@splash360/i18n';
 import { Image } from 'expo-image';
 import { Redirect, router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   composeStory,
   copyText,
+  photoForCheck,
   photoSupported,
   pickPhoto,
   shareStory,
   type Story,
 } from '@/ambassador/media';
+import { InstagramHandleField } from '@/ambassador/InstagramHandleField';
 import { ApiRequestError } from '@/api/client';
-import { useAmbassador, useAmbassadorEntry } from '@/api/hooks';
+import {
+  useAmbassador,
+  useAmbassadorEntry,
+  useAmbassadorProfile,
+  usePhotoCheck,
+} from '@/api/hooks';
 import { titleStyle } from '@/components/brand';
 import { TicketScanner } from '@/ambassador/TicketScanner';
 import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { BackButton, Loading, PrimaryButton, Screen } from '@/components/ui';
-import { displayHandle, handleForCopy, progressIndex, type AmbassadorStep } from '@/lib/ambassador';
+import {
+  displayHandle,
+  handleForCopy,
+  photoFeedback,
+  progressIndex,
+  stageLabel,
+  type AmbassadorStep,
+} from '@/lib/ambassador';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const t = messages.ambassador;
 
+/** Résultat de l'analyse de la photo : verdict signé par le serveur, ou analyse impossible. */
+type PhotoCheck =
+  | { readonly verdict: 'accepted' | 'rejected' | 'doubtful'; readonly token: string }
+  | { readonly verdict: 'error' };
+
 /**
- * Ambassadeur (lot 15, ADR 0019) : ticket → photo du burger avec le cadre de l'enseigne → story
- * Instagram taguée. La participation part « en attente » : le bonus n'est crédité qu'une fois la
- * mention vérifiée (vérification automatique à venir), une seule fois par ticket.
+ * Ambassadeur (lots 15 et 17, ADR 0019 et 0022) : ticket → photo du produit (analysée, jamais
+ * conservée) avec le cadre de l'enseigne → story Instagram taguée. Une participation par achat,
+ * enregistrée « en attente » : les points sont crédités après la mention et le délai de
+ * vérification de l'enseigne. Le compte Instagram du client est mémorisé.
  */
 export default function AmbassadorScreen() {
   const { config, palette, style, radii } = useTenant();
   const { member, memberToken } = useLoyalty();
   const insets = useSafeAreaInsets();
   const program = useAmbassador();
+  const profile = useAmbassadorProfile(memberToken);
   const entry = useAmbassadorEntry(memberToken);
+  const check = usePhotoCheck(memberToken);
   const [step, setStep] = useState<AmbassadorStep>('intro');
   const [ticket, setTicket] = useState('');
   // Contenu brut du QR scanné (envoyé au serveur seulement, qui en déduit lui-même le ticket).
   const [ticketQr, setTicketQr] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const onScanned = useCallback((raw: string) => {
     setScanning(false);
     setTicketQr(raw.trim());
@@ -48,18 +71,25 @@ export default function AmbassadorScreen() {
     setError(null);
   }, []);
   const closeScanner = useCallback(() => setScanning(false), []);
-  const [handle, setHandle] = useState('');
   const [story, setStory] = useState<Story | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<PhotoCheck | null>(null);
+  const [created, setCreated] = useState<AmbassadorEntryDto | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(timer);
+  }, [toast]);
   const brand = config.tenant.name;
 
   if (!program.data) return <Loading />;
   if (!program.data.enabled) return <Redirect href="/" />;
   const { instagramHandle, bonusPoints } = program.data;
+  const savedHandle = profile.data?.instagramHandle ?? null;
 
   const progress = progressIndex(step);
   const input = [styles.input, { borderColor: palette.border, color: palette.text }];
+  const feedback = photo ? photoFeedback(photo.verdict, brand) : null;
 
   const nextFromTicket = () => {
     const parsed = ticketRefSchema.safeParse(ticket);
@@ -71,37 +101,74 @@ export default function AmbassadorScreen() {
   const choosePhoto = async () => {
     const file = await pickPhoto();
     if (!file) return;
+    setPhoto(null);
     setStory(
       await composeStory(file, {
         brand,
         primary: palette.primary,
         onPrimary: palette.onPrimary,
         background: palette.background,
+        handle: displayHandle(instagramHandle),
       }),
     );
+    // Analyse : une copie réduite part au serveur, qui ne la garde pas.
+    const sample = await photoForCheck(file).catch(() => null);
+    if (!sample) return setPhoto({ verdict: 'error' });
+    check.mutate(sample, {
+      onSuccess: (r) => setPhoto({ verdict: r.verdict, token: r.token }),
+      onError: () => setPhoto({ verdict: 'error' }),
+    });
   };
 
-  const copy = async () => {
-    setCopied(await copyText(handleForCopy(instagramHandle)));
-  };
-
-  const send = () => {
-    const parsedHandle = instagramHandleSchema.safeParse(handle);
-    if (!parsedHandle.success) return setError(t.invalidHandle);
-    setError(null);
+  /** Enregistre la participation (une seule fois pour ce parcours). */
+  const register = (handle: string, then?: () => void) => {
+    if (created) return then?.();
     entry.mutate(
       {
         ticketRef: ticket,
         ...(ticketQr ? { ticketQr } : {}),
-        instagramHandle: parsedHandle.data,
+        instagramHandle: handle,
+        ...(photo && photo.verdict !== 'error' ? { photoCheck: photo.token } : {}),
       },
       {
-        onSuccess: () => setStep('sent'),
+        onSuccess: (e) => {
+          setCreated(e);
+          then?.();
+        },
         onError: (e) =>
           setError(e instanceof ApiRequestError && e.code === 'conflict' ? t.ticketUsed : t.error),
       },
     );
   };
+
+  /** Bouton principal : copie le compte (sans « @ »), ouvre le partage, enregistre la participation. */
+  const share = () => {
+    if (!savedHandle) return setError(t.instagramMissing);
+    setError(null);
+    void copyText(handleForCopy(instagramHandle)).then((ok) => {
+      if (ok) setToast(t.nameCopied);
+    });
+    void shareStory(story, `${config.tenant.subdomain}-story.jpg`, displayHandle(instagramHandle))
+      .then((r) => {
+        if (r === 'downloaded') setToast(t.imageSaved);
+      })
+      .catch(() => undefined);
+    register(savedHandle);
+  };
+
+  const published = () => {
+    if (!savedHandle) return setError(t.instagramMissing);
+    setError(null);
+    register(savedHandle, () => setStep('sent'));
+  };
+
+  const ticketBadge = created ? (
+    <View style={[styles.badge, { borderColor: palette.primary }]}>
+      <Text style={{ color: palette.text, fontWeight: '800' }}>
+        ✓ {t.ticketRegistered(created.ticketRef)}
+      </Text>
+    </View>
+  ) : null;
 
   return (
     <Screen>
@@ -240,11 +307,28 @@ export default function AmbassadorScreen() {
                 accessibilityLabel={t.previewTitle}
               />
             ) : null}
+            {check.isPending ? (
+              <Text style={{ color: palette.textMuted }}>{t.analyzing}</Text>
+            ) : feedback ? (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={{
+                  color: feedback.blocking ? palette.accent : palette.text,
+                  fontWeight: '700',
+                }}
+              >
+                {feedback.text}
+              </Text>
+            ) : null}
+            <Text style={{ color: palette.textMuted, fontSize: 13 }}>{t.consent(brand)}</Text>
             <PrimaryButton
-              label={story ? t.changePhoto : t.takePhoto}
+              label={story ? t.retakePhoto : t.takePhoto}
+              disabled={check.isPending}
               onPress={() => void choosePhoto()}
             />
-            {story ? <PrimaryButton label={t.next} onPress={() => setStep('story')} /> : null}
+            {story && photo && !feedback?.blocking ? (
+              <PrimaryButton label={t.next} onPress={() => setStep('story')} />
+            ) : null}
           </>
         ) : null}
 
@@ -253,6 +337,7 @@ export default function AmbassadorScreen() {
             <Text style={[styles.h1, titleStyle(style), { color: palette.text }]}>
               {t.previewTitle}
             </Text>
+            {ticketBadge}
             <View
               style={[
                 styles.account,
@@ -264,55 +349,41 @@ export default function AmbassadorScreen() {
                 {displayHandle(instagramHandle)}
               </Text>
               <Text style={{ color: palette.textMuted }}>{t.steps.tagHint}</Text>
-              {photoSupported ? (
+            </View>
+            <InstagramHandleField memberToken={memberToken} />
+            {story ? (
+              <>
+                <Image
+                  source={{ uri: story.url }}
+                  style={[styles.preview, { borderRadius: radii.card }]}
+                  contentFit="contain"
+                  accessibilityLabel={t.previewTitle}
+                />
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => void copy()}
-                  style={[styles.copy, { borderColor: palette.border }]}
+                  onPress={() => setStep('photo')}
+                  style={styles.link}
                 >
-                  <Text style={{ color: palette.accent, fontWeight: '800' }}>
-                    {copied ? t.copied : t.copy}
-                  </Text>
+                  <Text style={{ color: palette.accent, fontWeight: '700' }}>{t.editPhoto}</Text>
                 </Pressable>
-              ) : null}
-            </View>
-            {story ? (
-              <Image
-                source={{ uri: story.url }}
-                style={[styles.preview, { borderRadius: radii.card }]}
-                contentFit="contain"
-                accessibilityLabel={t.previewTitle}
-              />
+              </>
             ) : (
               <Text style={{ color: palette.textMuted }}>{t.photoNative}</Text>
             )}
-            <PrimaryButton
-              label={t.share}
-              onPress={() =>
-                void shareStory(
-                  story,
-                  `${config.tenant.subdomain}-story.jpg`,
-                  displayHandle(instagramHandle),
-                )
-              }
-            />
-            <Text style={{ color: palette.text, fontWeight: '700' }}>{t.yourInstagram}</Text>
-            <TextInput
-              value={handle}
-              onChangeText={setHandle}
-              placeholder="@moncompte"
-              placeholderTextColor={palette.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              accessibilityLabel={t.yourInstagram}
-              style={input}
-            />
-            <Text style={{ color: palette.textMuted, fontSize: 13 }}>{t.yourInstagramHint}</Text>
+            {toast ? (
+              <View
+                accessibilityLiveRegion="polite"
+                style={[styles.toast, { backgroundColor: palette.text }]}
+              >
+                <Text style={{ color: palette.background, fontWeight: '700' }}>{toast}</Text>
+              </View>
+            ) : null}
             {error ? <Text style={{ color: palette.accent }}>{error}</Text> : null}
+            <PrimaryButton label={t.shareInstagram} onPress={share} />
             <PrimaryButton
               label={entry.isPending ? t.sending : t.shared}
               disabled={entry.isPending}
-              onPress={send}
+              onPress={published}
             />
           </>
         ) : null}
@@ -322,6 +393,12 @@ export default function AmbassadorScreen() {
             <Text style={[styles.h1, titleStyle(style), { color: palette.text }]}>
               {t.sentTitle}
             </Text>
+            {ticketBadge}
+            {created ? (
+              <Text style={{ color: palette.text, fontWeight: '700', textAlign: 'center' }}>
+                {stageLabel(created, brand)}
+              </Text>
+            ) : null}
             <Text style={{ color: palette.textMuted, textAlign: 'center' }}>
               {t.sentHint(bonusPoints)}
             </Text>
@@ -356,16 +433,10 @@ const styles = StyleSheet.create({
   handle: { fontSize: 26, fontWeight: '900' },
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, minHeight: 48, fontSize: 16 },
   scanned: { borderWidth: 2, borderRadius: 12, padding: 14, gap: 4 },
+  badge: { borderWidth: 2, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14 },
   link: { minHeight: 44, justifyContent: 'center' },
   preview: { width: '100%', aspectRatio: 9 / 16, backgroundColor: '#00000010' },
   account: { padding: 16, gap: 6, borderLeftWidth: 4, borderRadius: 12 },
-  copy: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginTop: 4,
-  },
+  toast: { borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16 },
   sent: { alignItems: 'center', gap: 16, paddingTop: 40 },
 });

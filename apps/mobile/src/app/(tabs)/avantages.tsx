@@ -61,7 +61,7 @@ export default function RewardsScreen() {
       {brand ? <CheckerBand /> : null}
       <View style={styles.content}>
         <Text style={{ color: palette.textMuted }}>{t.earnHint(program.pointsPerEuro)}</Text>
-        <AmbassadorCard variant="rewards" />
+        <AmbassadorCard />
         {member ? (
           <FidelityCard
             member={member}

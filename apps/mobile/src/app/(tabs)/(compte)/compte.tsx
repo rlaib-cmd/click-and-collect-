@@ -3,6 +3,7 @@ import { messages } from '@splash360/i18n';
 import { router, type Href } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AmbassadorAccountSection } from '@/ambassador/AmbassadorAccountSection';
 import { CheckerBand, titleStyle } from '@/components/brand';
 import { Icon, type IconName } from '@/components/icons';
 import { JoinForm } from '@/components/JoinForm';
@@ -117,6 +118,8 @@ export default function AccountScreen() {
               </Pressable>
             ))}
         </View>
+
+        {member ? <AmbassadorAccountSection /> : null}
 
         {member ? (
           <Pressable accessibilityRole="button" onPress={logout} style={styles.logout}>

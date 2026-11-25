@@ -275,10 +275,11 @@ export const fr = {
     card: 'Carte VIP',
     account: 'Compte',
   },
-  /** Lot 15 (ADR 0019) : photo du burger partagée en story Instagram, bonus une fois par ticket. */
+  /**
+   * Lots 15 et 17 (ADR 0019 et 0022) : photo du produit partagée en story Instagram, bonus une
+   * fois par achat, crédité après la mention et le délai de vérification.
+   */
   ambassador: {
-    cardTitle: (brand: string) => `Deviens ambassadeur ${brand}`,
-    cardHint: 'Prends ton burger en photo et partage-le en story.',
     rewardsEntry: (brand: string, points: number) =>
       `Tag en Story ${brand} et gagne ${points} points ;)`,
     title: 'Comment ça marche ?',
@@ -290,7 +291,8 @@ export const fr = {
       tag: (brand: string) => `Tague ${brand} en story`,
       tagHint: 'Dans Instagram, ajoute le sticker @Mention et choisis ce compte.',
       bonus: (points: number) => `+${points} points`,
-      bonusHint: 'Crédités une fois la mention vérifiée, une seule fois par ticket.',
+      bonusHint:
+        'Crédités après vérification de ta story (environ 24 h après la mention), une fois par achat.',
     },
     start: 'C’est parti',
     progress: { ticket: 'Ticket', photo: 'Burger', story: 'Story' },
@@ -322,12 +324,45 @@ export const fr = {
     sending: 'Envoi…',
     sentTitle: 'Bien reçu !',
     sentHint: (points: number) =>
-      `En attente de vérification · +${points} points une fois la mention confirmée.`,
+      `En attente de la mention · tes +${points} points seront crédités après vérification de ta story.`,
     back: 'Retour à l’accueil',
     ticketUsed: 'Ce ticket a déjà servi pour une story.',
     invalidTicket: 'Numéro de ticket invalide.',
     invalidHandle: 'Compte Instagram invalide.',
     error: 'Envoi impossible pour le moment. Réessaie dans un instant.',
+    /* Lot 17 : compte mémorisé, analyse de la photo, partage, étapes et historique. */
+    consent: (brand: string) =>
+      `En continuant, ta photo est analysée automatiquement pour vérifier qu’on y voit un produit ${brand}. Elle n’est pas conservée.`,
+    analyzing: 'Vérification de ta photo…',
+    photoAccepted: 'Photo validée ✓',
+    photoRejected: (brand: string) =>
+      `On ne voit pas de produit ${brand} sur ta photo… Reprends-la en montrant bien ton produit.`,
+    photoDoubtful: 'Ta photo sera vérifiée par le restaurant : tu peux continuer.',
+    photoCheckError: 'Vérification impossible pour le moment : le restaurant vérifiera ta photo.',
+    retakePhoto: 'Reprendre la photo',
+    editPhoto: 'Modifier ma photo',
+    shareInstagram: 'Partager en story Instagram',
+    nameCopied: 'Nom copié, colle-le dans le sticker @Mention',
+    imageSaved: 'Image enregistrée : ouvre Instagram et ajoute-la en story.',
+    ticketRegistered: (ref: string) => `Ticket enregistré · Ticket ${ref}`,
+    instagramSave: 'Enregistrer',
+    instagramEdit: 'Modifier',
+    instagramSaved: 'Compte enregistré : il sera repris à chaque story.',
+    instagramMissing: 'Enregistre d’abord ton compte Instagram.',
+    stage: {
+      pending: (brand: string) => `En attente de la mention de ${brand}`,
+      to_review: 'Photo en cours de vérification par le restaurant',
+      mention_received: (points: number, when: string) =>
+        `Mention reçue — +${points} points le ${when}`,
+      credited: (points: number) => `+${points} points crédités`,
+      rejected: 'Participation refusée',
+    },
+    historyTitle: 'Mes stories ambassadeur',
+    historyEmpty: 'Aucune participation pour le moment.',
+    historyTicket: (ref: string) => `Ticket ${ref}`,
+    legalTitle: 'Programme ambassadeur : photo et story Instagram',
+    legal: (brand: string) =>
+      `Pour participer, tu envoies une photo de ton achat. Elle est analysée automatiquement (intelligence artificielle) ou par l’équipe de ${brand}, uniquement pour vérifier qu’on y voit un produit de l’enseigne ; elle n’est pas conservée. Ton compte Instagram est enregistré pour retrouver ta story et te créditer tes points (une participation par achat). Les points sont crédités après vérification de la mention, et peuvent être refusés si la story est retirée ou ne mentionne pas l’enseigne.`,
   },
   loyalty: {
     hello: (name: string) => `Salut ${name},`,

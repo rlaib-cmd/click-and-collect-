@@ -67,7 +67,7 @@ export default function HomeScreen() {
 
         <OrderShortcuts />
 
-        <AmbassadorCard variant="home" />
+        <AmbassadorCard />
 
         <View
           style={[styles.order, { backgroundColor: palette.primary, borderRadius: radii.card + 6 }]}

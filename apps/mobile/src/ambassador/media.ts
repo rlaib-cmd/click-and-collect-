@@ -1,7 +1,7 @@
 /**
  * Version web : photo choisie sur l'appareil, cadre de l'enseigne dessiné sur un canvas,
  * partage par la feuille de partage du navigateur (Web Share API) ou téléchargement.
- * La photo ne quitte jamais l'appareil : rien n'est envoyé au serveur.
+ * Lot 17 : une copie réduite de la photo est envoyée pour analyse (jamais conservée).
  */
 export const photoSupported = true;
 
@@ -10,6 +10,8 @@ export interface StoryFrame {
   readonly primary: string;
   readonly onPrimary: string;
   readonly background: string;
+  /** Compte à taguer, affiché « @compte » sur le cadre. */
+  readonly handle: string;
 }
 
 export interface Story {
@@ -63,7 +65,7 @@ export async function composeStory(file: File, frame: StoryFrame): Promise<Story
 
   // Photo recadrée pour remplir la zone, sans déformation.
   const pad = 60;
-  const box = { x: pad, y: top + pad, w: W - pad * 2, h: H - top - pad * 2 - 120 };
+  const box = { x: pad, y: top + pad, w: W - pad * 2, h: H - top - pad * 2 - 220 };
   const scale = Math.max(box.w / img.width, box.h / img.height);
   const sw = box.w / scale;
   const sh = box.h / scale;
@@ -78,6 +80,13 @@ export async function composeStory(file: File, frame: StoryFrame): Promise<Story
     box.w,
     box.h,
   );
+
+  // « @compte » à taguer, sur un bandeau au-dessus du damier.
+  ctx.fillStyle = frame.primary;
+  ctx.fillRect(0, H - 220, W, 100);
+  ctx.fillStyle = frame.onPrimary;
+  ctx.font = '800 56px system-ui, sans-serif';
+  ctx.fillText(frame.handle, W / 2, H - 170, W - 120);
 
   // Damier de marque en bas.
   const cell = 40;
@@ -123,4 +132,23 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+const MAX_SIDE = 1600;
+
+/** Copie réduite (1 600 px, JPEG) pour l'analyse : bien sous la limite de 4 Mo du serveur. */
+export async function photoForCheck(
+  file: File,
+): Promise<{ mediaType: 'image/jpeg'; data: string } | null> {
+  const img = await loadImage(file);
+  const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  const data = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  return data ? { mediaType: 'image/jpeg', data } : null;
 }

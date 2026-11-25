@@ -9,16 +9,15 @@ import { useTenant } from '@/tenant/TenantProvider';
 const t = messages.ambassador;
 
 /**
- * Entrée vers le parcours Ambassadeur (lot 15) : grande carte sur l'accueil, ligne compacte dans
- * Avantages. Rien n'est affiché si l'enseigne n'a pas activé la fonction.
+ * Entrée vers le parcours Ambassadeur (lots 15 et 17) : une seule carte, aux couleurs de
+ * l'enseigne (« Tag en Story … et gagne … points ;) »), sur l'accueil et dans Avantages.
+ * Rien n'est affiché si l'enseigne n'a pas activé la fonction.
  */
-export function AmbassadorCard({ variant }: { variant: 'home' | 'rewards' }) {
+export function AmbassadorCard() {
   const { config, palette, style, radii } = useTenant();
   const program = useAmbassador();
   if (!program.data?.enabled) return null;
-  const brand = config.tenant.name;
-  const title =
-    variant === 'home' ? t.cardTitle(brand) : t.rewardsEntry(brand, program.data.bonusPoints);
+  const title = t.rewardsEntry(config.tenant.name, program.data.bonusPoints);
   return (
     <Pressable
       accessibilityRole="button"
@@ -27,41 +26,19 @@ export function AmbassadorCard({ variant }: { variant: 'home' | 'rewards' }) {
       style={[
         styles.card,
         {
-          backgroundColor: variant === 'home' ? palette.surface : palette.primary,
+          backgroundColor: palette.primary,
           borderColor: palette.border,
           borderRadius: radii.card + 6,
         },
       ]}
     >
-      <View
-        style={[
-          styles.icon,
-          { backgroundColor: variant === 'home' ? palette.primary : palette.onPrimary },
-        ]}
-      >
-        <Icon
-          name="star"
-          color={variant === 'home' ? palette.onPrimary : palette.primary}
-          size={22}
-        />
+      <View style={[styles.icon, { backgroundColor: palette.onPrimary }]}>
+        <Icon name="star" color={palette.primary} size={22} />
       </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text
-          style={[
-            styles.title,
-            titleStyle(style),
-            { color: variant === 'home' ? palette.text : palette.onPrimary },
-          ]}
-        >
-          {title}
-        </Text>
-        {variant === 'home' ? <Text style={{ color: palette.textMuted }}>{t.cardHint}</Text> : null}
-      </View>
-      <Text
-        style={{ color: variant === 'home' ? palette.accent : palette.onPrimary, fontSize: 20 }}
-      >
-        ›
+      <Text style={[styles.title, titleStyle(style), { color: palette.onPrimary, flex: 1 }]}>
+        {title}
       </Text>
+      <Text style={{ color: palette.onPrimary, fontSize: 20 }}>›</Text>
     </Pressable>
   );
 }
