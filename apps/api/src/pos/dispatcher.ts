@@ -112,6 +112,9 @@ async function advance(
   const now = deps.now ?? (() => new Date());
   const timing = posTiming(deps);
   const { tenantId, id: orderId } = order;
+  // Commande annulée ou remboursée : elle ne doit jamais partir (ou repartir) en caisse (audit M5).
+  if (order.status === 'cancelled' || order.status === 'refunded')
+    throw new PosRejectedError('Commande annulée ou remboursée : pas d’envoi en caisse', false);
   let ticket: PosTicket | null = await deps.tickets.getTicket(tenantId, orderId);
 
   // Sur place (ou commande antérieure au lot 14) : la commande n'a pas encore de ticket.

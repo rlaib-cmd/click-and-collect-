@@ -40,9 +40,13 @@ export interface OperationsStore {
   markDispatched(orderId: string, externalReference: string): Promise<void>;
   /** `retryAt` null : abandon définitif, l'alerte apparaît au back-office. */
   markDispatchFailed(orderId: string, error: string, retryAt: Date | null): Promise<void>;
-  listFailedDispatches(tenantId: string): Promise<FailedDispatch[]>;
-  /** Relance manuelle depuis le back-office. */
-  retryDispatch(tenantId: string, orderId: string): Promise<boolean>;
+  /** `restaurantId` : envois d'un seul restaurant (équipier, audit du 25/11 M5). */
+  listFailedDispatches(tenantId: string, restaurantId?: string): Promise<FailedDispatch[]>;
+  /**
+   * Relance manuelle depuis le back-office. Jamais pour une commande annulée ou remboursée
+   * (elle serait préparée alors que le client est remboursé, audit M5).
+   */
+  retryDispatch(tenantId: string, orderId: string, restaurantId?: string): Promise<boolean>;
   /** Changement de statut contrôlé par la machine à états de `core`, tracé avec son auteur. */
   changeStatus(
     tenantId: string,
@@ -88,7 +92,7 @@ export function createPostgresOperationsStore(sql: Sql): OperationsStore {
         where order_id = ${orderId}`;
     },
 
-    async listFailedDispatches(tenantId) {
+    async listFailedDispatches(tenantId, restaurantId) {
       const rows = await sql<
         {
           order_id: string;
@@ -101,6 +105,7 @@ export function createPostgresOperationsStore(sql: Sql): OperationsStore {
         select d.order_id, o.number, d.attempts, d.last_error, d.updated_at
         from public.pos_dispatches d join public.orders o on o.id = d.order_id
         where d.tenant_id = ${tenantId} and d.status = 'failed'
+          ${restaurantId ? sql`and o.restaurant_id = ${restaurantId}` : sql``}
         order by d.updated_at desc`;
       return rows.map((r) => ({
         orderId: r.order_id,
@@ -111,10 +116,13 @@ export function createPostgresOperationsStore(sql: Sql): OperationsStore {
       }));
     },
 
-    async retryDispatch(tenantId, orderId) {
+    async retryDispatch(tenantId, orderId, restaurantId) {
       const rows = await sql`
-        update public.pos_dispatches set status = 'pending', next_attempt_at = now(), attempts = 0
-        where tenant_id = ${tenantId} and order_id = ${orderId} and status = 'failed'`;
+        update public.pos_dispatches d set status = 'pending', next_attempt_at = now(), attempts = 0
+        from public.orders o
+        where d.tenant_id = ${tenantId} and d.order_id = ${orderId} and d.status = 'failed'
+          and o.id = d.order_id and o.status not in ('cancelled', 'refunded')
+          ${restaurantId ? sql`and o.restaurant_id = ${restaurantId}` : sql``}`;
       return rows.count === 1;
     },
 

@@ -441,13 +441,21 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   app.get('/alerts', async (c) => {
     const denied = allow(c, 'orders');
     if (denied) return denied;
-    return c.json({ alerts: await deps.operations.listFailedDispatches(tenantId(c)) });
+    return c.json({
+      alerts: await deps.operations.listFailedDispatches(tenantId(c), restaurantScope(ctx(c))),
+    });
   });
 
   app.post('/orders/:id/dispatch-retry', async (c) => {
     const denied = allow(c, 'orders');
     if (denied) return denied;
-    if (!(await deps.operations.retryDispatch(tenantId(c), c.req.param('id'))))
+    if (
+      !(await deps.operations.retryDispatch(
+        tenantId(c),
+        c.req.param('id'),
+        restaurantScope(ctx(c)),
+      ))
+    )
       return apiError(c, 'not_found', 'Aucun envoi en échec');
     await audit(c, 'order.dispatch_retry', c.req.param('id'));
     return c.body(null, 204);

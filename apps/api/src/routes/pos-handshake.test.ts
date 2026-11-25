@@ -268,6 +268,14 @@ describe('après paiement : envoi du paiement puis confirmation', () => {
     );
     const failed = await setup.deps.operations.listFailedDispatches(BELLA_ID);
     expect(failed[0]?.lastError).toContain('pas confirmé');
+    // Commande remboursée : « Relancer l'envoi » est refusé, rien ne repart en caisse (audit M5).
+    const orderId = setup.backend.orders[0]?.id ?? '';
+    expect(await setup.deps.operations.retryDispatch(BELLA_ID, orderId)).toBe(false);
+    expect(dispatch?.status).toBe('failed');
+    // Un équipier ne voit et ne relance que les envois de son restaurant.
+    expect(await setup.deps.operations.listFailedDispatches(BELLA_ID, 'autre-restaurant')).toEqual(
+      [],
+    );
   });
 
   it('rembourse aussitôt si la caisse refuse le paiement', async () => {

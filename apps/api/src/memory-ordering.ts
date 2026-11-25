@@ -388,10 +388,14 @@ export function createMemoryOrderBackend(
       }
       return Promise.resolve();
     },
-    listFailedDispatches(tenantId) {
+    listFailedDispatches(tenantId, restaurantId) {
+      const live = (orderId: string) => {
+        const o = orders.find((x) => x.id === orderId);
+        return !!o && (!restaurantId || o.restaurantId === restaurantId);
+      };
       return Promise.resolve(
         [...dispatches.entries()]
-          .filter(([, d]) => d.tenantId === tenantId && d.status === 'failed')
+          .filter(([id, d]) => d.tenantId === tenantId && d.status === 'failed' && live(id))
           .map(([orderId, d]) => ({
             orderId,
             number: orders.find((o) => o.id === orderId)?.number ?? 0,
@@ -401,9 +405,18 @@ export function createMemoryOrderBackend(
           })),
       );
     },
-    retryDispatch(tenantId, orderId) {
+    retryDispatch(tenantId, orderId, restaurantId) {
       const d = dispatches.get(orderId);
-      if (!d || d.tenantId !== tenantId || d.status !== 'failed') return Promise.resolve(false);
+      const o = orders.find((x) => x.id === orderId);
+      if (
+        !d ||
+        !o ||
+        d.tenantId !== tenantId ||
+        d.status !== 'failed' ||
+        ['cancelled', 'refunded'].includes(o.status) ||
+        (restaurantId && o.restaurantId !== restaurantId)
+      )
+        return Promise.resolve(false);
       Object.assign(d, { status: 'pending', attempts: 0, nextAt: 0 });
       return Promise.resolve(true);
     },
