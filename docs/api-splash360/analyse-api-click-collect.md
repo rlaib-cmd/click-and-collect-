@@ -29,8 +29,29 @@ Serveur : `https://api.splash360.fr`. Authentification : OAuth2 *client credenti
 - Carte v2 : `GET /api/export/v2/menus` (`types`, `ingredients`, `steps`/`regles`) ; traduite en
   groupes d'options par `toMenu`. Libellé client = `legende`, libellé du ticket = `nom`.
 - Ventes : `GET https://api2.splash360.fr/api/export/orders?page&pageSize(≤100)&fromDate&toDate&status`
-  (`confirmed` par défaut, `deleted`, ou les deux) ; format de réponse encore inconnu.
+  (`confirmed` par défaut, `deleted`, ou les deux) ; format relevé le 25/11 (ci-dessous).
 - Appels séquentiels par identifiant client ; une minute entre deux collectes des ventes.
+
+## Format de l'export des ventes (relevé le 25/11, Chicken Street Siège, journée du 24/11)
+
+Lecture unique par le diagnostic super-admin ; seule la structure est conservée (aucune donnée de vente
+ni de client copiée).
+
+- Enveloppe : `{ data: Vente[], pagination: { page, pageSize, total, totalPages, hasNextPage } }`.
+- `Vente` : `ticket_id` (UUID), `local_id` (UUID), `numero`, `chrono`, `restaurant_id`, `jour_comptable`
+  (AAAA-MM-JJ), `mode` (`surplace` / `emporter` / `livraison`), `status` (`confirmed` / `deleted`),
+  `commande_type` (ex. `vente`), `pos_type` (ex. `caisse`), `centre_revenu`, `devise` (`EUR;€`),
+  `total` (euros, nombre à virgule), `prix_ttc` / `prix_ht` / `montant_tva` / `total_remises` (entiers,
+  vraisemblablement en centimes), `tva[]` (`code`, `nom`, `valeur`, `montant`, `ht`, `ttc`),
+  `items[]`, `reglements[]` (`moyen` : `carte`, `especes`… ; `valeur` en euros ; `detail` ;
+  `reglementId`), `modificateurs[]`, `comments[]`, `rendus[]`, `client`, `customer_id`, `bipper`,
+  `wait_time`, horodatages ISO avec fuseau (`createdAt`, `updatedAt`, `syncedAt`, `order_start`,
+  `order_end`, `production_*`, `shipping_*`).
+- `items[]` : `itemid` (UUID), `nom`, `produitid`, `plu`, `produit_fk`, `quantite`,
+  `prix_unitaire_ttc`, `prix_ttc`, `prix_ht`, `montant_tva` (entiers), `ingredients[]`.
+- À confirmer avec Splash360 : unité des montants entiers (centimes ?), lien entre le QR code imprimé
+  sur le ticket et `ticket_id` / `local_id` / `numero` (nécessaire pour l'« achat vérifié » du
+  programme ambassadeur).
 
 ## Correspondance avec notre application
 
