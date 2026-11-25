@@ -3,6 +3,9 @@ import {
   ambassadorEntryRequestSchema,
   ambassadorSettingsSchema,
   instagramHandleSchema,
+  ticketQrSchema,
+  ticketRefFromQr,
+  ticketRefSchema,
 } from './ambassador';
 
 describe('ambassadeur : saisies normalisées', () => {
@@ -30,5 +33,33 @@ describe('ambassadeur : saisies normalisées', () => {
     expect(
       ambassadorSettingsSchema.parse({ enabled: true, instagramHandle: '@bills', bonusPoints: 50 }),
     ).toEqual({ enabled: true, instagramHandle: 'bills', bonusPoints: 50 });
+  });
+});
+
+describe('référence de ticket tirée du QR code', () => {
+  it('reprend un numéro de ticket déjà au bon format', () => {
+    expect(ticketRefFromQr(' bb-1042 ')).toBe('BB-1042');
+  });
+
+  it('lit le numéro dans une URL (paramètre connu, sinon dernier segment)', () => {
+    expect(ticketRefFromQr('https://example.test/t?ticket=bb-2042')).toBe('BB-2042');
+    expect(ticketRefFromQr('https://example.test/t?x=1&numero=A123')).toBe('A123');
+    expect(ticketRefFromQr('https://example.test/tickets/BB-3042')).toBe('BB-3042');
+  });
+
+  it('donne une empreinte stable et distincte pour un contenu non conforme', () => {
+    const a = ticketRefFromQr('{"caisse":7,"montant":"14,90"}');
+    expect(a).toMatch(/^QR-[0-9A-F]{16}$/);
+    expect(ticketRefFromQr('{"caisse":7,"montant":"14,90"}')).toBe(a);
+    expect(ticketRefFromQr('{"caisse":7,"montant":"14,91"}')).not.toBe(a);
+    expect(ticketRefSchema.safeParse(a).success).toBe(true);
+    // Empreinte FNV-1a 64 bits de référence (chaîne vide).
+    expect(ticketRefFromQr('https://')).toMatch(/^QR-/);
+  });
+
+  it('accepte un contenu de QR brut raisonnable et refuse un contenu trop long', () => {
+    expect(ticketQrSchema.safeParse('https://example.test/t?ticket=BB-2042').success).toBe(true);
+    expect(ticketQrSchema.safeParse('x'.repeat(513)).success).toBe(false);
+    expect(ticketQrSchema.safeParse('\u0000\u0001').success).toBe(false);
   });
 });

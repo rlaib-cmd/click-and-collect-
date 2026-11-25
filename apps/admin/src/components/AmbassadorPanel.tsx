@@ -126,7 +126,14 @@ export function AmbassadorPanel() {
           <tbody>
             {entries.data.entries.map((e) => (
               <tr key={e.id}>
-                <td>{e.ticketRef}</td>
+                <td>
+                  {e.ticketRef}
+                  {e.scanned ? (
+                    <span className="badge" title={t.scannedHint} style={{ marginLeft: 6 }}>
+                      {t.scanned}
+                    </span>
+                  ) : null}
+                </td>
                 <td>@{e.instagramHandle}</td>
                 <td>{t.statusLabel[e.status]}</td>
                 <td className="num">{e.bonusPoints}</td>

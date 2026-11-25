@@ -535,6 +535,8 @@ export const adminFr = {
       'Vérification automatique à venir (mention Instagram et ticket Splash360) : les participations restent « en attente » et aucun point n’est crédité pour l’instant.',
     entries: 'Participations reçues',
     ticket: 'Ticket',
+    scanned: 'QR',
+    scannedHint: 'Ticket déclaré par scan du QR code (sinon numéro saisi à la main)',
     instagram: 'Instagram du client',
     status: 'Statut',
     date: 'Date',

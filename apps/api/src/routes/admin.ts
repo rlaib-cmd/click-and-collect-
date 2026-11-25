@@ -897,6 +897,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
         ...toEntryDto(e),
         memberId: e.memberId,
         instagramHandle: e.instagramHandle,
+        scanned: e.ticketQr !== null,
         decidedAt: e.decidedAt?.toISOString() ?? null,
       })),
     });

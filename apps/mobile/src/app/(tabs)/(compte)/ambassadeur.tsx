@@ -1,8 +1,8 @@
-import { instagramHandleSchema, ticketRefSchema } from '@splash360/contracts';
+import { instagramHandleSchema, ticketRefFromQr, ticketRefSchema } from '@splash360/contracts';
 import { messages } from '@splash360/i18n';
 import { Image } from 'expo-image';
 import { Redirect, router } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -16,6 +16,7 @@ import {
 import { ApiRequestError } from '@/api/client';
 import { useAmbassador, useAmbassadorEntry } from '@/api/hooks';
 import { titleStyle } from '@/components/brand';
+import { TicketScanner } from '@/ambassador/TicketScanner';
 import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { BackButton, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { displayHandle, handleForCopy, progressIndex, type AmbassadorStep } from '@/lib/ambassador';
@@ -37,6 +38,16 @@ export default function AmbassadorScreen() {
   const entry = useAmbassadorEntry(memberToken);
   const [step, setStep] = useState<AmbassadorStep>('intro');
   const [ticket, setTicket] = useState('');
+  // Contenu brut du QR scanné (envoyé au serveur seulement, qui en déduit lui-même le ticket).
+  const [ticketQr, setTicketQr] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const onScanned = useCallback((raw: string) => {
+    setScanning(false);
+    setTicketQr(raw.trim());
+    setTicket(ticketRefFromQr(raw));
+    setError(null);
+  }, []);
+  const closeScanner = useCallback(() => setScanning(false), []);
   const [handle, setHandle] = useState('');
   const [story, setStory] = useState<Story | null>(null);
   const [copied, setCopied] = useState(false);
@@ -79,7 +90,11 @@ export default function AmbassadorScreen() {
     if (!parsedHandle.success) return setError(t.invalidHandle);
     setError(null);
     entry.mutate(
-      { ticketRef: ticket, instagramHandle: parsedHandle.data },
+      {
+        ticketRef: ticket,
+        ...(ticketQr ? { ticketQr } : {}),
+        instagramHandle: parsedHandle.data,
+      },
       {
         onSuccess: () => setStep('sent'),
         onError: (e) =>
@@ -165,17 +180,47 @@ export default function AmbassadorScreen() {
               {t.steps.ticket}
             </Text>
             <Text style={{ color: palette.textMuted }}>{t.steps.ticketHint}</Text>
-            <Text style={{ color: palette.text, fontWeight: '700' }}>{t.ticketLabel}</Text>
-            <TextInput
-              value={ticket}
-              onChangeText={setTicket}
-              placeholder={t.ticketPlaceholder}
-              placeholderTextColor={palette.textMuted}
-              autoCapitalize="characters"
-              accessibilityLabel={t.ticketLabel}
-              style={input}
-            />
-            <Text style={{ color: palette.textMuted, fontSize: 13 }}>{t.ticketSoon}</Text>
+            {scanning ? (
+              <TicketScanner onRead={onScanned} onClose={closeScanner} />
+            ) : ticketQr ? (
+              <View style={[styles.scanned, { borderColor: palette.primary }]}>
+                <Text style={{ color: palette.text, fontWeight: '800' }} accessibilityRole="text">
+                  ✓ {t.scanned(ticket)}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setScanning(true)}
+                  style={styles.link}
+                >
+                  <Text style={{ color: palette.accent, fontWeight: '700' }}>{t.scanRetry}</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setTicketQr(null);
+                    setTicket('');
+                  }}
+                  style={styles.link}
+                >
+                  <Text style={{ color: palette.accent, fontWeight: '700' }}>{t.scanTyped}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <PrimaryButton label={t.scanTicket} onPress={() => setScanning(true)} />
+                <Text style={{ color: palette.textMuted, textAlign: 'center' }}>{t.orType}</Text>
+                <Text style={{ color: palette.text, fontWeight: '700' }}>{t.ticketLabel}</Text>
+                <TextInput
+                  value={ticket}
+                  onChangeText={setTicket}
+                  placeholder={t.ticketPlaceholder}
+                  placeholderTextColor={palette.textMuted}
+                  autoCapitalize="characters"
+                  accessibilityLabel={t.ticketLabel}
+                  style={input}
+                />
+              </>
+            )}
             {error ? <Text style={{ color: palette.accent }}>{error}</Text> : null}
             <PrimaryButton label={t.next} onPress={nextFromTicket} />
           </>
@@ -310,6 +355,8 @@ const styles = StyleSheet.create({
   howTitle: { fontSize: 17, fontWeight: '800' },
   handle: { fontSize: 26, fontWeight: '900' },
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, minHeight: 48, fontSize: 16 },
+  scanned: { borderWidth: 2, borderRadius: 12, padding: 14, gap: 4 },
+  link: { minHeight: 44, justifyContent: 'center' },
   preview: { width: '100%', aspectRatio: 9 / 16, backgroundColor: '#00000010' },
   account: { padding: 16, gap: 6, borderLeftWidth: 4, borderRadius: 12 },
   copy: {

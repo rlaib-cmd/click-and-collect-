@@ -1,6 +1,7 @@
 import type { LoyaltyProvider } from '@splash360/api-loyalty';
 import {
   ambassadorEntryRequestSchema,
+  ticketRefFromQr,
   type AmbassadorConfig,
   type AmbassadorEntryDto,
 } from '@splash360/contracts';
@@ -75,10 +76,14 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
       memberId,
     );
     if (!member) return apiError(c, 'unauthorized', 'Compte fidélité introuvable');
+    // QR scanné : la référence est recalculée ici à partir du contenu brut (pas de confiance au client).
+    const ticketQr = parsed.data.ticketQr ?? null;
+    const ticketRef = ticketQr ? ticketRefFromQr(ticketQr) : parsed.data.ticketRef;
     const created = await deps.ambassador.createEntry({
       tenantId: tenant.id,
       memberId,
-      ticketRef: parsed.data.ticketRef,
+      ticketRef,
+      ticketQr,
       instagramHandle: parsed.data.instagramHandle,
       bonusPoints: s.bonusPoints,
     });

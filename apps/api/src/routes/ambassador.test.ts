@@ -101,6 +101,30 @@ describe('ambassadeur', () => {
     expect(mine.entries).toHaveLength(1);
   });
 
+  it('déduit lui-même le ticket du QR scanné, sans croire le numéro envoyé par l’app', async () => {
+    const s = setup();
+    const session = await join(s);
+    const res = await enter(s, session.memberToken, {
+      ticketRef: 'FAUX-999', // ignoré : le serveur relit le QR
+      ticketQr: 'https://example.test/t?ticket=bb-2042',
+      instagramHandle: 'camille',
+    });
+    expect(res.status).toBe(201);
+    expect(ambassadorEntrySchema.parse(await res.json()).ticketRef).toBe('BB-2042');
+    expect(s.ambassador.entries[0]).toMatchObject({
+      ticketRef: 'BB-2042',
+      ticketQr: 'https://example.test/t?ticket=bb-2042',
+    });
+    // Le même ticket, saisi à la main ensuite : déjà utilisé.
+    const manual = await enter(s, session.memberToken, {
+      ticketRef: 'BB-2042',
+      instagramHandle: 'camille',
+    });
+    expect(manual.status).toBe(409);
+    // Le back-office voit qu'il s'agit d'un scan.
+    expect(s.ambassador.entries.map((e) => e.ticketQr !== null)).toEqual([true]);
+  });
+
   it('exige un membre connecté et une saisie valide', async () => {
     const s = setup();
     expect((await enter(s, null, { ticketRef: 'BB1', instagramHandle: 'x' })).status).toBe(401);

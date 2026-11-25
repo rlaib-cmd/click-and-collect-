@@ -23,6 +23,89 @@ export const ticketRefSchema = z
   .transform((v) => v.toUpperCase().replace(/\s+/g, ''))
   .pipe(z.string().regex(/^[A-Z0-9-]{3,40}$/, 'Numéro de ticket invalide'));
 
+const TICKET_REF = /^[A-Z0-9-]{3,40}$/;
+const normalizeRef = (v: string) => v.trim().toUpperCase().replace(/\s+/g, '');
+const QR_PARAMS = ['ticket', 'ticketId', 'ticket_id', 'numero', 'num', 'id', 't'];
+
+/** Octets UTF-8 d'une chaîne (sans TextEncoder : le paquet n'embarque pas les types du DOM). */
+function utf8(text: string): number[] {
+  const bytes: number[] = [];
+  for (const ch of text) {
+    const c = ch.codePointAt(0) ?? 0;
+    if (c < 0x80) bytes.push(c);
+    else if (c < 0x800) bytes.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+    else if (c < 0x10000) bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    else
+      bytes.push(
+        0xf0 | (c >> 18),
+        0x80 | ((c >> 12) & 63),
+        0x80 | ((c >> 6) & 63),
+        0x80 | (c & 63),
+      );
+  }
+  return bytes;
+}
+
+/** Empreinte FNV-1a 64 bits en hexadécimal (16 caractères), déterministe et sans module natif. */
+function fnv1a64(text: string): string {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  for (const byte of utf8(text)) {
+    hash ^= BigInt(byte);
+    hash = (hash * prime) & 0xffffffffffffffffn;
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
+const safeDecode = (v: string) => {
+  try {
+    return decodeURIComponent(v.replace(/\+/g, ' '));
+  } catch {
+    return v;
+  }
+};
+
+/**
+ * Référence de ticket tirée du QR code imprimé sur le ticket de caisse. Le format du QR Splash360
+ * n'est pas encore connu (questions-en-attente n° 17) : on ne présume rien de sa structure.
+ * - contenu déjà au format d'un numéro de ticket : repris tel quel (normalisé) ;
+ * - URL : premier paramètre connu (ticket, ticketId, ticket_id, numero, num, id, t) au bon format,
+ *   sinon dernier segment du chemin au bon format ;
+ * - sinon : « QR- » + empreinte du contenu (un même ticket donne toujours la même référence, ce
+ *   qui suffit pour « une participation par ticket »).
+ * Le serveur la recalcule lui-même à partir du contenu brut : il ne fait pas confiance au client.
+ */
+export function ticketRefFromQr(raw: string): string {
+  const content = raw.trim();
+  const direct = normalizeRef(content);
+  if (TICKET_REF.test(direct)) return direct;
+  const url = /^https?:\/\/[^/?#]+([^?#]*)(?:\?([^#]*))?/i.exec(content);
+  if (url) {
+    const params = new Map<string, string>();
+    for (const pair of (url[2] ?? '').split('&')) {
+      const [name = '', value = ''] = pair.split('=');
+      const key = safeDecode(name);
+      if (key && !params.has(key)) params.set(key, safeDecode(value));
+    }
+    for (const name of QR_PARAMS) {
+      const value = params.get(name);
+      if (value !== undefined && TICKET_REF.test(normalizeRef(value))) return normalizeRef(value);
+    }
+    const last = (url[1] ?? '').split('/').filter(Boolean).at(-1);
+    if (last && TICKET_REF.test(normalizeRef(safeDecode(last))))
+      return normalizeRef(safeDecode(last));
+  }
+  return `QR-${fnv1a64(content).toUpperCase()}`;
+}
+
+/** Contenu brut du QR code du ticket : 512 caractères imprimables au plus. */
+export const ticketQrSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(512)
+  .regex(/^[\x20-\x7E\u00A0-\uFFFF]+$/, 'QR code illisible');
+
 /** Réponse publique de GET /v1/tenants/{subdomain}/ambassador. */
 export const ambassadorConfigSchema = z.discriminatedUnion('enabled', [
   z.object({
@@ -38,6 +121,8 @@ export type AmbassadorConfig = z.infer<typeof ambassadorConfigSchema>;
 /** POST /v1/tenants/{subdomain}/ambassador/entries (membre connecté). */
 export const ambassadorEntryRequestSchema = z.object({
   ticketRef: ticketRefSchema,
+  /** Contenu brut du QR scanné : le serveur en déduit lui-même `ticketRef` (ticketRefFromQr). */
+  ticketQr: ticketQrSchema.optional(),
   instagramHandle: instagramHandleSchema,
 });
 export type AmbassadorEntryRequest = z.input<typeof ambassadorEntryRequestSchema>;
@@ -73,6 +158,8 @@ export const adminAmbassadorEntriesSchema = z.object({
   entries: z.array(
     ambassadorEntrySchema.extend({
       memberId: z.string(),
+      /** Participation déclarée par scan du QR du ticket (sinon numéro saisi). */
+      scanned: z.boolean().default(false),
       instagramHandle: z.string(),
       decidedAt: z.iso.datetime().nullable(),
     }),

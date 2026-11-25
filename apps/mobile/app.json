@@ -42,7 +42,7 @@
             "useFrameworks": "dynamic"
           },
           "android": {
-            "extraProguardRules": "# Stripe : le provisionnement de cartes (Issuing) n'est pas utilis\u00e9 et ses classes ne sont pas publiques.\n-dontwarn com.stripe.android.pushProvisioning.**"
+            "extraProguardRules": "# Stripe : le provisionnement de cartes (Issuing) n'est pas utilisé et ses classes ne sont pas publiques.\n-dontwarn com.stripe.android.pushProvisioning.**"
           }
         }
       ],
@@ -51,6 +51,14 @@
         {
           "merchantIdentifier": "merchant.fr.splash360.commande",
           "enableGooglePay": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "L’application utilise la caméra pour scanner le QR code de ton ticket de caisse.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ],
       "expo-notifications",

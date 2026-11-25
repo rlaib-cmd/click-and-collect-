@@ -43,6 +43,16 @@ describe.skipIf(!url)('AmbassadorStore Postgres (lot 15)', () => {
     });
     expect(again).toEqual({ ok: false, error: 'ticket_already_used' });
     if (!first.ok) throw new Error('participation non créée');
+    expect(first.entry.ticketQr).toBeNull();
+    const scanned = await store.createEntry({
+      tenantId: BILLS,
+      memberId: 'membre-test',
+      ticketRef: `T${run}Q`,
+      ticketQr: `https://example.test/t?ticket=T${run}Q`,
+      instagramHandle: 'client.test',
+      bonusPoints: 50,
+    });
+    expect(scanned.ok && scanned.entry.ticketQr).toBe(`https://example.test/t?ticket=T${run}Q`);
 
     const at = new Date();
     const [a, b] = await Promise.all([
@@ -52,6 +62,7 @@ describe.skipIf(!url)('AmbassadorStore Postgres (lot 15)', () => {
     // Deux décisions simultanées : une seule passe (un seul crédit de points).
     expect([a, b].filter(Boolean)).toHaveLength(1);
     expect(await store.decide(BELLA, first.entry.id, 'rejected', at)).toBeNull();
-    expect((await store.memberEntries(BILLS, 'membre-test'))[0]?.status).toBe('confirmed');
+    const mine = await store.memberEntries(BILLS, 'membre-test');
+    expect(mine.find((e) => e.id === first.entry.id)?.status).toBe('confirmed');
   });
 });

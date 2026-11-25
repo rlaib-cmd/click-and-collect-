@@ -17,6 +17,8 @@ export interface AmbassadorEntry {
   readonly memberId: string;
   readonly status: AmbassadorStatus;
   readonly ticketRef: string;
+  /** Contenu brut du QR scanné ; null si le numéro a été saisi. */
+  readonly ticketQr: string | null;
   readonly instagramHandle: string;
   readonly bonusPoints: number;
   readonly createdAt: Date;
@@ -27,6 +29,7 @@ export interface NewAmbassadorEntry {
   readonly tenantId: string;
   readonly memberId: string;
   readonly ticketRef: string;
+  readonly ticketQr?: string | null;
   readonly instagramHandle: string;
   readonly bonusPoints: number;
 }
@@ -66,6 +69,7 @@ interface Row {
   member_id: string;
   status: AmbassadorStatus;
   ticket_ref: string;
+  ticket_qr: string | null;
   instagram_handle: string;
   bonus_points: number;
   created_at: Date;
@@ -78,6 +82,7 @@ const toEntry = (r: Row): AmbassadorEntry => ({
   memberId: r.member_id,
   status: r.status,
   ticketRef: r.ticket_ref,
+  ticketQr: r.ticket_qr,
   instagramHandle: r.instagram_handle,
   bonusPoints: r.bonus_points,
   createdAt: r.created_at,
@@ -109,8 +114,8 @@ export function createPostgresAmbassadorStore(sql: Sql): AmbassadorStore {
 
     async createEntry(e) {
       const rows = await sql<Row[]>`
-        insert into public.ambassador_entries (tenant_id, member_id, ticket_ref, instagram_handle, bonus_points)
-        values (${e.tenantId}, ${e.memberId}, ${e.ticketRef}, ${e.instagramHandle}, ${e.bonusPoints})
+        insert into public.ambassador_entries (tenant_id, member_id, ticket_ref, ticket_qr, instagram_handle, bonus_points)
+        values (${e.tenantId}, ${e.memberId}, ${e.ticketRef}, ${e.ticketQr ?? null}, ${e.instagramHandle}, ${e.bonusPoints})
         on conflict (tenant_id, ticket_ref) do nothing
         returning *`;
       const r = rows[0];
@@ -160,6 +165,7 @@ export function createMemoryAmbassadorStore(
         return Promise.resolve({ ok: false, error: 'ticket_already_used' } as const);
       const entry: AmbassadorEntry = {
         ...e,
+        ticketQr: e.ticketQr ?? null,
         id: randomUUID(),
         status: 'pending',
         createdAt: new Date(),
