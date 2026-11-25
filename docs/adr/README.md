@@ -26,3 +26,4 @@ Format : Contexte, Décision, Conséquences, Statut.
 | [0021](0021-fidelite-dans-le-click-and-collect.md) | Fidélité dans le click & collect : catégories par palier, cadeau sur le ticket, profil facultatif | Acceptée |
 | [0022](0022-ambassadeur-complet.md) | Ambassadeur complet : compte Instagram mémorisé, photo analysée, mention, délais, historique | Acceptée |
 | [0023](0023-cartes-bancaires-enregistrees.md) | Cartes bancaires enregistrées : client Stripe de la plateforme, carte clonée au paiement | Acceptée |
+| [0024](0024-splash360-v2-appels-sequentiels.md) | Splash360 v2 : jeton api2, appels séquentiels par identifiant client (verrou Postgres), une minute entre deux exports des ventes, options par étapes | Acceptée |

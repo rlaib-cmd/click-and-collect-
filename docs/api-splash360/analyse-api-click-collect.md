@@ -22,6 +22,16 @@ Serveur : `https://api.splash360.fr`. Authentification : OAuth2 *client credenti
 - Accès vérifié le 24/11 : `GET /api/export/menus` sans jeton → 401 « OAuth2 authentication
   required » ; `/oauth/v2/token` attend `grant_type=client_credentials`.
 
+## Consignes v2 (CTO, 25/11 — lot 19, ADR 0024)
+
+- Jeton : `POST https://api2.splash360.fr/oauth/v2/token`, `Authorization: Basic base64(id:secret)`,
+  `grant_type=client_credentials&scope=user`, 24 h. Vérifié en recette le 25/11 (HTTP 200).
+- Carte v2 : `GET /api/export/v2/menus` (`types`, `ingredients`, `steps`/`regles`) ; traduite en
+  groupes d'options par `toMenu`. Libellé client = `legende`, libellé du ticket = `nom`.
+- Ventes : `GET https://api2.splash360.fr/api/export/orders?page&pageSize(≤100)&fromDate&toDate&status`
+  (`confirmed` par défaut, `deleted`, ou les deux) ; format de réponse encore inconnu.
+- Appels séquentiels par identifiant client ; une minute entre deux collectes des ventes.
+
 ## Correspondance avec notre application
 
 | Splash360 | Chez nous | Remarque |

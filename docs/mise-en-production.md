@@ -30,6 +30,9 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | pour inviter | Invitations des comptes du back-office (lien « Choisir mon mot de passe ») ; clé de service côté serveur uniquement |
 | `SPLASH360_CLIENT_ID`, `SPLASH360_CLIENT_SECRET` | pour la vraie caisse | Accès OAuth2 à l'API Click & Collect Splash360 (ADR 0018) ; sans eux, carte et caisse de démonstration. À poser en secret du serveur uniquement |
 | `SPLASH360_API_URL` | non | `https://api.splash360.fr` par défaut |
+| `SPLASH360_TOKEN_URL`, `SPLASH360_SCOPE`, `SPLASH360_MENU_PATH` | non | Jeton `https://api2.splash360.fr/oauth/v2/token`, portée `user`, carte `/api/export/v2/menus` par défaut (ADR 0024) |
+| `SPLASH360_ORDERS_API_URL` | non | Export des ventes, `https://api2.splash360.fr` par défaut |
+| `SPLASH360_ORDERS_CLIENT_ID`, `SPLASH360_ORDERS_CLIENT_SECRET` | non | Identifiants dédiés à l'export des ventes, si Splash360 en fournit d'autres (les deux ou aucun). Secrets du serveur |
 | `SPLASH360_FEE_VAT_RATE` | non | Taux de TVA des frais transmis à la caisse (0,2 par défaut, à confirmer avec Splash360) |
 | `POS_READY_TIMEOUT_SECONDS`, `POS_CONFIRM_TIMEOUT_SECONDS` | non | Attente de la caisse avant paiement (60 s) et de sa confirmation après paiement (300 s, puis remboursement automatique) |
 | `POS_WEBHOOK_SECRET` | pour la caisse | Secret partagé avec Splash360 (retour des statuts) |
