@@ -183,3 +183,10 @@ lue dans Supabase → Connect → Transaction pooler). L'adresse est construite 
 après une réinitialisation. Le journal « Connexion base » indique au démarrage le mode utilisé.
 `DATABASE_POOLER_URL` (adresse complète saisie à la main) reste accepté si l'hôte n'est pas posé.
 Vérification : `pg_stat_activity` ne montre que quelques connexions « Supavisor ».
+
+## Migration en attente pour la production
+
+`20261125040000_ambassador_ticket_qr.sql` (scan du QR du ticket, parcours ambassadeur) : appliquée
+en recette le 25/11, **à appliquer en production** au prochain déploiement, avant la fonction `api`
+qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS pour le scan
+(module `expo-camera`, permission caméra) ; la version web l'a déjà.
