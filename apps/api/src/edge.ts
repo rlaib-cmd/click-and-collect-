@@ -41,6 +41,7 @@ import {
   createPostgresMemberSessionStore,
 } from '@splash360/db';
 import { Hono } from 'hono';
+import { corsOriginsFrom } from './http/cors';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createSupabaseVerifier } from './admin/auth';
 import { createSupabaseAssetStorage } from './admin/logo';
@@ -209,6 +210,7 @@ const posTiming = {
 const geo = createBanGeoProvider(env('GEOCODER_URL') ?? 'https://data.geopf.fr/geocodage/search');
 
 const adminUrl = env('ADMIN_URL') ?? 'http://localhost:3000';
+
 // Invitations du back-office : Supabase Auth du même projet, clé de service fournie par le runtime.
 const inviter = createSupabaseInviter({
   url: supabaseUrl,
@@ -320,7 +322,8 @@ function build() {
       url: supabaseUrl,
       serviceKey: required('SUPABASE_SERVICE_ROLE_KEY'),
     }),
-    corsOrigins: '*',
+    // Origines web autorisées (CORS_ORIGINS, séparées par des virgules) ; `*` si absent (recette).
+    corsOrigins: corsOriginsFrom(env('CORS_ORIGINS')),
     log: true,
     trustProxy: true,
     // Posé par Cloudflare devant Supabase Edge, qui écrase toute valeur envoyée par le client.
