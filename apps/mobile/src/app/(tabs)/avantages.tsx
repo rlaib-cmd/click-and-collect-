@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckerBand, titleStyle } from '@/components/brand';
+import { AmbassadorCard } from '@/components/AmbassadorCard';
 import { Icon } from '@/components/icons';
 import { FidelityCard } from '@/components/loyalty';
 import { ProductCard } from '@/components/ProductCard';
@@ -60,6 +61,7 @@ export default function RewardsScreen() {
       {brand ? <CheckerBand /> : null}
       <View style={styles.content}>
         <Text style={{ color: palette.textMuted }}>{t.earnHint(program.pointsPerEuro)}</Text>
+        <AmbassadorCard variant="rewards" />
         {member ? (
           <FidelityCard
             member={member}

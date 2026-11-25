@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckerBand, titleStyle } from '@/components/brand';
 import { OrderShortcuts } from '@/components/CurrentOrder';
+import { AmbassadorCard } from '@/components/AmbassadorCard';
 import { FeaturedProducts } from '@/components/FeaturedProducts';
 import { FidelityCard, JoinCard } from '@/components/loyalty';
 import { TenantLogo } from '@/components/TenantLogo';
@@ -65,6 +66,8 @@ export default function HomeScreen() {
         </View>
 
         <OrderShortcuts />
+
+        <AmbassadorCard variant="home" />
 
         <View
           style={[styles.order, { backgroundColor: palette.primary, borderRadius: radii.card + 6 }]}

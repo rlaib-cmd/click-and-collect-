@@ -1,6 +1,9 @@
 import { readinessInterval, trackingInterval } from '@/lib/polling';
 import {
+  ambassadorConfigSchema,
+  ambassadorEntrySchema,
   availabilitySchema,
+  type AmbassadorEntryRequest,
   deliveryCheckSchema,
   geoSearchSchema,
   menuSchema,
@@ -233,5 +236,34 @@ export function useMemberOrders(memberToken: string | null, before: number | nul
           fetch(input, { ...init, headers: { Authorization: `Bearer ${memberToken ?? ''}` } }),
       ),
     enabled: memberToken !== null,
+  });
+}
+
+/** Programme Ambassadeur de l'enseigne (lot 15, ADR 0019). */
+export function useAmbassador() {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useQuery({
+    queryKey: ['ambassador', sub],
+    queryFn: () => apiGet(`/v1/tenants/${sub}/ambassador`, ambassadorConfigSchema),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Participation « story » d'un membre : enregistrée en attente de vérification. */
+export function useAmbassadorEntry(memberToken: string | null) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useMutation({
+    mutationFn: (body: AmbassadorEntryRequest) =>
+      apiPost(`/v1/tenants/${sub}/ambassador/entries`, body, ambassadorEntrySchema, (input, init) =>
+        fetch(input, {
+          ...init,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${memberToken ?? ''}`,
+          },
+        }),
+      ),
   });
 }
