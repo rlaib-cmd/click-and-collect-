@@ -278,6 +278,16 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
     reset(): void;
   }
 
+  /** Code d'erreur OAuth (« invalid_client », « invalid_scope »…), jamais d'identifiant. */
+  function oauthReason(body: unknown): string {
+    if (!body || typeof body !== 'object') return '';
+    const { error, error_description: description } = body as Record<string, unknown>;
+    const parts = [error, description]
+      .filter((v): v is string => typeof v === 'string')
+      .map((v) => v.slice(0, 120));
+    return parts.length ? ` : ${parts.join(' — ')}` : '';
+  }
+
   function tokenSource(
     clientId: string,
     clientSecret: string,
@@ -307,7 +317,7 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
       if (!res.ok) {
         // 400/401 : identifiants refusés, inutile d'insister ; 5xx : panne passagère.
         throw new Splash360Error(
-          `Jeton Splash360 refusé (HTTP ${res.status})`,
+          `Jeton Splash360 refusé (HTTP ${res.status}${oauthReason(res.body)})`,
           res.status,
           res.status >= 500,
         );
@@ -366,6 +376,7 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
       if (!refused) throw error;
       options.onNotice?.('Identifiants de carte Splash360 refusés : repli sur les principaux', {
         status: error.status,
+        reason: error.message,
       });
       return authorized(path, {}, mainToken);
     }
