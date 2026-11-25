@@ -1,4 +1,9 @@
-import { ticketRefFromQr, ticketRefSchema, type AmbassadorEntryDto } from '@splash360/contracts';
+import {
+  TICKET_PHOTO_MAX_AGE_DAYS,
+  ticketRefFromQr,
+  ticketRefSchema,
+  type AmbassadorEntryDto,
+} from '@splash360/contracts';
 import { messages } from '@splash360/i18n';
 import { Image } from 'expo-image';
 import { Redirect, router } from 'expo-router';
@@ -21,6 +26,7 @@ import {
   useAmbassadorEntry,
   useAmbassadorProfile,
   usePhotoCheck,
+  useTicketPhoto,
 } from '@/api/hooks';
 import { titleStyle } from '@/components/brand';
 import { TicketScanner } from '@/ambassador/TicketScanner';
@@ -32,6 +38,8 @@ import {
   photoFeedback,
   progressIndex,
   stageLabel,
+  ticketCheckLabel,
+  ticketReadSummary,
   type AmbassadorStep,
 } from '@/lib/ambassador';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
@@ -43,6 +51,19 @@ const t = messages.ambassador;
 type PhotoCheck =
   | { readonly verdict: 'accepted' | 'rejected' | 'doubtful'; readonly token: string }
   | { readonly verdict: 'error' };
+
+/**
+ * Ticket photographié (lot 20) : données lues par l'IA, signées par le serveur, à confirmer par
+ * le client ; ou lecture impossible (il tape alors le numéro).
+ */
+type Receipt =
+  | {
+      readonly kind: 'read';
+      readonly summary: string;
+      readonly token: string;
+      readonly confirmed: boolean;
+    }
+  | { readonly kind: 'failed'; readonly message: string };
 
 /**
  * Ambassadeur (lots 15 et 17, ADR 0019 et 0022) : ticket → photo du produit (analysée, jamais
@@ -58,6 +79,8 @@ export default function AmbassadorScreen() {
   const profile = useAmbassadorProfile(memberToken);
   const entry = useAmbassadorEntry(memberToken);
   const check = usePhotoCheck(memberToken);
+  const ticketPhoto = useTicketPhoto(memberToken);
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [step, setStep] = useState<AmbassadorStep>('intro');
   const [ticket, setTicket] = useState('');
   // Contenu brut du QR scanné (envoyé au serveur seulement, qui en déduit lui-même le ticket).
@@ -66,6 +89,7 @@ export default function AmbassadorScreen() {
   const [error, setError] = useState<string | null>(null);
   const onScanned = useCallback((raw: string) => {
     setScanning(false);
+    setReceipt(null);
     setTicketQr(raw.trim());
     setTicket(ticketRefFromQr(raw));
     setError(null);
@@ -91,7 +115,42 @@ export default function AmbassadorScreen() {
   const input = [styles.input, { borderColor: palette.border, color: palette.text }];
   const feedback = photo ? photoFeedback(photo.verdict, brand) : null;
 
+  const receiptToken = receipt?.kind === 'read' && receipt.confirmed ? receipt.token : null;
+
+  /** « Achat vérifié » : le ticket est lu par le serveur (copie réduite, jamais conservée). */
+  const takeTicketPhoto = async () => {
+    const file = await pickPhoto();
+    if (!file) return;
+    setError(null);
+    setTicketQr(null);
+    setReceipt(null);
+    const sample = await photoForCheck(file).catch(() => null);
+    if (!sample) return setReceipt({ kind: 'failed', message: t.ticketPhotoError });
+    ticketPhoto.mutate(sample, {
+      onSuccess: (r) => {
+        const summary = ticketReadSummary(r);
+        setReceipt(
+          summary && r.token
+            ? { kind: 'read', summary, token: r.token, confirmed: false }
+            : { kind: 'failed', message: t.ticketUnreadable },
+        );
+      },
+      onError: (e) =>
+        setReceipt({
+          kind: 'failed',
+          message:
+            e instanceof ApiRequestError && e.code === 'invalid_request'
+              ? t.ticketDateRejected(TICKET_PHOTO_MAX_AGE_DAYS)
+              : t.ticketPhotoError,
+        }),
+    });
+  };
+
   const nextFromTicket = () => {
+    if (receiptToken) {
+      setError(null);
+      return setStep(photoSupported ? 'photo' : 'story');
+    }
     const parsed = ticketRefSchema.safeParse(ticket);
     if (!parsed.success) return setError(t.invalidTicket);
     setError(null);
@@ -125,8 +184,9 @@ export default function AmbassadorScreen() {
     if (created) return then?.();
     entry.mutate(
       {
-        ticketRef: ticket,
-        ...(ticketQr ? { ticketQr } : {}),
+        ...(receiptToken
+          ? { ticketPhoto: receiptToken }
+          : { ticketRef: ticket, ...(ticketQr ? { ticketQr } : {}) }),
         instagramHandle: handle,
         ...(photo && photo.verdict !== 'error' ? { photoCheck: photo.token } : {}),
       },
@@ -136,7 +196,13 @@ export default function AmbassadorScreen() {
           then?.();
         },
         onError: (e) =>
-          setError(e instanceof ApiRequestError && e.code === 'conflict' ? t.ticketUsed : t.error),
+          setError(
+            e instanceof ApiRequestError && e.code === 'conflict'
+              ? t.ticketUsed
+              : e instanceof ApiRequestError && e.code === 'invalid_request' && receiptToken
+                ? t.ticketPhotoExpired
+                : t.error,
+          ),
       },
     );
   };
@@ -249,6 +315,38 @@ export default function AmbassadorScreen() {
             <Text style={{ color: palette.textMuted }}>{t.steps.ticketHint}</Text>
             {scanning ? (
               <TicketScanner onRead={onScanned} onClose={closeScanner} />
+            ) : ticketPhoto.isPending ? (
+              <Text accessibilityLiveRegion="polite" style={{ color: palette.textMuted }}>
+                {t.readingTicket}
+              </Text>
+            ) : receipt?.kind === 'read' ? (
+              <View style={[styles.scanned, { borderColor: palette.primary }]}>
+                <Text style={{ color: palette.text, fontWeight: '800' }} accessibilityRole="text">
+                  {receipt.confirmed ? '✓ ' : ''}
+                  {t.ticketReadTitle}
+                </Text>
+                <Text style={{ color: palette.text }}>{receipt.summary}</Text>
+                {!receipt.confirmed ? (
+                  <PrimaryButton
+                    label={t.ticketReadConfirm}
+                    onPress={() => setReceipt({ ...receipt, confirmed: true })}
+                  />
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void takeTicketPhoto()}
+                  style={styles.link}
+                >
+                  <Text style={{ color: palette.accent, fontWeight: '700' }}>{t.ticketRetake}</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setReceipt(null)}
+                  style={styles.link}
+                >
+                  <Text style={{ color: palette.accent, fontWeight: '700' }}>{t.scanTyped}</Text>
+                </Pressable>
+              </View>
             ) : ticketQr ? (
               <View style={[styles.scanned, { borderColor: palette.primary }]}>
                 <Text style={{ color: palette.text, fontWeight: '800' }} accessibilityRole="text">
@@ -274,6 +372,19 @@ export default function AmbassadorScreen() {
               </View>
             ) : (
               <>
+                {photoSupported ? (
+                  <>
+                    <PrimaryButton label={t.photoTicket} onPress={() => void takeTicketPhoto()} />
+                    <Text style={{ color: palette.textMuted, fontSize: 13 }}>
+                      {t.photoTicketHint} {t.ticketConsent}
+                    </Text>
+                    {receipt?.kind === 'failed' ? (
+                      <Text accessibilityLiveRegion="polite" style={{ color: palette.accent }}>
+                        {receipt.message}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
                 <PrimaryButton label={t.scanTicket} onPress={() => setScanning(true)} />
                 <Text style={{ color: palette.textMuted, textAlign: 'center' }}>{t.orType}</Text>
                 <Text style={{ color: palette.text, fontWeight: '700' }}>{t.ticketLabel}</Text>
@@ -289,7 +400,9 @@ export default function AmbassadorScreen() {
               </>
             )}
             {error ? <Text style={{ color: palette.accent }}>{error}</Text> : null}
-            <PrimaryButton label={t.next} onPress={nextFromTicket} />
+            {receipt?.kind === 'read' && !receipt.confirmed ? null : (
+              <PrimaryButton label={t.next} onPress={nextFromTicket} />
+            )}
           </>
         ) : null}
 
@@ -397,6 +510,11 @@ export default function AmbassadorScreen() {
             {created ? (
               <Text style={{ color: palette.text, fontWeight: '700', textAlign: 'center' }}>
                 {stageLabel(created, brand)}
+              </Text>
+            ) : null}
+            {created && ticketCheckLabel(created) ? (
+              <Text style={{ color: palette.textMuted, textAlign: 'center' }}>
+                {ticketCheckLabel(created)}
               </Text>
             ) : null}
             <Text style={{ color: palette.textMuted, textAlign: 'center' }}>

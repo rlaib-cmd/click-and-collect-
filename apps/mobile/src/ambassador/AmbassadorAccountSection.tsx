@@ -2,7 +2,7 @@ import { messages } from '@splash360/i18n';
 import { StyleSheet, Text, View } from 'react-native';
 import { useAmbassador, useAmbassadorEntries } from '@/api/hooks';
 import { titleStyle } from '@/components/brand';
-import { stageLabel } from '@/lib/ambassador';
+import { stageLabel, ticketCheckLabel } from '@/lib/ambassador';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { useTenant } from '@/tenant/TenantProvider';
 import { InstagramHandleField } from './InstagramHandleField';
@@ -45,6 +45,17 @@ export function AmbassadorAccountSection() {
             >
               {stageLabel(e, config.tenant.name)}
             </Text>
+            {ticketCheckLabel(e) ? (
+              <Text
+                style={{
+                  color: e.ticketCheck === 'verified' ? palette.text : palette.textMuted,
+                  fontWeight: e.ticketCheck === 'verified' ? '700' : '400',
+                }}
+              >
+                {e.ticketCheck === 'verified' ? '✓ ' : ''}
+                {ticketCheckLabel(e)}
+              </Text>
+            ) : null}
           </View>
         ))
       )}

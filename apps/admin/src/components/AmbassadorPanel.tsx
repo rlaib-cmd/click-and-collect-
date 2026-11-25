@@ -12,7 +12,7 @@ import { can } from '@splash360/core';
 import { messages } from '@splash360/i18n';
 import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { z } from 'zod';
-import { api } from '@/lib/api';
+import { api, euros } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
 
@@ -27,6 +27,8 @@ const settingsResponse = z.object({
 });
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('fr-FR') : '—');
+/** « 2026-11-24 » → « 24/11/2026 ». */
+const day = (date: string) => date.split('-').reverse().join('/');
 
 const ISO = /^\d{4}-\d{2}-\d{2}T/;
 const verdicts: Readonly<Record<string, string>> = t.verdictLabel;
@@ -36,6 +38,7 @@ function detailValue(key: string, value: string | number | boolean | null): stri
   if (typeof value === 'string' && ISO.test(value)) return when(value);
   if (key === 'verdict' && typeof value === 'string') return verdicts[value] ?? value;
   if (key === 'result' && typeof value === 'string') return t.resultLabel[value] ?? value;
+  if (key === 'totalCents' && typeof value === 'number') return euros(value);
   return String(value);
 }
 
@@ -228,6 +231,26 @@ export function AmbassadorPanel() {
                         <span className="badge" title={t.scannedHint} style={{ marginLeft: 6 }}>
                           {t.scanned}
                         </span>
+                      ) : null}
+                      {e.ticketCheck !== 'unverified' ? (
+                        <span
+                          className={`badge${e.ticketCheck === 'verified' ? '' : ' warn'}`}
+                          title={t.ticketCheckHint}
+                          style={{ marginLeft: 6 }}
+                        >
+                          {t.ticketCheckLabel[e.ticketCheck]}
+                        </span>
+                      ) : (
+                        <div className="muted">{t.ticketCheckLabel.unverified}</div>
+                      )}
+                      {e.ticketNumber && e.ticketDate && e.ticketTotalCents !== null ? (
+                        <div className="muted">
+                          {t.ticketRead(
+                            e.ticketNumber,
+                            day(e.ticketDate),
+                            euros(e.ticketTotalCents),
+                          )}
+                        </div>
                       ) : null}
                     </td>
                     <td>@{e.instagramHandle}</td>

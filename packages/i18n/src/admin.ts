@@ -554,6 +554,17 @@ export const adminFr = {
     ticket: 'Ticket',
     scanned: 'QR',
     scannedHint: 'Ticket déclaré par scan du QR code (sinon numéro saisi à la main)',
+    ticketCheckLabel: {
+      unverified: 'Non vérifié',
+      pending: 'Vérification du ticket en cours',
+      verified: 'Achat vérifié',
+      unpaid: 'Commande annulée en caisse',
+      not_found: 'Ticket introuvable : à vérifier',
+    },
+    ticketCheckHint:
+      'Ticket photographié : numéro, date et total lus par l’IA, puis comparés aux ventes de la caisse Splash360.',
+    ticketRead: (orderNumber: string, date: string, amount: string) =>
+      `Commande n° ${orderNumber} du ${date} · ${amount}`,
     instagram: 'Instagram du client',
     status: 'Étape',
     photo: 'Photo',
@@ -607,10 +618,19 @@ export const adminFr = {
       creditDueAt: 'crédit prévu',
       result: 'résultat',
       points: 'points',
+      orderNumber: 'commande n°',
+      date: 'journée',
+      totalCents: 'total (centimes)',
+      sale: 'vente Splash360',
     } as Readonly<Record<string, string>>,
-    resultLabel: { online: 'story en ligne', removed: 'story retirée' } as Readonly<
-      Record<string, string>
-    >,
+    resultLabel: {
+      online: 'story en ligne',
+      removed: 'story retirée',
+      verified: 'achat vérifié',
+      unpaid: 'commande annulée en caisse',
+      not_found: 'ticket introuvable dans les ventes',
+      unavailable: 'ventes Splash360 non branchées',
+    } as Readonly<Record<string, string>>,
   },
   audit: { action: 'Action', actor: 'Auteur', target: 'Cible', at: 'Date' },
   tenants: {

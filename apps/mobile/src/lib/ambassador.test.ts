@@ -7,6 +7,8 @@ import {
   photoFeedback,
   progressIndex,
   stageLabel,
+  ticketCheckLabel,
+  ticketReadSummary,
 } from './ambassador';
 
 const entry = (over: Partial<AmbassadorEntryDto>): AmbassadorEntryDto => ({
@@ -67,5 +69,39 @@ describe('ambassadeur', () => {
     expect(photoFeedback('accepted', 'B').blocking).toBe(false);
     expect(photoFeedback('doubtful', 'B').blocking).toBe(false);
     expect(photoFeedback('error', 'B').blocking).toBe(false);
+  });
+});
+
+describe('achat vérifié (lot 20)', () => {
+  it('affiche l’état de la vérification du ticket photographié', () => {
+    expect(ticketCheckLabel(entry({ ticketCheck: 'verified' }))).toBe('Achat vérifié');
+    expect(ticketCheckLabel(entry({ ticketCheck: 'pending' }))).toBe(
+      'Vérification du ticket en cours',
+    );
+    expect(ticketCheckLabel(entry({ ticketCheck: 'not_found' }))).toBe(
+      'Ticket introuvable : vérification par le restaurant',
+    );
+    expect(ticketCheckLabel(entry({ ticketCheck: 'unverified' }))).toBeNull();
+  });
+
+  it('résume ce qui a été lu sur le ticket, pour confirmation', () => {
+    expect(
+      ticketReadSummary({
+        readable: true,
+        orderNumber: '6',
+        date: '2026-11-24',
+        totalCents: 1230,
+        token: 'r1.x.y',
+      }),
+    ).toBe('Commande n° 6 · 24/11/2026 · 12,30\u00a0€');
+    expect(
+      ticketReadSummary({
+        readable: false,
+        orderNumber: null,
+        date: null,
+        totalCents: null,
+        token: null,
+      }),
+    ).toBeNull();
   });
 });

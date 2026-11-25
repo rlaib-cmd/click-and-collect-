@@ -313,7 +313,8 @@ export const fr = {
     title: 'Comment ça marche ?',
     steps: {
       ticket: 'Ton ticket de caisse',
-      ticketHint: 'Scanne le QR code de ton ticket ou tape son numéro : une story par ticket.',
+      ticketHint:
+        'Prends ton ticket en photo, scanne son QR code ou tape son numéro : une story par ticket.',
       photo: 'Photographie ton burger',
       photoHint: (brand: string) => `L’appli ajoute le cadre ${brand} à ta photo.`,
       tag: (brand: string) => `Tague ${brand} en story`,
@@ -384,6 +385,31 @@ export const fr = {
         `Mention reçue — +${points} points le ${when}`,
       credited: (points: number) => `+${points} points crédités`,
       rejected: 'Participation refusée',
+    },
+    /* Lot 20 (ADR 0025) : « Achat vérifié », ticket de caisse photographié et lu par l'IA. */
+    photoTicket: 'Prendre mon ticket en photo',
+    photoTicketHint:
+      'Le plus simple : on lit ton ticket et on vérifie ton achat auprès du restaurant.',
+    readingTicket: 'Lecture de ton ticket…',
+    ticketReadTitle: 'Ticket lu',
+    ticketRead: (orderNumber: string, date: string, amount: string) =>
+      `Commande n° ${orderNumber} · ${date} · ${amount}`,
+    ticketReadConfirm: 'Les informations sont justes',
+    ticketRetake: 'Reprendre la photo du ticket',
+    ticketUnreadable:
+      'On n’arrive pas à lire ton ticket. Reprends la photo bien à plat et éclairée, ou tape son numéro ci-dessous.',
+    ticketPhotoError:
+      'Lecture impossible pour le moment : tape le numéro de ton ticket ci-dessous.',
+    ticketDateRejected: (days: number) =>
+      `Ce ticket ne peut pas servir : seuls les achats des ${days} derniers jours comptent (ou la date a été mal lue). Reprends la photo ou tape le numéro.`,
+    ticketPhotoExpired: 'La photo du ticket a expiré : reprends-la.',
+    ticketConsent:
+      'Ta photo du ticket est lue automatiquement (numéro, date, montant), puis effacée : elle n’est pas conservée.',
+    ticketCheck: {
+      verified: 'Achat vérifié',
+      pending: 'Vérification du ticket en cours',
+      not_found: 'Ticket introuvable : vérification par le restaurant',
+      unpaid: 'Commande annulée en caisse',
     },
     historyTitle: 'Mes stories ambassadeur',
     historyEmpty: 'Aucune participation pour le moment.',

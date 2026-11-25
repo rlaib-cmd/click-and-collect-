@@ -1,4 +1,9 @@
-import type { AmbassadorEntryDto, PhotoVerdictDto } from '@splash360/contracts';
+import type {
+  AmbassadorEntryDto,
+  PhotoVerdictDto,
+  TicketPhotoResponse,
+} from '@splash360/contracts';
+import { formatPrice } from './format';
 import { messages } from '@splash360/i18n';
 
 /**
@@ -63,4 +68,25 @@ export function photoFeedback(
   if (verdict === 'accepted') return { text: t.photoAccepted, blocking: false };
   if (verdict === 'doubtful') return { text: t.photoDoubtful, blocking: false };
   return { text: t.photoCheckError, blocking: false };
+}
+
+/** Vérification du ticket photographié (lot 20) ; null pour un ticket scanné ou saisi. */
+export function ticketCheckLabel(entry: AmbassadorEntryDto): string | null {
+  const labels = messages.ambassador.ticketCheck;
+  switch (entry.ticketCheck) {
+    case 'verified':
+    case 'pending':
+    case 'not_found':
+    case 'unpaid':
+      return labels[entry.ticketCheck];
+    default:
+      return null;
+  }
+}
+
+/** « Commande n° 6 · 24/11/2026 · 12,30 € » : ce que l'IA a lu, à confirmer par le client. */
+export function ticketReadSummary(read: TicketPhotoResponse): string | null {
+  if (!read.readable || !read.orderNumber || !read.date || read.totalCents === null) return null;
+  const date = read.date.split('-').reverse().join('/');
+  return messages.ambassador.ticketRead(read.orderNumber, date, formatPrice(read.totalCents));
 }

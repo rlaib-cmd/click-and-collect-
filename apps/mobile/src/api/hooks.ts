@@ -5,6 +5,7 @@ import {
   ambassadorEntrySchema,
   ambassadorProfileSchema,
   photoCheckResponseSchema,
+  ticketPhotoResponseSchema,
   type PhotoCheckRequest,
   availabilitySchema,
   type AmbassadorEntryRequest,
@@ -344,6 +345,21 @@ export function usePhotoCheck(memberToken: string | null) {
         `/v1/tenants/${sub}/ambassador/photo-check`,
         body,
         photoCheckResponseSchema,
+        memberFetch(memberToken),
+      ),
+  });
+}
+
+/** « Achat vérifié » (lot 20) : lecture du ticket de caisse photographié (jamais conservé). */
+export function useTicketPhoto(memberToken: string | null) {
+  const { config } = useTenant();
+  const sub = config.tenant.subdomain;
+  return useMutation({
+    mutationFn: (body: PhotoCheckRequest) =>
+      apiPost(
+        `/v1/tenants/${sub}/ambassador/ticket-photo`,
+        body,
+        ticketPhotoResponseSchema,
         memberFetch(memberToken),
       ),
   });
