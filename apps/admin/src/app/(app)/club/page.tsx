@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
+import { AmbassadorPanel } from '@/components/AmbassadorPanel';
 import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.club;
@@ -82,6 +83,7 @@ export default function ClubPage() {
       />
       <h1>{messages.admin.nav.club}</h1>
       <p className="muted">{t.demo}</p>
+      <AmbassadorPanel />
       {error ? (
         <p className="banner danger" role="alert">
           {error}

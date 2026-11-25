@@ -521,6 +521,25 @@ export const adminFr = {
     noClub: 'Cette enseigne n’a pas de club fidélité.',
     demo: 'Données de test : la fidélité sera gérée par l’API Splash360.',
   },
+  /** Lot 15 (ADR 0019) : story Instagram taguée = bonus de points, une fois par ticket. */
+  ambassador: {
+    title: 'Ambassadeur : story Instagram',
+    intro:
+      'Le client prend son burger en photo, la partage en story en taguant votre compte et gagne un bonus, une fois par ticket.',
+    enabled: 'Proposer « Deviens ambassadeur » dans l’application',
+    handle: 'Compte Instagram à taguer (sans @)',
+    bonus: 'Bonus en points',
+    save: 'Enregistrer',
+    saved: 'Réglages enregistrés.',
+    pendingNote:
+      'Vérification automatique à venir (mention Instagram et ticket Splash360) : les participations restent « en attente » et aucun point n’est crédité pour l’instant.',
+    entries: 'Participations reçues',
+    ticket: 'Ticket',
+    instagram: 'Instagram du client',
+    status: 'Statut',
+    date: 'Date',
+    statusLabel: { pending: 'En attente', confirmed: 'Confirmée', rejected: 'Refusée' },
+  },
   audit: { action: 'Action', actor: 'Auteur', target: 'Cible', at: 'Date' },
   tenants: {
     create: 'Créer une enseigne',
