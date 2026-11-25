@@ -66,7 +66,7 @@ export interface YoufidClientOptions extends YoufidCredentials {
   readonly timeoutMs?: number;
   /**
    * Format du téléphone envoyé à YouFID. Défaut « national » (06…), celui saisi sur la tablette
-   * en magasin ; à confirmer avec Splash360 (questions-en-attente).
+   * en magasin ; à confirmer avec Splash360 (questions-en-attente, YouFID Y10).
    */
   readonly phoneFormat?: 'national' | 'e164';
 }

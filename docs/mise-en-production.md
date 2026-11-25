@@ -40,6 +40,9 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | recommandé | Remontée des erreurs |
 | `EXPO_ACCESS_TOKEN` | non | Notifications push (sécurité renforcée Expo) |
 | `ADMIN_URL` | oui | URL du back-office (retours d'inscription Stripe) |
+| `YOUFID_ACCOUNTS` | pour la fidélité réelle | Fidélité YouFID (lot 21, ADR 0026) : JSON `{"<sous-domaine>": {"login": "…", "password": "…"}}` ; secret du serveur (et de la fonction Edge), jamais journalisé, validé au démarrage. Enseignes absentes : fidélité de `LOYALTY` |
+| `YOUFID_BASE_URL` | non | `https://api-loyalty.splash360.fr/dev/service/` par défaut (URL confirmée par Splash360 le 25/11, production comprise) |
+| `YOUFID_DEVICE_ID` | non | Appareil déclaré à YouFID (clé de session propre) ; défaut `splash360-commande-<APP_ENV>` |
 | `LOYALTY_OTP` | oui | `1` : connexion du client par code SMS ou e-mail (ADR 0012) |
 | `APP_ENV` | oui en prod | `production` : aucune aide de test (code renvoyé, connexion par e-mail sans code) |
 | `OTP_DEBUG_ECHO` | recette seulement | `1` : code de connexion renvoyé à l'écran tant qu'aucun prestataire n'envoie |
@@ -232,3 +235,22 @@ qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS po
 2. Rien d'autre à poser : mêmes clés Stripe que le paiement. Option `CLIENT_APP_URL` (https) :
    retour après 3-D Secure si l'application n'en fournit pas.
 3. CORS : l'en-tête `X-Member-Token` est autorisé par l'API (déjà dans le code).
+
+## Fidélité réelle YouFID (lot 21, ADR 0026)
+
+1. Migration `20261126000000_loyalty_youfid.sql` (recette puis production), **avant** la fonction
+   `api` qui l'utilise : tables `loyalty_members_youfid`, `loyalty_operations`,
+   `loyalty_program_settings` (RLS, accès serveur).
+2. Secret `YOUFID_ACCOUNTS` (fonction Edge `api` et serveur Node), par exemple
+   `{"chickenstreet": {"login": "…", "password": "…"}}` — posé par le propriétaire en recette le
+   25/11. Facultatifs : `YOUFID_BASE_URL`, `YOUFID_DEVICE_ID`. Aucun identifiant dans le dépôt.
+3. Vérifier au back-office (super-administrateur, page Enseignes) : « Tester YouFID » doit
+   afficher le numéro de marchand et le nombre de cadeaux.
+4. Activer la connexion par SMS (`LOYALTY_OTP=1`, Brevo) : l'inscription YouFID se fait par
+   téléphone uniquement.
+5. Suivi : page Fidélité du back-office, « Opérations à vérifier ». Une opération « issue
+   inconnue » n'est jamais renvoyée automatiquement : vérifier le solde du client chez YouFID,
+   corriger (ajout de points) si besoin, puis « Marquer comme vérifiée ». Journal du serveur :
+   messages « Fidélité YouFID : … » (sans donnée client).
+6. Attention : le compte marchand configuré en recette est réel ; chaque test crédite de vrais
+   clients YouFID tant que Splash360 n'a pas fourni de compte de test.

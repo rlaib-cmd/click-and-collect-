@@ -1,0 +1,138 @@
+# ADR 0026 — Fidélité réelle YouFID (« SPLASH FID POS API »)
+
+- Statut : acceptée (lot 21, 25 novembre 2026)
+- Remplace en partie : ADR 0009 (fidélité de démonstration), qui reste pour les enseignes sans
+  compte YouFID, les tests et le développement local.
+- Documentation de l'API : [docs/api-splash360/fidelite-youfid.md](../api-splash360/fidelite-youfid.md)
+
+## Contexte
+
+Splash360 a fourni le 25/11 la documentation de l'API fidélité YouFID (celle de la tablette en
+magasin). Le club de l'application (inscription par SMS, carte VIP avec QR code, solde, cadeaux,
+points des commandes, bonus ambassadeur) doit utiliser cette API pour les enseignes configurées,
+derrière l'interface existante `LoyaltyProvider`. L'API n'a ni clé d'idempotence, ni historique
+client, ni retrait de points, ni réglage « points par euro » lisible, et renvoie le PIN du client
+en clair.
+
+## Décisions
+
+### Branchement par enseigne
+
+- `packages/api-loyalty` contient le client (`youfid/client.ts`), le fournisseur
+  (`youfid/provider.ts`) et un fournisseur d'aiguillage (`routing.ts`). Il reste le seul paquet à
+  parler à l'API fidélité.
+- Secrets dans l'environnement du serveur, jamais en base : `YOUFID_ACCOUNTS` = objet JSON indexé
+  par sous-domaine d'enseigne → `{ "login", "password" }`, validé par zod au démarrage (erreur sans
+  valeur citée). `merchant_id` vient de la réponse de connexion.
+- Une enseigne absente de `YOUFID_ACCOUNTS` garde le fournisseur de `LOYALTY` (démonstration) ou
+  aucune fidélité, comme avant. Le sous-domaine d'une enseigne est lu en base (cache 5 min).
+- `YOUFID_BASE_URL` : défaut `https://api-loyalty.splash360.fr/dev/service/`, confirmée par
+  Splash360 le 25/11 comme l'URL à utiliser (production comprise, jusqu'à nouvel ordre).
+
+### Session et signature
+
+- Une session par compte marchand et par instance du serveur, en mémoire. Connexion (route 1)
+  avec un `device_id` stable par environnement (`YOUFID_DEVICE_ID`, défaut
+  `splash360-commande-<APP_ENV>`) : clé propre, renouvelée 10 minutes avant son expiration
+  (48 h). Plusieurs instances partagent le même `device_id` : YouFID renvoie la même clé tant
+  qu'elle a moins de 24 h, et l'ancienne reste valable 10 min.
+- Signature HMAC-SHA256 (clé = `session_key` décodée de l'hexadécimal) sur le corps exact envoyé
+  + `merchant_id` + nonce (16 octets aléatoires) + timestamp ; en-tête
+  `fid_client_id=…,nonce=…,timestamp=…,sign_algo=HMAC_SHA256,sign=…`. Pas de signature si
+  `sec_type` = `none`.
+- `ERR0401` (ou HTTP 401 sans code) : une seule réinitialisation et un seul nouvel essai, puis
+  échec. Délai de 10 s par appel. Le statut est toujours lu dans le corps (`ok`, `ko`,
+  `success`, `error`), quel que soit le statut HTTP.
+
+### Données personnelles
+
+- Le PIN client (routes 3, 5, 14) est retiré à la lecture : les schémas ne le déclarent pas. Il
+  n'est ni stocké, ni journalisé, ni renvoyé. Notre produit n'utilise pas de code PIN (décision du
+  25/11) ; la route 13 n'est pas implémentée.
+- Aucun corps de requête ou de réponse n'est journalisé ; journaux et registre ne contiennent que
+  des identifiants techniques et des codes d'erreur.
+
+### Membre, carte et inscription
+
+- Identifiant de membre = `usr_id` YouFID (texte de chiffres). Les jetons de membre acceptent
+  désormais un UUID (démonstration) ou cet identifiant numérique.
+- Carte VIP : `cardCode` = `qr_code` YouFID.
+- Table `loyalty_members_youfid` (`tenant_id`, `usr_id`, `qr_code`, téléphone E.164, e-mail et
+  date de naissance saisis dans l'app, dates ; RLS, serveur uniquement) : YouFID ne retrouve un
+  client que par QR code ou e-mail (route 3), le lien permet `getMember(usr_id)`. Elle est remplie
+  à l'inscription, à la connexion par e-mail et par les recherches du back-office.
+- Inscription par SMS : route 10 (client créé ou retrouvé), puis prénom et e-mail par la route 12,
+  puis points de bienvenue par la route 5 (`forced_amount`, clé `welcome:<usr_id>`).
+  `findByPhone` ne consulte que le lien local : la route 10 crée le client, elle n'est appelée
+  qu'après acceptation des conditions. Un client déjà connu en magasin est retrouvé avec ses points
+  (pas de prénom par défaut envoyé, pas de bienvenue).
+- Inscription par e-mail seul : impossible chez YouFID (création par téléphone) ; refus clair, un
+  compte existant reste retrouvé par son e-mail.
+
+### Programme
+
+- Paliers = `products` de la route 2 (id, coût, nom) ; les catégories offertes par palier (lot 16)
+  restent réglées au back-office et suivent les identifiants YouFID.
+- Points par euro et points de bienvenue : réglages de l'enseigne (`loyalty_program_settings`),
+  modifiables au back-office. Défauts décidés le 25/11 : **10 points par euro, 100 points de
+  bienvenue**. Le gain réel d'une commande est calculé par YouFID sur le montant ; notre réglage
+  sert à l'annoncer.
+
+### Commande payée : exactement une fois
+
+- Ordre : cadeau (route 6, après contrôle du solde par la route 3), puis gain (route 5 avec
+  `amount` = total payé en euros exacts, converti des centimes sans calcul à virgule). Pas de gain
+  pour un total nul (YouFID créditerait les points fixes de passage).
+- Registre `loyalty_operations` (`tenant_id`, clé unique `order:<id>:redeem|earn`,
+  `welcome:<usr_id>`, `ambassador:<participation>`, `adjust:<uuid>` ; type, points, libellé,
+  statut, code d'erreur, points crédités, essais ; RLS serveur). Avant l'appel, la clé est
+  réservée par insertion conditionnelle ; après, l'issue est notée :
+  - `done` : appliquée ; un rejeu ne rappelle pas YouFID ;
+  - `failed` : refus certain (statut `error`, solde insuffisant, `maximum_scans_reached`) ;
+    l'opération peut être reprise par un nouvel essai ;
+  - `uncertain` : coupure réseau, délai dépassé ou réponse illisible **après envoi** ; jamais
+    rejouée seule, journalisée et listée au back-office (« Opérations à vérifier ») ;
+  - une réservation restée `pending` plus de 2 minutes (serveur arrêté pendant l'appel) devient
+    `uncertain` ; un appel concurrent sur une réservation récente répond « en cours » ;
+  - `resolved` : marquée vérifiée par l'équipe après contrôle chez YouFID.
+- **Risque résiduel** : sans clé d'idempotence côté YouFID, une opération `uncertain` a pu être
+  appliquée ou non. On préfère un crédit manquant (corrigé à la main) à un double crédit : rien
+  n'est renvoyé automatiquement. Une panne de notre base entre l'appel et la note de l'issue
+  laisse l'opération `pending`, donc `uncertain` : même traitement.
+
+### Corrections et bonus
+
+- `adjustPoints` : route 5 avec `forced_amount`, positif seulement ; un retrait renvoie
+  « non pris en charge par YouFID » au back-office. Le bonus ambassadeur passe la clé
+  `ambassador:<participation>` : un rejeu ne crédite pas deux fois.
+- `maximum_scans_reached` : échec visible (registre, journal, message au back-office, motif dans
+  l'historique de la participation ambassadeur), jamais ignoré.
+
+### Historique et back-office
+
+- Pas de route d'historique : l'historique du membre est le registre local (opérations
+  appliquées), présenté comme « mouvements faits dans l'application » (`historyScope: "app"`).
+- Back-office : liste des membres (liens locaux ; recherche par nom ou e-mail via la route 7, par
+  téléphone dans les liens locaux), solde et QR code lus chez YouFID, règles de points,
+  opérations à vérifier avec badge et action « Marquer comme vérifiée ».
+- Suppression RGPD : seul le lien local est effacé ; l'effacement chez YouFID se demande à
+  Splash360 (pas de route).
+- Diagnostic super-administrateur : `POST /v1/admin/tenants/:id/youfid/test` (connexion + route 2)
+  renvoie `{ ok, merchantId, rewards, secType }`, sans secret ; bouton « Tester YouFID » dans la
+  liste des enseignes.
+
+### Hors périmètre
+
+- Bons de réduction (routes 14 et 15) et consentement SMS (route 11) : fonctions du client
+  écrites et testées, non branchées dans le parcours (étape suivante : bon au paiement).
+- Remboursement d'une commande : pas de retrait de points possible chez YouFID.
+
+## Conséquences
+
+- Les enseignes configurées utilisent leurs vrais clients YouFID : en recette, un compte marchand
+  réel crédite de vrais clients (compte de test demandé à Splash360).
+- Hypothèses à confirmer (voir `questions-en-attente.md`, section YouFID) : format du téléphone
+  envoyé à la route 10 (national `06…` retenu), identifiant de question attendu par la route 12
+  (id de la question en attente si son type correspond, sinon 0), format de `BIRTH`
+  (AAAA-MM-JJ), détection d'un nouveau client (absence de `phone` à la route 10), montant envoyé
+  (total payé, frais compris).

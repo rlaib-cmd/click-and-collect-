@@ -28,3 +28,4 @@ Format : Contexte, Décision, Conséquences, Statut.
 | [0023](0023-cartes-bancaires-enregistrees.md) | Cartes bancaires enregistrées : client Stripe de la plateforme, carte clonée au paiement | Acceptée |
 | [0024](0024-splash360-v2-appels-sequentiels.md) | Splash360 v2 : jeton api2, appels séquentiels par identifiant client (verrou Postgres), une minute entre deux exports des ventes, options par étapes | Acceptée |
 | [0025](0025-verification-ticket-photo.md) | « Achat vérifié » : ticket identifié par son `ticket_id` (photo lue par l'IA ou QR de borne), vérifié dans l'export des ventes Splash360 (journée comptable coupée à 02:00) avant tout crédit automatique | Acceptée |
+| [0026](0026-fidelite-youfid.md) | Fidélité réelle YouFID : aiguillage par enseigne, session signée HMAC, PIN jamais lu, registre local « exactement une fois » (opérations à l'issue inconnue jamais rejouées) | Acceptée |

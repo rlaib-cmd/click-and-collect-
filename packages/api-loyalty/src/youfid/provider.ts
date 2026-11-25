@@ -224,7 +224,7 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
     let ok = true;
     for (const [type, response] of answers) {
       try {
-        // Hypothèse (questions-en-attente n° 37) : le type suffit ; l'id n'est connu que pour
+        // Hypothèse (questions-en-attente, YouFID Y9) : le type suffit ; l'id n'est connu que pour
         // la prochaine question renvoyée par YouFID, sinon 0.
         const id = pending?.type === type ? pending.id : '0';
         await client.submitProfileResponse(usrId, { id, type }, response);

@@ -58,3 +58,28 @@ Le lot 8 tourne sur des données de test (ADR 0009). À obtenir de Splash360 :
   membre sans nom ?
 - La date de naissance doit-elle déclencher une offre anniversaire (points, cadeau) ? Rien n'est
   construit tant que la règle n'est pas donnée.
+
+## Fidélité YouFID (lot 21, ADR 0026)
+
+Questions pour Splash360 (Abdoul). Chacune indique le choix provisoire retenu.
+
+| # | Question | Choix provisoire |
+|---|---|---|
+| Y1 | ~~URL de production de l'API~~ — **répondu (25/11)** : `https://api-loyalty.splash360.fr/dev/service/`, production comprise jusqu'à nouvel ordre | Défaut de `YOUFID_BASE_URL` |
+| Y2 | ~~Points par euro et points de bienvenue~~ — **tranché par le propriétaire (25/11)** : 10 points par euro, 100 de bienvenue, modifiables par enseigne. Reste à confirmer : le taux configuré chez YouFID pour chaque marchand (YouFID calcule lui-même le gain sur `amount`) doit être le même que celui affiché par l'app | Réglages de l'enseigne, gain réel = celui de YouFID |
+| Y3 | **Idempotence de la route 5** : peut-on passer un numéro de commande (ou une clé) pour qu'un renvoi ne crédite pas deux fois ? | Registre local ; une réponse perdue laisse l'opération « à vérifier », jamais renvoyée seule (crédit possiblement manquant, jamais doublé) |
+| Y4 | **Limite de passages par jour** (`maximum_scans_reached`) : quelle valeur ? Le bonus (`forced_amount`), la bienvenue et une deuxième commande du même jour comptent-ils comme des passages ? Peut-on l'éviter pour les crédits de l'application ? | Échec visible (« passages du jour atteints ») ; crédit à faire à la main |
+| Y5 | **Retirer des points** (correction négative, commande remboursée) : quelle route ? | Retrait refusé (« non pris en charge par YouFID ») |
+| Y6 | **Historique du client** (passages, cadeaux, en magasin compris) : une route existe-t-elle ? | Historique = opérations faites par l'application |
+| Y7 | **Compte marchand de test** pour la recette, pour ne pas créditer de vrais clients | Compte réel de l'enseigne (Chicken Street) en recette, tests à limiter |
+| Y8 | Corrections serveur listées page 15 : route 13 (PIN de n'importe quel client), route 15 (compteur du bon remis à 1), route 14 (client inconnu + bon OPEN), route 12 (`FEMALE` refusé, type inconnu accepté sans rien enregistrer), route 2 (`categories` vide), route 11 (lien groupe) | Contournements : route 13 jamais appelée, catégories ignorées, genre non envoyé, bons non branchés |
+| Y9 | Route 12 : l'`id` de la question est-il nécessaire, ou le `type` suffit-il ? On ne connaît que l'id de la prochaine question renvoyée | id de la question en attente si son type correspond, sinon 0 |
+| Y10 | Route 10 : format du téléphone attendu (`0612345678` comme sur la tablette, ou `+33612345678`) ? Un mauvais format créerait un doublon d'un client connu en magasin | Format national `06…` pour la France |
+| Y11 | Route 12, `BIRTH` : format de la date | `AAAA-MM-JJ` |
+| Y12 | Route 10 : un nouveau client se reconnaît-il bien à l'absence de `phone` dans la réponse ? | Oui (bienvenue créditée seulement dans ce cas) |
+| Y13 | Route 5 : `amount` = total payé, frais de livraison compris et cadeau déduit ? En euros décimaux (`12.5`) ? | Total payé en euros, frais compris, pas d'appel si le total est nul |
+| Y14 | Route 6 : contrôle-t-elle le solde ? Quel message en cas de solde insuffisant ? `id` du cadeau en nombre ? | Solde contrôlé avant par la route 3 ; id envoyé en nombre |
+| Y15 | Effacement RGPD d'un client chez YouFID : quelle procédure ? | Lien local effacé, effacement YouFID à demander |
+| Y16 | Inscription sans téléphone (e-mail seul) : la route 5 `is_register` demande un `qr_code` fourni par l'appelant ; qui le génère ? | Inscription par SMS uniquement |
+| Y17 | Le `qr_code` renvoyé est-il exactement le contenu que la tablette scanne (carte VIP de l'app) ? | Oui, affiché tel quel dans le QR |
+| Y18 | Les points ont une durée de validité (`loyalty_program.validity`) : faut-il l'afficher ? | Non affichée |
