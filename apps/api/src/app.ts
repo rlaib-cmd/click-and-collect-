@@ -77,7 +77,7 @@ export interface AppDeps {
   /** Sonde de disponibilité (base de données). */
   readonly ready?: () => Promise<boolean>;
   /** Requêtes par minute et par IP : création/paiement/devis, et lectures publiques. */
-  readonly rateLimits?: { orders: number; reads: number };
+  readonly rateLimits?: { orders: number; reads: number; admin?: number };
   readonly trustProxy?: boolean;
   /** Club fidélité Splash360 (lot 8) ; absent = pas de fidélité. */
   readonly loyalty?: LoyaltyProvider;
@@ -145,6 +145,9 @@ export function createApp(deps: AppDeps) {
     app.on('POST', path, strict);
   }
   app.use('/v1/tenants/*', rateLimit({ limit: limits.reads, windowMs: 60_000, trustProxy }));
+  // Back-office : plafond par adresse, vérifié avant toute lecture en base. Un onglet qui boucle
+  // (bug constaté le 24/11 : ~200 requêtes/s) est arrêté ici au lieu de saturer Postgres.
+  app.use('/v1/admin/*', rateLimit({ limit: limits.admin ?? 600, windowMs: 60_000, trustProxy }));
   const loyaltyDeps = {
     loyalty: deps.loyalty,
     tenants: deps.tenants,

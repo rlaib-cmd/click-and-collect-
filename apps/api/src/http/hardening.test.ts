@@ -27,6 +27,14 @@ describe('durcissement de l’API', () => {
     expect(statuses.slice(0, 5).every((s) => s === 200)).toBe(true);
   });
 
+  it('plafonne les requêtes du back-office avant toute lecture en base', async () => {
+    const app = testApp({ rateLimits: { orders: 3, reads: 1000, admin: 4 } });
+    const statuses = [];
+    for (let i = 0; i < 6; i++) statuses.push((await app.request('/v1/admin/restaurants')).status);
+    expect(statuses.slice(0, 4).every((s) => s === 401)).toBe(true);
+    expect(statuses.slice(4)).toEqual([429, 429]);
+  });
+
   it('refuse un corps de requête trop volumineux', async () => {
     const res = await testApp().request(`/v1/tenants/bella/restaurants/${BELLA_RESTO}/quote`, {
       method: 'POST',
