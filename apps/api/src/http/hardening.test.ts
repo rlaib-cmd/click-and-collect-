@@ -59,6 +59,33 @@ describe('durcissement de l’API', () => {
     expect(pre.status).toBe(204);
   });
 
+  it('plafonne par adresse avant le garde « obsolète » et ne retient que 20 requêtes à la fois', async () => {
+    // Plafond par adresse d'abord : la 4e requête obsolète est refusée tout de suite (429).
+    const limited = testSetup({
+      outdatedClientHoldMs: 0,
+      rateLimits: { orders: 3, reads: 100, admin: 3 },
+    });
+    const codes = [];
+    for (let i = 0; i < 4; i++)
+      codes.push(
+        (await limited.app.fetch(new Request('http://local/v1/admin/restaurants'))).status,
+      );
+    expect(codes).toEqual([426, 426, 426, 429]);
+
+    // Au plus 20 requêtes retenues : les suivantes reçoivent 426 sans attendre.
+    const setup = testSetup({ outdatedClientHoldMs: 300 });
+    const started = Date.now();
+    const durations = await Promise.all(
+      Array.from({ length: 25 }, async () => {
+        const res = await setup.app.fetch(new Request('http://local/v1/admin/restaurants'));
+        expect(res.status).toBe(426);
+        return Date.now() - started;
+      }),
+    );
+    expect(durations.filter((d) => d >= 250)).toHaveLength(20);
+    expect(durations.filter((d) => d < 250)).toHaveLength(5);
+  });
+
   it('refuse un corps de requête trop volumineux', async () => {
     const res = await testApp().request(`/v1/tenants/bella/restaurants/${BELLA_RESTO}/quote`, {
       method: 'POST',

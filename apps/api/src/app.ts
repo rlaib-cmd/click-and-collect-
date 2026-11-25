@@ -79,7 +79,7 @@ export interface AppDeps {
   readonly ready?: () => Promise<boolean>;
   /** Requêtes par minute et par IP : création/paiement/devis, et lectures publiques. */
   readonly rateLimits?: { orders: number; reads: number; admin?: number };
-  /** Attente imposée à un back-office obsolète avant de lui répondre (défaut 120 s). */
+  /** Attente imposée à un back-office obsolète avant de lui répondre (défaut 60 s). */
   readonly outdatedClientHoldMs?: number;
   readonly trustProxy?: boolean;
   /** Club fidélité Splash360 (lot 8) ; absent = pas de fidélité. */
@@ -158,19 +158,29 @@ export function createApp(deps: AppDeps) {
     app.on('POST', path, strict);
   }
   app.use('/v1/tenants/*', rateLimit({ limit: limits.reads, windowMs: 60_000, trustProxy }));
+  // Back-office : plafond par adresse, vérifié en premier, avant toute lecture en base et avant
+  // le garde ci-dessous (audit du 25/11, M6). Un onglet qui boucle est arrêté ici.
+  app.use('/v1/admin/*', rateLimit({ limit: limits.admin ?? 600, windowMs: 60_000, trustProxy }));
   // Back-office obsolète (onglet resté ouvert sur la version qui bouclait, 24/11) : il n'annonce
   // pas sa version. On le fait patienter avant de répondre « rechargez » : l'ancien code ne relance
-  // qu'après une réponse, sa boucle passe d'environ 200 requêtes/s à une toutes les 2 minutes.
-  const hold = deps.outdatedClientHoldMs ?? 120_000;
+  // qu'après une réponse, sa boucle ralentit fortement. Au plus `maxHeld` requêtes retenues en même
+  // temps par instance ; au-delà, réponse immédiate (pas de saturation volontaire, audit M6).
+  const hold = deps.outdatedClientHoldMs ?? 60_000;
+  const maxHeld = 20;
+  let held = 0;
   app.use('/v1/admin/*', async (c, next) => {
     if (c.req.method === 'OPTIONS' || c.req.header('X-Splash360-Client') === 'back-office-2')
       return next();
-    if (hold > 0) await new Promise((r) => setTimeout(r, hold));
+    if (hold > 0 && held < maxHeld) {
+      held += 1;
+      try {
+        await new Promise((r) => setTimeout(r, hold));
+      } finally {
+        held -= 1;
+      }
+    }
     return apiError(c, 'client_outdated', 'Version obsolète du back-office : rechargez la page');
   });
-  // Back-office : plafond par adresse, vérifié avant toute lecture en base. Un onglet qui boucle
-  // (bug constaté le 24/11 : ~200 requêtes/s) est arrêté ici au lieu de saturer Postgres.
-  app.use('/v1/admin/*', rateLimit({ limit: limits.admin ?? 600, windowMs: 60_000, trustProxy }));
   const loyaltyDeps = {
     loyalty: deps.loyalty,
     tenants: deps.tenants,
