@@ -25,3 +25,4 @@ Format : Contexte, Décision, Conséquences, Statut.
 | [0018](0018-caisse-splash360-avant-paiement.md) | Branchement réel Splash360 : la caisse accepte la commande avant le paiement | Acceptée |
 | [0021](0021-fidelite-dans-le-click-and-collect.md) | Fidélité dans le click & collect : catégories par palier, cadeau sur le ticket, profil facultatif | Acceptée |
 | [0022](0022-ambassadeur-complet.md) | Ambassadeur complet : compte Instagram mémorisé, photo analysée, mention, délais, historique | Acceptée |
+| [0023](0023-cartes-bancaires-enregistrees.md) | Cartes bancaires enregistrées : client Stripe de la plateforme, carte clonée au paiement | Acceptée |

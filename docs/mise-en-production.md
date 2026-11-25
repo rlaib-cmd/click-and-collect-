@@ -209,3 +209,11 @@ qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS po
    « à vérifier » par le restaurant. La clé n'est jamais dans le dépôt ni dans l'application.
 3. Rien à planifier : la tâche « ambassadeur » (contrôle à +20 h, crédit à +24 h) tourne au fil du
    trafic client (Edge) ou chaque minute (serveur Node), comme la relance de la caisse.
+
+## Cartes bancaires enregistrées (lot 18, ADR 0023)
+
+1. Migration `20261125080000_stripe_customers.sql` (recette puis production), avant la fonction
+   `api` qui l'utilise.
+2. Rien d'autre à poser : mêmes clés Stripe que le paiement. Option `CLIENT_APP_URL` (https) :
+   retour après 3-D Secure si l'application n'en fournit pas.
+3. CORS : l'en-tête `X-Member-Token` est autorisé par l'API (déjà dans le code).
