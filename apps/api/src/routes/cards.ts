@@ -32,7 +32,8 @@ export interface CardRoutesDeps {
 
 type Env = { Variables: { tenant: TenantWithTheme } };
 
-const MEMBER_TOKEN = /^(m2\.[0-9a-f-]{36}\.[0-9a-z]{1,13}\.\d{1,6}\.[A-Za-z0-9_-]{20,100})$/i;
+const MEMBER_TOKEN =
+  /^(m2\.(?:[0-9a-f-]{36}|\d{1,18})\.[0-9a-z]{1,13}\.\d{1,6}\.[A-Za-z0-9_-]{20,100})$/i;
 const CARD_ID = /^pm_[A-Za-z0-9]+$/;
 
 /**

@@ -24,7 +24,7 @@ import type { PosGateway } from './pos/gateway';
 import type { PosTiming } from './pos/handshake';
 import { posRoutes } from './routes/pos';
 import type { TokenVerifier } from './admin/auth';
-import { adminRoutes, type Splash360Probe } from './routes/admin';
+import { adminRoutes, type AdminRoutesDeps, type Splash360Probe } from './routes/admin';
 import { MAX_LOGO_BYTES, type AssetStorage } from './admin/logo';
 import type { GeoProvider } from './geo';
 import { createHmac } from 'node:crypto';
@@ -98,6 +98,10 @@ export interface AppDeps {
   readonly clientIpHeader?: string;
   /** Club fidélité Splash360 (lot 8) ; absent = pas de fidélité. */
   readonly loyalty?: LoyaltyProvider;
+  /** Registre des opérations YouFID et réglages du programme (lot 21, ADR 0026). */
+  readonly loyaltyLedger?: AdminRoutesDeps['loyaltyLedger'];
+  /** Comptes YouFID du serveur (lot 21) : diagnostic du back-office ; null = aucun. */
+  readonly youfid?: AdminRoutesDeps['youfid'];
   /** Version de session des membres du club (audit M4). */
   readonly memberSessions?: MemberSessionStore;
   /** Ambassadeur (lot 15, ADR 0019) ; absent = fonction désactivée. */
@@ -329,6 +333,8 @@ export function createApp(input: AppDeps) {
       menus: deps.menus,
       loyalty: deps.loyalty,
       ambassador: deps.ambassador,
+      loyaltyLedger: deps.loyaltyLedger,
+      youfid: deps.youfid ?? null,
       adminUrl: deps.adminUrl ?? 'http://localhost:3000',
       inviter: deps.inviter ?? null,
       previewSecret,

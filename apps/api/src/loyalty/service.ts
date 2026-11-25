@@ -19,7 +19,8 @@ export interface LoyaltyDeps {
   readonly now?: () => Date;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Identifiant de membre : UUID (démonstration) ou `usr_id` numérique YouFID (lot 21). */
+const MEMBER_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{1,18})$/i;
 
 /** Durée de vie d'un jeton de membre (audit du 25/11, M4) : reconnexion par code au-delà. */
 export const MEMBER_TOKEN_TTL_MS = 90 * 24 * 3600 * 1000;
@@ -55,7 +56,7 @@ export function readMemberToken(
   const parts = token.split('.');
   if (parts.length !== 5 || parts[0] !== 'm2') return null;
   const [, memberId = '', expRaw = '', versionRaw = '', sig = ''] = parts;
-  if (!UUID.test(memberId) || !/^\d{1,6}$/.test(versionRaw)) return null;
+  if (!MEMBER_ID.test(memberId) || !/^\d{1,6}$/.test(versionRaw)) return null;
   const body = `${memberId}.${expRaw}.${versionRaw}`;
   const given = Buffer.from(sig);
   const expected = Buffer.from(signature(secret, `${tenantId}:${body}`));
@@ -111,5 +112,7 @@ export async function memberView(
         }
       : null,
     history: [...(await provider.history(tenant, member.id))],
+    // YouFID : seules les opérations faites par l'application sont connues (lot 21).
+    historyScope: program.source === 'youfid' ? 'app' : 'all',
   };
 }

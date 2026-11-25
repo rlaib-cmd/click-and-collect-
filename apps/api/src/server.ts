@@ -24,6 +24,7 @@ import {
   createPostgresPosTicketStore,
   createPostgresRestaurantStore,
   createPostgresTenantStore,
+  createPostgresYoufidStore,
   createSql,
   createPostgresSplash360Gate,
   createPostgresOtpStore,
@@ -36,6 +37,7 @@ import { createApp } from './app';
 import { loadEnv } from './env';
 import { jsonLog } from './http/logging';
 import { createOtpDeps, createSmsSender } from './loyalty/otp';
+import { configureLoyalty } from './loyalty/youfid';
 import { createClaudePhotoAnalyzer } from './loyalty/photo-check';
 import { createClaudeTicketReader } from './loyalty/ticket-read';
 import { createBanGeoProvider, createDemoGeoProvider } from './geo';
@@ -117,8 +119,26 @@ const notifier = createNotificationSender({
   log,
 });
 
+const tenants = createPostgresTenantStore(sql);
+// Fidélité (lot 21) : YouFID pour les enseignes de YOUFID_ACCOUNTS, démonstration (ou rien) sinon.
+const youfidStore = createPostgresYoufidStore(sql);
+const { loyalty, youfid } = configureLoyalty({
+  fallback:
+    env.LOYALTY === 'demo'
+      ? createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID)
+      : null,
+  accountsJson: env.YOUFID_ACCOUNTS,
+  baseUrl: env.YOUFID_BASE_URL,
+  deviceId: env.YOUFID_DEVICE_ID,
+  environment: env.APP_ENV,
+  store: youfidStore,
+  tenants,
+  random: randomUUID,
+  log,
+});
+
 const app = createApp({
-  tenants: createPostgresTenantStore(sql),
+  tenants,
   restaurants,
   menus,
   ordering: createPostgresOrderingStore(sql),
@@ -184,9 +204,11 @@ const app = createApp({
   stripeCustomers: createPostgresStripeCustomerStore(sql),
   clientAppUrl: env.CLIENT_APP_URL,
   tokenSecret: env.ORDER_TOKEN_SECRET,
-  ...(env.LOYALTY === 'demo'
+  youfid,
+  ...(loyalty
     ? {
-        loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
+        loyalty,
+        loyaltyLedger: youfidStore,
         memberSessions: createPostgresMemberSessionStore(sql),
         loyaltyDemoLogin: env.LOYALTY_DEMO_LOGIN === '1' && env.APP_ENV !== 'production',
         ...(env.LOYALTY_OTP === '1'

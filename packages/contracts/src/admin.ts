@@ -322,7 +322,36 @@ export type StaffMember = z.infer<typeof staffMemberSchema>;
 export type StaffUpdate = z.infer<typeof staffUpdateSchema>;
 export type TenantSummaryDto = z.infer<typeof tenantSummarySchema>;
 export type AlertDto = z.infer<typeof alertSchema>;
+/** Lot 21 : réglages du programme que l'API YouFID ne fournit pas (défauts 10 et 100). */
+export const loyaltySettingsSchema = z.object({
+  pointsPerEuro: z.number().int().min(0).max(1000),
+  welcomePoints: z.number().int().min(0).max(100_000),
+});
+
+/** GET /v1/admin/loyalty/settings : `source` « youfid » quand les réglages sont utilisés. */
+export const loyaltySettingsResponseSchema = loyaltySettingsSchema.extend({
+  source: z.enum(['demo', 'youfid']),
+});
+
+/** Lot 21 : opération de points envoyée à YouFID, refusée ou à l'issue inconnue. */
+export const loyaltyOperationSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['earn', 'redeem', 'welcome', 'bonus', 'adjust']),
+  memberId: z.string(),
+  orderId: z.string().nullable(),
+  points: z.number().int(),
+  label: z.string(),
+  status: z.enum(['pending', 'done', 'failed', 'uncertain', 'resolved']),
+  error: z.string().nullable(),
+  attempts: z.number().int(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 export type ClubMemberDto = z.infer<typeof clubMemberSchema>;
+export type LoyaltySettingsDto = z.infer<typeof loyaltySettingsSchema>;
+export type LoyaltySettingsResponse = z.infer<typeof loyaltySettingsResponseSchema>;
+export type LoyaltyOperationDto = z.infer<typeof loyaltyOperationSchema>;
 export type PointsAdjustRequest = z.infer<typeof pointsAdjustSchema>;
 
 /** Codes promo (lot 11, ADR 0015) : création au back-office. Montants en centimes. */

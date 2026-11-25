@@ -33,6 +33,7 @@ import {
   createPostgresPosTicketStore,
   createPostgresRestaurantStore,
   createPostgresTenantStore,
+  createPostgresYoufidStore,
   createSql,
   createPostgresSplash360Gate,
   type Sql,
@@ -48,6 +49,7 @@ import { createApp } from './app';
 import { createBanGeoProvider } from './geo';
 import { jsonLog } from './http/logging';
 import { createOtpDeps, createSmsSender } from './loyalty/otp';
+import { configureLoyalty } from './loyalty/youfid';
 import { createClaudePhotoAnalyzer } from './loyalty/photo-check';
 import { createClaudeTicketReader } from './loyalty/ticket-read';
 import { createNotificationSender } from './notifications/sender';
@@ -225,8 +227,23 @@ function build() {
   const sql = createSql(databaseUrl, { max: 2, idleTimeout: 10 });
   gateSql = sql;
   const payments = createPostgresPaymentStore(sql);
+  const tenants = createPostgresTenantStore(sql);
+  // Fidélité (lot 21, ADR 0026) : YouFID pour les enseignes de YOUFID_ACCOUNTS (secret de
+  // fonction), fidélité de test pour les autres.
+  const youfidStore = createPostgresYoufidStore(sql);
+  const { loyalty, youfid } = configureLoyalty({
+    fallback: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
+    accountsJson: env('YOUFID_ACCOUNTS'),
+    baseUrl: env('YOUFID_BASE_URL'),
+    deviceId: env('YOUFID_DEVICE_ID'),
+    environment: appEnv,
+    store: youfidStore,
+    tenants,
+    random: randomUUID,
+    log,
+  });
   const app = createApp({
-    tenants: createPostgresTenantStore(sql),
+    tenants,
     restaurants: createPostgresRestaurantStore(sql),
     menus,
     ordering: createPostgresOrderingStore(sql),
@@ -269,8 +286,10 @@ function build() {
     stripeCustomers: createPostgresStripeCustomerStore(sql),
     clientAppUrl: env('CLIENT_APP_URL'),
     tokenSecret,
-    // Aperçu : fidélité de test, connexion par e-mail (ADR 0009).
-    loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
+    // Aperçu : YouFID pour les enseignes configurées, fidélité de test sinon (ADR 0009, 0026).
+    ...(loyalty ? { loyalty } : {}),
+    loyaltyLedger: youfidStore,
+    youfid,
     memberSessions: createPostgresMemberSessionStore(sql),
     // Connexion de démonstration sans code : seulement si demandée explicitement, hors production
     // (désactivée par défaut, audit du 25/11).

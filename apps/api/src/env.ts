@@ -15,6 +15,15 @@ const envSchema = z.object({
   POS_WEBHOOK_SECRET: z.string().min(32).optional(),
   /** Fidélité de test (ADR 0009) : 'demo' active le programme de démonstration, 'off' le coupe. */
   LOYALTY: z.enum(['demo', 'off']).default('demo'),
+  /**
+   * Fidélité YouFID (lot 21, ADR 0026). `YOUFID_ACCOUNTS` : JSON indexé par sous-domaine
+   * d'enseigne → { "login", "password" } (secret, jamais journalisé ; validé au démarrage).
+   * Les enseignes absentes gardent la fidélité de `LOYALTY`. URL par défaut : celle de test.
+   */
+  YOUFID_ACCOUNTS: z.string().optional(),
+  YOUFID_BASE_URL: z.url().startsWith('https://').optional(),
+  /** Appareil stable (clé de session propre, 48 h) ; défaut « splash360-commande-<APP_ENV> ». */
+  YOUFID_DEVICE_ID: z.string().min(1).max(100).optional(),
   /** Connexion au club par simple e-mail, sans vérification : jamais en production. */
   LOYALTY_DEMO_LOGIN: z.enum(['0', '1']).default('0'),
   /** Connexion du client par code SMS ou e-mail (lot 10, ADR 0012). */

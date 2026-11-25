@@ -1,9 +1,10 @@
 import type { MemberSessionStore } from '@splash360/db';
-import type {
-  LoyaltyMember,
-  LoyaltyProvider,
-  LoyaltyTenant,
-  MemberProfileUpdate,
+import {
+  LoyaltyUnsupportedError,
+  type LoyaltyMember,
+  type LoyaltyProvider,
+  type LoyaltyTenant,
+  type MemberProfileUpdate,
 } from '@splash360/api-loyalty';
 import { reservedRewardPoints } from '@splash360/core';
 import {
@@ -53,9 +54,33 @@ const asLoyaltyTenant = (t: TenantWithTheme): LoyaltyTenant => ({
 
 /** Lit « Authorization: Bearer <jeton de membre> ». */
 const bearerMember = (c: Context) =>
-  /^Bearer (m2\.[0-9a-f-]{36}\.[0-9a-z]{1,13}\.\d{1,6}\.[A-Za-z0-9_-]{20,100})$/i.exec(
+  /^Bearer (m2\.(?:[0-9a-f-]{36}|\d{1,18})\.[0-9a-z]{1,13}\.\d{1,6}\.[A-Za-z0-9_-]{20,100})$/i.exec(
     c.req.header('Authorization') ?? '',
   )?.[1];
+
+/**
+ * Adhésion ; YouFID ne crée un compte que par téléphone (lot 21) : l'inscription par e-mail seul
+ * est refusée avec un message clair (un compte existant reste retrouvé par son e-mail).
+ */
+async function joinOrRefuse(
+  c: Context,
+  provider: LoyaltyProvider,
+  tenant: LoyaltyTenant,
+  input: Parameters<LoyaltyProvider['join']>[1],
+) {
+  try {
+    return await provider.join(tenant, input);
+  } catch (error) {
+    if (error instanceof LoyaltyUnsupportedError) {
+      return apiError(
+        c,
+        'invalid_request',
+        'Inscription au club par numéro de mobile uniquement : choisis « SMS »',
+      );
+    }
+    throw error;
+  }
+}
 
 /** Club fidélité de l'enseigne (lot 8), monté sous /v1/tenants/:subdomain. */
 export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & ReservationDeps) {
@@ -139,7 +164,9 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
     if (!parsed.success) return apiError(c, 'invalid_request', 'Inscription invalide');
     const ctx = await context(c);
     if (!ctx) return apiError(c, 'not_found', 'Pas de club fidélité');
-    const { member, created } = await ctx.provider.join(ctx.tenant, parsed.data);
+    const joined = await joinOrRefuse(c, ctx.provider, ctx.tenant, parsed.data);
+    if (joined instanceof Response) return joined;
+    const { member, created } = joined;
     // Un e-mail déjà inscrit ne donne pas accès au compte sans vérification.
     if (!created && !deps.loyaltyDemoLogin) {
       return apiError(c, 'conflict', 'Cet e-mail a déjà un compte fidélité');
@@ -225,12 +252,13 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
     if (!(await consumeOtp(otp, v.challengeId))) {
       return apiError(c, 'otp_expired', 'Code déjà utilisé : demande un nouveau code');
     }
-    const { member, created } = await ctx.provider.join(ctx.tenant, {
+    const joined = await joinOrRefuse(c, ctx.provider, ctx.tenant, {
       name: name && name.trim().length >= 2 ? name : DEFAULT_MEMBER_NAME,
       phone: channel === 'sms' ? v.identifier : null,
       email: channel === 'email' ? v.identifier : null,
     });
-    return session(c, member.id, created, true);
+    if (joined instanceof Response) return joined;
+    return session(c, joined.member.id, joined.created, true);
   });
 
   app.get('/:subdomain/loyalty/me', async (c) => {

@@ -37,6 +37,8 @@ export async function settleLoyalty(
     orderId: order.id,
     orderNumber: order.number,
     earnPoints: pointsForAmount(cents(order.totals.totalCents), program),
+    // YouFID calcule le gain sur le montant payé (frais compris, après cadeau) — ADR 0026.
+    amountCents: order.totals.totalCents,
     reward: reward
       ? {
           id: reward.id,
@@ -46,7 +48,8 @@ export async function settleLoyalty(
       : null,
   });
   if (!result.ok) {
-    // Commande déjà payée : on la sert, l'écart de points est signalé pour traitement manuel.
+    // Commande déjà payée : on la sert, l'écart de points est signalé pour traitement manuel
+    // (opérations « à vérifier » du back-office pour YouFID, lot 21).
     deps.log('Fidélité non réglée', { orderId, error: result.error });
     return;
   }

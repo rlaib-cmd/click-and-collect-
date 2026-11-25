@@ -108,6 +108,11 @@ export const loyaltyMemberSchema = z.object({
     .object({ name: z.string(), costPoints: z.number().int(), missingPoints: z.number().int() })
     .nullable(),
   history: z.array(loyaltyMovementSchema),
+  /**
+   * Lot 21 : « app » quand la fidélité vient de YouFID, l'historique ne montre que les opérations
+   * faites par l'application (passages en magasin absents) ; « all » sinon.
+   */
+  historyScope: z.enum(['all', 'app']).default('all'),
 });
 
 /** Réponse de l'adhésion et de la connexion. */

@@ -22,6 +22,8 @@ export const apiErrorCodeSchema = z.enum([
   // Caisse Splash360 (lot 14) : pas encore prête, le paiement attend
   'pos_not_ready',
   'client_outdated',
+  // Fidélité YouFID (lot 21) : refus ou panne, opération à vérifier
+  'loyalty_unavailable',
 ]);
 
 /** Problème précis sur une commande, pour guider le client (retour au panier avec un message clair). */

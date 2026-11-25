@@ -1,4 +1,4 @@
-import type { LoyaltyProvider, LoyaltyTenant } from '@splash360/api-loyalty';
+import type { AdjustResult, LoyaltyProvider, LoyaltyTenant } from '@splash360/api-loyalty';
 import type {
   AdminAmbassadorEntryDto,
   AmbassadorEntryDto,
@@ -77,6 +77,16 @@ export const toAdminEntryDto = (
     .map((ev) => ({ type: ev.type, actor: ev.actor, detail: ev.detail, at: ev.at.toISOString() })),
 });
 
+/** Motif d'un crédit non fait, affiché dans l'historique de la participation (back-office). */
+const CREDIT_FAILURE: Record<Extract<AdjustResult, { ok: false }>['error'], string> = {
+  unknown_member: 'Membre introuvable au club',
+  insufficient_points: 'Solde insuffisant',
+  unsupported: 'Opération non prise en charge par YouFID',
+  daily_limit: 'YouFID : nombre de passages du jour atteint, à créditer à la main',
+  already_processed: 'Crédit déjà en cours ou à vérifier (opérations YouFID)',
+  provider_error: 'YouFID indisponible ou refus : voir les opérations à vérifier',
+};
+
 export type ConfirmResult =
   | { readonly ok: true; readonly entry: AmbassadorEntry }
   | { readonly ok: false; readonly error: 'not_pending' | 'unknown_member' };
@@ -103,17 +113,19 @@ export async function confirmAmbassadorEntry(
     detail: { points: current.bonusPoints },
   });
   if (!entry) return { ok: false, error: 'not_pending' };
+  // Clé d'opération : avec YouFID, un rejeu ne crédite jamais deux fois (lot 21).
   const credited = await deps.loyalty.adjustPoints(
     tenant,
     entry.memberId,
     entry.bonusPoints,
     `Story Instagram (ticket ${entry.ticketRef})`,
+    { operationKey: `ambassador:${entry.id}`, kind: 'bonus' },
   );
   if (!credited.ok) {
     await deps.ambassador.addEvent(tenant.id, entryId, {
       type: 'credit_failed',
       actor: SYSTEM_ACTOR,
-      detail: { reason: 'Membre introuvable au club' },
+      detail: { reason: CREDIT_FAILURE[credited.error] },
     });
     return { ok: false, error: 'unknown_member' };
   }

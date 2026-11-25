@@ -1,4 +1,4 @@
-import type { LoyaltyProvider } from '@splash360/api-loyalty';
+import type { LoyaltyProvider, YoufidRegistry, YoufidStore } from '@splash360/api-loyalty';
 import { MenuUnavailableError, type MenuCache } from '@splash360/api-menu';
 import {
   canAssignRole,
@@ -26,6 +26,9 @@ import {
   type AdminMenu,
   type AdminOrderDetail,
   type ClubMemberDto,
+  loyaltySettingsSchema,
+  type LoyaltyOperationDto,
+  type LoyaltySettingsResponse,
   type Dashboard,
   type Me,
   type ThemeDraftState,
@@ -89,6 +92,15 @@ export interface AdminRoutesDeps extends NotifyDeps {
   readonly loyalty?: LoyaltyProvider | undefined;
   /** Ambassadeur (lot 15, ADR 0019) ; absent = fonction indisponible. */
   readonly ambassador?: AmbassadorStore | undefined;
+  /** Registre des opérations YouFID et réglages du programme (lot 21) ; absent = indisponible. */
+  readonly loyaltyLedger?:
+    | Pick<
+        YoufidStore,
+        'operationsToReview' | 'resolveOperation' | 'getProgramSettings' | 'saveProgramSettings'
+      >
+    | undefined;
+  /** Comptes YouFID du serveur (lot 21) ; null : aucun compte configuré. */
+  readonly youfid?: Pick<YoufidRegistry, 'has' | 'probe'> | null | undefined;
   /** URL publique du back-office (retours de l'inscription Stripe). */
   readonly adminUrl: string;
   /** Envoi des invitations Supabase Auth ; null : non configuré (aucun e-mail envoyé). */
@@ -231,6 +243,39 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       detail: input,
     });
     return c.body(null, 204);
+  });
+
+  // Diagnostic YouFID (lot 21) : connexion du marchand puis lecture des cadeaux, sans secret.
+  app.post('/tenants/:id/youfid/test', async (c) => {
+    const denied = allow(c, 'platform', false);
+    if (denied) return denied;
+    const target = await deps.tenants.findById(c.req.param('id'));
+    if (!target) return apiError(c, 'not_found', 'Enseigne inconnue');
+    const probe = deps.youfid?.probe(target.subdomain) ?? null;
+    if (!probe) {
+      return c.json({
+        ok: false,
+        message: 'Aucun compte YouFID pour cette enseigne (YOUFID_ACCOUNTS)',
+      });
+    }
+    const audited = (detail: Record<string, unknown>) =>
+      deps.admin.audit({
+        tenantId: target.id,
+        actor: ctx(c).staff,
+        action: 'youfid.test',
+        target: target.subdomain,
+        detail,
+      });
+    try {
+      const r = await probe;
+      await audited({ ok: true, merchantId: r.merchantId });
+      return c.json({ ok: true, merchantId: r.merchantId, rewards: r.rewards, secType: r.secType });
+    } catch (error) {
+      // Détail technique au journal d'audit seulement (jamais d'identifiant ni de corps).
+      const detail = error instanceof Error ? error.message : String(error);
+      await audited({ ok: false, detail: detail.slice(0, 300) });
+      return c.json({ ok: false, message: 'Connexion à YouFID impossible' });
+    }
   });
 
   app.delete('/tenants/:id', async (c) => {
@@ -1144,15 +1189,99 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       input.delta,
       input.reason,
     );
-    if (!result.ok)
-      return result.error === 'unknown_member'
-        ? apiError(c, 'not_found', 'Membre inconnu')
-        : apiError(c, 'conflict', 'Le solde ne peut pas devenir négatif');
+    if (!result.ok) {
+      switch (result.error) {
+        case 'unknown_member':
+          return apiError(c, 'not_found', 'Membre inconnu');
+        case 'insufficient_points':
+          return apiError(c, 'conflict', 'Le solde ne peut pas devenir négatif');
+        case 'unsupported':
+          return apiError(
+            c,
+            'invalid_request',
+            'Retrait de points non pris en charge par YouFID : seul un ajout est possible',
+          );
+        case 'daily_limit':
+          return apiError(
+            c,
+            'conflict',
+            'YouFID refuse : nombre de passages du jour atteint pour ce client. Réessayez demain.',
+          );
+        case 'already_processed':
+          return apiError(c, 'conflict', 'Opération déjà en cours pour ce client');
+        case 'provider_error':
+          return apiError(
+            c,
+            'loyalty_unavailable',
+            'YouFID n’a pas confirmé l’opération : vérifiez les opérations à contrôler',
+          );
+      }
+    }
     await audit(c, 'loyalty.adjust', c.req.param('id'), {
       delta: input.delta,
       reason: input.reason,
     });
     return c.json({ points: result.member.points });
+  });
+
+  // ——— Fidélité YouFID (lot 21, ADR 0026) : réglages et opérations à vérifier ———
+  app.get('/loyalty/settings', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    const cl = await club(c);
+    if (!cl || !deps.loyaltyLedger) return apiError(c, 'not_found', 'Pas de club fidélité');
+    const program = await cl.provider.getProgram(cl.ref);
+    const settings = await deps.loyaltyLedger.getProgramSettings(tenantId(c));
+    const body: LoyaltySettingsResponse = {
+      ...settings,
+      source: program?.source === 'youfid' ? 'youfid' : 'demo',
+    };
+    return c.json(body);
+  });
+
+  app.put('/loyalty/settings', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    const input = await body(c, loyaltySettingsSchema);
+    if (!input) return apiError(c, 'invalid_request', 'Réglages invalides');
+    if (!deps.loyaltyLedger) return apiError(c, 'not_found', 'Pas de club fidélité');
+    await deps.loyaltyLedger.saveProgramSettings(tenantId(c), input);
+    await audit(c, 'loyalty.settings', null, { ...input });
+    return c.body(null, 204);
+  });
+
+  app.get('/loyalty/operations', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    if (!deps.loyaltyLedger) return c.json({ operations: [] });
+    const ops = await deps.loyaltyLedger.operationsToReview(tenantId(c), 100);
+    const operations: LoyaltyOperationDto[] = ops.map((o) => ({
+      id: o.id,
+      kind: o.kind,
+      memberId: o.memberId,
+      orderId: o.orderId,
+      points: o.points,
+      label: o.label,
+      status: o.status,
+      error: o.error,
+      attempts: o.attempts,
+      createdAt: o.createdAt,
+      updatedAt: o.updatedAt,
+    }));
+    c.header('Cache-Control', 'no-store');
+    return c.json({ operations });
+  });
+
+  // « Vérifiée » : l'équipe a contrôlé le solde chez YouFID (et corrigé à la main si besoin).
+  app.post('/loyalty/operations/:id/resolve', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    if (!deps.loyaltyLedger) return apiError(c, 'not_found', 'Opération inconnue');
+    const id = c.req.param('id');
+    if (!(await deps.loyaltyLedger.resolveOperation(tenantId(c), id)))
+      return apiError(c, 'not_found', 'Opération inconnue ou déjà vérifiée');
+    await audit(c, 'loyalty.operation.resolve', id);
+    return c.body(null, 204);
   });
 
   app.delete('/loyalty/members/:id', async (c) => {
