@@ -421,7 +421,6 @@ export const fr = {
   },
   loyalty: {
     hello: (name: string) => `Salut ${name},`,
-    hungry: 'T’as faim ?',
     featuredTitle: (brand: string) => `En ce moment chez ${brand}`,
     featuredOrder: (name: string) => `${name} : commander`,
     orderOnline: 'Commander en ligne',
@@ -432,7 +431,6 @@ export const fr = {
     pointsLong: (n: number) => `${n} points`,
     nextReward: (missing: number, name: string) => `Plus que ${missing} pts pour : ${name}`,
     allRewards: 'Toutes les récompenses sont à toi.',
-    welcomeTitle: 'Les bons moments, ça se mérite.',
     welcomePoints: (n: number) => `${n} points de bienvenue`,
     welcomeHint: 'Ta première récompense commence ici.',
     join: 'Rejoindre le club',

@@ -26,13 +26,13 @@ export default function HomeScreen() {
       <View
         style={[
           styles.hero,
-          { paddingTop: insets.top + 20 },
+          { paddingTop: insets.top + 8 },
           brand
             ? { backgroundColor: palette.primary }
             : { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.border },
         ]}
       >
-        {brand && config.theme.logoUrl ? <TenantLogo size={56} wide /> : <TenantLogo size={72} />}
+        {brand && config.theme.logoUrl ? <TenantLogo size={36} wide /> : <TenantLogo size={48} />}
         {!brand || !config.theme.logoUrl ? (
           <Text
             style={[styles.brandName, titleStyle(style), { color: palette.text }]}
@@ -56,14 +56,9 @@ export default function HomeScreen() {
       {brand ? <CheckerBand /> : null}
 
       <View style={styles.content}>
-        <View style={styles.greeting}>
-          {member ? (
-            <Text style={{ color: palette.textMuted, fontSize: 15 }}>{t.hello(member.name)}</Text>
-          ) : null}
-          <Text style={[styles.h1, titleStyle(style), { color: palette.text }]}>
-            {club && !member ? t.welcomeTitle : t.hungry}
-          </Text>
-        </View>
+        {member ? (
+          <Text style={{ color: palette.textMuted, fontSize: 15 }}>{t.hello(member.name)}</Text>
+        ) : null}
 
         <OrderShortcuts />
 
@@ -165,12 +160,17 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   page: { paddingBottom: 32 },
-  hero: { alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 22 },
-  brandName: { fontSize: 26, fontWeight: '800', textAlign: 'center' },
-  tagline: { fontSize: 15, textAlign: 'center', fontWeight: '700' },
-  content: { padding: 16, gap: 16, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  greeting: { gap: 2 },
-  h1: { fontSize: 30, fontWeight: '900' },
+  hero: { alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingBottom: 10 },
+  brandName: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  tagline: { fontSize: 13, textAlign: 'center', fontWeight: '700' },
+  content: {
+    padding: 16,
+    paddingTop: 12,
+    gap: 14,
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
+  },
   order: { padding: 18, gap: 8 },
   orderTitle: { fontSize: 24, fontWeight: '900' },
   orderButtons: { flexDirection: 'row', gap: 10, marginTop: 6 },

@@ -191,7 +191,6 @@ function Home(ctx: Ctx) {
       <Header {...ctx} />
       <div className="pv-body">
         <span style={{ color: palette.textMuted, fontSize: 12 }}>{l.hello('Camille')}</span>
-        <strong style={{ ...title, fontSize: 22 }}>{l.hungry}</strong>
         <div
           className="pv-card"
           style={{
