@@ -54,6 +54,7 @@ export function createMemoryOrderBackend(
   const redemptions: { promoId: string; contactKey: string; memberId: string | null }[] = [];
   let counter = 1000;
   const accounts = new Map<string, boolean>();
+  const refundRequests = new Set<string>();
 
   const load = (restaurantId: string, from: Date, to: Date): SlotLoad => {
     const out: Record<string, number> = {};
@@ -252,12 +253,22 @@ export function createMemoryOrderBackend(
         })),
       );
     },
-    recordRefund(tenantId, orderId, amount, actor) {
+    hasRefundRequest(_tenantId, orderId, requestId) {
+      return Promise.resolve(refundRequests.has(`${orderId}:${requestId}`));
+    },
+    recordRefund(tenantId, orderId, amount, actor, requestId) {
       const o = orders.find((x) => x.tenantId === tenantId && x.id === orderId);
+      if (o && refundRequests.has(`${orderId}:${requestId}`))
+        return Promise.resolve({
+          ok: true,
+          refundedCents: o.refundedCents,
+          fullyRefunded: o.refundedCents === o.totals.totalCents,
+        });
       if (!o || !PAID.includes(o.status))
         return Promise.resolve({ ok: false, error: 'not_refundable' });
       if (amount <= 0 || o.refundedCents + amount > o.totals.totalCents)
         return Promise.resolve({ ok: false, error: 'amount_too_high' });
+      refundRequests.add(`${orderId}:${requestId}`);
       o.refundedCents += amount;
       const full = o.refundedCents === o.totals.totalCents;
       if (full) o.status = 'refunded';

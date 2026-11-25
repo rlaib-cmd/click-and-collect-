@@ -97,6 +97,13 @@ export async function refundOrder(
   if (!order) return { ok: false, error: 'not_found' };
   if (!order.paymentIntentId || !order.stripeAccountId)
     return { ok: false, error: 'not_refundable' };
+  // Demande déjà traitée (double clic, nouvel essai) : même réponse, sans nouveau remboursement.
+  if (await deps.payments.hasRefundRequest(input.tenantId, input.orderId, input.requestId))
+    return {
+      ok: true,
+      refundedCents: order.refundedCents,
+      fullyRefunded: order.refundedCents === order.totalCents,
+    };
   if (order.refundedCents + input.amountCents > order.totalCents || input.amountCents <= 0) {
     return { ok: false, error: 'amount_too_high' };
   }
@@ -112,6 +119,7 @@ export async function refundOrder(
     input.orderId,
     input.amountCents,
     input.actor,
+    input.requestId,
   );
   return recorded.ok ? recorded : { ok: false, error: recorded.error };
 }

@@ -49,13 +49,19 @@ export interface PaymentStore {
   markPaymentFailed(paymentIntentId: string): Promise<PaymentTransition>;
   /** Commandes en attente de paiement depuis avant `olderThan` : annulées, créneau libéré. */
   expirePending(olderThan: Date): Promise<ExpiredOrder[]>;
-  /** Remboursement total ou partiel, tracé dans l'historique. */
+  /**
+   * Remboursement total ou partiel, tracé dans l'historique. Idempotent par `requestId` : une
+   * demande déjà enregistrée (double clic, nouvel essai) n'est pas comptée deux fois.
+   */
   recordRefund(
     tenantId: string,
     orderId: string,
     amountCents: number,
     actor: string,
+    requestId: string,
   ): Promise<RefundResult>;
+  /** Cette demande de remboursement a-t-elle déjà été enregistrée ? */
+  hasRefundRequest(tenantId: string, orderId: string, requestId: string): Promise<boolean>;
   /** Webhook account.updated. */
   setChargesEnabled(stripeAccountId: string, enabled: boolean): Promise<void>;
   /** Points crédités et récompense consommée chez Splash360 (lot 8). */
@@ -185,11 +191,32 @@ export function createPostgresPaymentStore(sql: Sql): PaymentStore {
       });
     },
 
-    async recordRefund(tenantId, orderId, amountCents, actor) {
+    async hasRefundRequest(tenantId, orderId, requestId) {
+      const rows = await sql`
+        select 1 from public.order_events
+        where tenant_id = ${tenantId} and order_id = ${orderId}
+          and status in ('refunded', 'partially_refunded') and detail->>'requestId' = ${requestId}
+        limit 1`;
+      return rows.length > 0;
+    },
+
+    async recordRefund(tenantId, orderId, amountCents, actor, requestId) {
       return sql.begin(async (tx) => {
         const [o] = await tx<{ status: string; total_cents: number; refunded_cents: number }[]>`
           select status, total_cents, refunded_cents from public.orders
           where tenant_id = ${tenantId} and id = ${orderId} for update`;
+        // Même demande déjà enregistrée (sous le verrou de la commande) : rien à ajouter.
+        const seen = await tx`
+          select 1 from public.order_events
+          where tenant_id = ${tenantId} and order_id = ${orderId}
+            and status in ('refunded', 'partially_refunded') and detail->>'requestId' = ${requestId}
+          limit 1`;
+        if (o && seen.length > 0)
+          return {
+            ok: true as const,
+            refundedCents: o.refunded_cents,
+            fullyRefunded: o.refunded_cents === o.total_cents,
+          };
         if (!o || !PAID_STATUSES.includes(o.status))
           return { ok: false as const, error: 'not_refundable' as const };
         if (
@@ -205,7 +232,7 @@ export function createPostgresPaymentStore(sql: Sql): PaymentStore {
                  where id = ${orderId}`;
         await tx`insert into public.order_events (tenant_id, order_id, status, actor, detail)
                  values (${tenantId}, ${orderId}, ${full ? 'refunded' : 'partially_refunded'}, ${actor},
-                         ${tx.json({ amountCents })})`;
+                         ${tx.json({ amountCents, requestId })})`;
         return { ok: true as const, refundedCents: refunded, fullyRefunded: full };
       });
     },

@@ -96,22 +96,30 @@ describe.skipIf(!url)('PaymentStore Postgres', () => {
 
   it('rembourse partiellement puis totalement, sans dépasser le total', async () => {
     const id = await newOrder('b');
-    expect(await payments.recordRefund(BELLA, id, 500, 'admin')).toEqual({
+    expect(await payments.recordRefund(BELLA, id, 500, 'admin', 'r0')).toEqual({
       ok: false,
       error: 'not_refundable',
     });
     await payments.attachPaymentIntent(BELLA, id, `pi_${run}_b`);
     await payments.markPaid(`pi_${run}_b`, 1300, 'eur');
-    expect(await payments.recordRefund(BELLA, id, 500, 'admin')).toEqual({
+    expect(await payments.recordRefund(BELLA, id, 500, 'admin', 'r1')).toEqual({
       ok: true,
       refundedCents: 500,
       fullyRefunded: false,
     });
-    expect(await payments.recordRefund(BELLA, id, 900, 'admin')).toEqual({
+    // Double clic : la même demande n'est pas comptée deux fois.
+    expect(await payments.recordRefund(BELLA, id, 500, 'admin', 'r1')).toEqual({
+      ok: true,
+      refundedCents: 500,
+      fullyRefunded: false,
+    });
+    expect(await payments.hasRefundRequest(BELLA, id, 'r1')).toBe(true);
+    expect(await payments.hasRefundRequest(BELLA, id, 'autre')).toBe(false);
+    expect(await payments.recordRefund(BELLA, id, 900, 'admin', 'r2')).toEqual({
       ok: false,
       error: 'amount_too_high',
     });
-    expect(await payments.recordRefund(BELLA, id, 800, 'admin')).toEqual({
+    expect(await payments.recordRefund(BELLA, id, 800, 'admin', 'r3')).toEqual({
       ok: true,
       refundedCents: 1300,
       fullyRefunded: true,

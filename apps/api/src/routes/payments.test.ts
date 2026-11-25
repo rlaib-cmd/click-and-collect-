@@ -279,6 +279,12 @@ describe('expiration et remboursement', () => {
       refundedCents: 450,
       fullyRefunded: false,
     });
+    // Double clic : même demande, même réponse, aucun second remboursement chez Stripe.
+    expect(await refundOrder(deps, { ...base, amountCents: 450, requestId: 'r1' })).toMatchObject({
+      ok: true,
+      refundedCents: 450,
+      fullyRefunded: false,
+    });
     expect(await refundOrder(deps, { ...base, amountCents: 1001, requestId: 'r2' })).toEqual({
       ok: false,
       error: 'amount_too_high',
