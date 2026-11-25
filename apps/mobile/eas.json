@@ -20,7 +20,7 @@
       "autoIncrement": true,
       "environment": "production",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://splash360-commande-api.fly.dev"
+        "EXPO_PUBLIC_API_URL": "https://azenkeuuejwwtbudvwqt.supabase.co/functions/v1/api"
       },
       "android": {
         "buildType": "app-bundle"

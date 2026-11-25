@@ -75,7 +75,7 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
    SMTP Settings : `smtp-relay.brevo.com`, port 587, identifiant et clé SMTP Brevo, expéditeur vérifié).
    Dans URL Configuration, ajouter l'URL `https://<back-office>/mot-de-passe/` aux redirections autorisées
    et traduire les modèles « Invite user » et « Reset password » en français.
-6. **Application** : profil `<enseigne>-production` (API `https://splash360-commande-api.fly.dev`), Google Play :
+6. **Application** : profil `<enseigne>-production` (API `https://azenkeuuejwwtbudvwqt.supabase.co/functions/v1/api`, version 1.1.0 depuis le 26/11), Google Play :
    [`stores/google-play.md`](stores/google-play.md).
 
 ## Base de données
