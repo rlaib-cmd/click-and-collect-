@@ -17,7 +17,7 @@ export interface PosSaleRecord {
 
 /** Avancement de la lecture de l'export pour une enseigne et une journée. */
 export interface PosSalesCursor {
-  /** Prochaine page à lire (1 = début : l'export commence à la page 1). */
+  /** Prochaine page à lire (0 = début : l'export Splash360 numérote à partir de 0). */
   readonly nextPage: number;
   /** La lecture en cours a commencé après la fin de la journée (heure de Paris). */
   readonly passAfterDay: boolean;
@@ -26,7 +26,8 @@ export interface PosSalesCursor {
 }
 
 /** Première page de l'export des ventes Splash360. */
-export const FIRST_SALES_PAGE = 1;
+/** Première page de l'export des ventes : Splash360 numérote à partir de 0 (constaté le 25/11). */
+export const FIRST_SALES_PAGE = 0;
 
 export const EMPTY_SALES_CURSOR: PosSalesCursor = {
   nextPage: FIRST_SALES_PAGE,

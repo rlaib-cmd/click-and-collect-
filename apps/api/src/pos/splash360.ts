@@ -186,8 +186,14 @@ export function splash360Probe(client: Splash360Client, baseUrl: string): Splash
       return { products: menu.products.length, categories: menu.categories.length };
     },
     rawMenu: () => client.getMenusAt(SPLASH360_DEFAULT_MENU_PATH),
-    rawSales: (date) =>
-      client.listSales({ fromDate: date, toDate: date, status: 'confirmed,deleted', pageSize: 5 }),
+    rawSales: (date, pageSize = 5, page = 0) =>
+      client.listSales({
+        fromDate: date,
+        toDate: date,
+        status: 'confirmed,deleted',
+        pageSize,
+        page,
+      }),
   };
 }
 

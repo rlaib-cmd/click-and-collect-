@@ -15,7 +15,7 @@ Réponses de Splash360 (25/11) :
   ensuite au comptoir : un QR seul ne prouve donc pas le paiement) ;
 - **journée comptable** (`jour_comptable`) : une vente faite **avant 02:00** (heure de Paris)
   appartient à la veille ; à partir de 02:00, à sa journée du calendrier ;
-- la **pagination** de l'export des ventes commence à **1** ;
+- la **pagination** de l'export des ventes commence à **0** en pratique (annoncée « à partir de 1 », mais le 25/11, `page=1` renvoyait la deuxième page : 28 ventes en page 0, aucune en page 1 avec `pageSize=100`) ;
 - au plus **un export par minute et par identifiant client** (ADR 0024).
 
 Disposition d'un vrai ticket de caisse (Chicken Street Siège, Splash360 1.4.13) : nom et adresse, un
@@ -59,7 +59,7 @@ la TVA, « REGLEMENT : CB 10,00 EUR ». En bas, une **autre** référence à ne 
    « non vérifiés » (`unverified`, comportement des lots 15 et 17). Événement `ticket_read`.
 5. **Copie des ventes** : `pos_sales` (enseigne, `ticket_id` en minuscules — clé primaire —,
    restaurant Splash360, journée, statut, total en centimes ; ni client, ni lignes, ni règlements)
-   et `pos_sales_sync` (avancement par enseigne et par journée, page suivante à partir de 1).
+   et `pos_sales_sync` (avancement par enseigne et par journée, page suivante à partir de 0).
    `tenant_id`, RLS sans règle (accès serveur seulement), pgTAP. Lecture de l'export dans
    `packages/api-menu` (`readSalesPage` : enveloppe stricte, vente lue champ par champ, `ticket_id`
    UUID ; une vente illisible est ignorée et comptée ; euros → centimes par `Math.round(total × 100)`).
@@ -72,7 +72,7 @@ la TVA, « REGLEMENT : CB 10,00 EUR ». En bas, une **autre** référence à ne 
    - seules les ventes des restaurants **branchés** (`splash360_live`) de l'enseigne sont copiées ;
    - une journée n'est **complète** qu'après une lecture entière commencée une fois la journée
      terminée (02:00 le lendemain) : l'ordre des ventes n'étant pas garanti, une lecture commencée
-     plus tôt recommence à la page 1 ;
+     plus tôt recommence à la page 0 ;
    - rapprochement **par `ticket_id`** (sans casse), restaurant branché de l'enseigne, quelle que
      soit la journée où la vente a été copiée. Vente encaissée → `verified` ; seulement annulée →
      `unpaid` et participation **refusée** (« Commande annulée en caisse ») dans la même
@@ -114,4 +114,4 @@ la TVA, « REGLEMENT : CB 10,00 EUR ». En bas, une **autre** référence à ne 
 ## Questions à Splash360 (questions-en-attente n° 17) : toutes répondues
 
 `ticket_id` imprimé en texte sur le ticket de caisse : oui. QR de borne = même `ticket_id` : oui.
-Journée comptable coupée à 02:00 : oui. Pagination à partir de 1 : oui.
+Journée comptable coupée à 02:00 : oui. Pagination : annoncée à partir de 1, constatée à partir de 0 (migration 20261125120000).

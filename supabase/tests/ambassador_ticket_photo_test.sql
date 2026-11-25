@@ -77,8 +77,8 @@ select throws_ok($$
   '23514', null, 'statut de vente inconnu refusé');
 select throws_ok($$
   insert into public.pos_sales_sync (tenant_id, jour, next_page)
-  values ('eeeeeeee-0000-4000-8000-000000000021', '2026-11-24', 0) $$,
-  '23514', null, 'page 0 refusée : l''export commence à la page 1');
+  values ('eeeeeeee-0000-4000-8000-000000000021', '2026-11-24', -1) $$,
+  '23514', null, 'page négative refusée : l''export commence à la page 0');
 
 set local role anon;
 select is((select count(*)::int from public.pos_sales), 0, 'anon ne lit aucune vente');

@@ -52,7 +52,7 @@ ni de client copiée).
 - À confirmer avec Splash360 : unité des montants entiers (centimes ?).
 - Réponses de Splash360 (25/11, ADR 0025) : le `ticket_id` est imprimé en texte sur le ticket de
   caisse (UUID seul sur sa ligne, sous le « #numéro ») et encodé dans le QR des tickets de borne ;
-  `jour_comptable` : une vente avant 02:00 (Paris) appartient à la veille ; pagination à partir de 1.
+  `jour_comptable` : une vente avant 02:00 (Paris) appartient à la veille ; pagination annoncée à partir de 1 mais constatée à partir de 0 (`page=1` = deuxième page).
 
 ## Correspondance avec notre application
 

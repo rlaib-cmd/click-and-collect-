@@ -24,7 +24,7 @@ ADR 0025.
 ## Vérifications
 
 - Tests : export des ventes (centimes exacts, identifiant non UUID ignoré, enveloppe inconnue,
-  page 1 par défaut), journée comptable (01:59 / 02:00, heure d'été, heure d'hiver, passages à
+  page 0 par défaut), journée comptable (01:59 / 02:00, heure d'été, heure d'hiver, passages à
   l'heure d'été et d'hiver), lecture du ticket avec un client Claude simulé (lisible, heure et total
   facultatifs, UUID invalide, injection, refus, panne, sans clé, consignes « jamais Ticket : T… »),
   UUID strict et corrections O/I/l, jeton, fenêtre de 7 jours en journée comptable, QR de borne,

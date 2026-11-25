@@ -467,7 +467,8 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
     async listSales(query) {
       const date = /^\d{4}-\d{2}-\d{2}$/;
       const pageSize = query.pageSize ?? 100;
-      const page = query.page ?? 1;
+      // Pages numérotées à partir de 0 (constaté le 25/11 : page=1 est la deuxième page).
+      const page = query.page ?? 0;
       if (
         !date.test(query.fromDate) ||
         !date.test(query.toDate) ||
@@ -475,7 +476,7 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
         pageSize < 1 ||
         pageSize > 100 ||
         !Number.isInteger(page) ||
-        page < 1
+        page < 0
       ) {
         throw new Splash360Error('Filtre des ventes invalide', null, false);
       }

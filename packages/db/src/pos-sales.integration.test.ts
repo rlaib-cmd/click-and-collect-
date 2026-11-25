@@ -47,7 +47,7 @@ describe.skipIf(!url)('PosSalesStore Postgres (lot 20)', () => {
 
   it('garde l’avancement de la lecture par enseigne et par journée', async () => {
     expect(await store.getCursor(BILLS, jour)).toEqual({
-      nextPage: 1,
+      nextPage: 0,
       passAfterDay: false,
       complete: false,
     });

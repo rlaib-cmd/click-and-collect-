@@ -23,7 +23,7 @@ import { addDays, businessDay, isBusinessDayOver, receiptBusinessDays } from './
  *   l'heure est illisible, la date imprimée et la veille ; pour un QR (sans date), la journée
  *   comptable de la participation et la précédente.
  * - Au plus UNE page de l'export par passage (Splash360 : un export par minute et par identifiant
- *   client) : la journée la plus ancienne encore à lire, 100 ventes par page (pages à partir de 1),
+ *   client) : la journée la plus ancienne encore à lire, 100 ventes par page (pages à partir de 0),
  *   ventes encaissées et annulées. Sur 429, le passage saute la lecture ; sur une autre erreur, il la
  *   journalise.
  * - Une journée n'est « complète » qu'après une lecture entière commencée une fois la journée
@@ -39,7 +39,7 @@ export type SalesFetchResult =
   | { readonly ok: true; readonly page: Splash360SalesPage }
   | { readonly ok: false; readonly reason: 'rate_limited' | 'error'; readonly message: string };
 
-/** Lecture d'une page (à partir de 1) de l'export des ventes d'une journée. */
+/** Lecture d'une page (à partir de 0) de l'export des ventes d'une journée. */
 export interface SalesSource {
   fetchPage(jour: string, page: number): Promise<SalesFetchResult>;
 }
@@ -185,11 +185,25 @@ export async function verifyAmbassadorTickets(
     if (result.ok) {
       run.fetched = true;
       const ids = live.get(tenantId) ?? new Set<string>();
-      await sales.saveSales(
-        tenantId,
-        result.page.sales.filter((s) => ids.has(s.restaurantId)),
-        now,
-      );
+      const kept = result.page.sales.filter((s) => ids.has(s.restaurantId));
+      await sales.saveSales(tenantId, kept, now);
+      deps.log?.('Export des ventes Splash360 lu', {
+        jour,
+        page,
+        read: result.page.sales.length,
+        kept: kept.length,
+        hasNextPage: result.page.hasNextPage,
+      });
+      // Ventes d'autres restaurants : souvent un identifiant Splash360 mal réglé au back-office.
+      if (kept.length < result.page.sales.length)
+        deps.log?.('Ventes Splash360 hors des restaurants branchés', {
+          jour,
+          page,
+          read: result.page.sales.length,
+          kept: kept.length,
+          restaurants: [...new Set(result.page.sales.map((s) => s.restaurantId))].slice(0, 10),
+          branches: [...ids],
+        });
       if (result.page.skipped > 0)
         deps.log?.('Ventes Splash360 ignorées (format inattendu)', {
           jour,

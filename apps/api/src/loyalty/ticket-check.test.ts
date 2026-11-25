@@ -50,7 +50,7 @@ const sale = (over: Partial<Splash360Sale> = {}): Splash360Sale => ({
   ...over,
 });
 
-/** Export simulé : pages (à partir de 1) par journée, appels mémorisés ; `fail` force une réponse. */
+/** Export simulé : pages (à partir de 0) par journée, appels mémorisés ; `fail` force une réponse. */
 function fakeSource(pages: Record<string, Splash360Sale[][]>, fail?: SalesFetchResult) {
   const calls: [string, number][] = [];
   const source: SalesSource = {
@@ -60,7 +60,7 @@ function fakeSource(pages: Record<string, Splash360Sale[][]>, fail?: SalesFetchR
       const list = pages[jour] ?? [];
       return Promise.resolve({
         ok: true,
-        page: { sales: list[page - 1] ?? [], hasNextPage: page < list.length, skipped: 0 },
+        page: { sales: list[page] ?? [], hasNextPage: page < list.length - 1, skipped: 0 },
       });
     },
   };
@@ -152,24 +152,24 @@ describe('rapprochement d’un ticket (règles)', () => {
   });
 
   it('journée complète seulement après une lecture entière commencée après sa fin', () => {
-    const start = { nextPage: 1, passAfterDay: false, complete: false };
-    expect(nextCursor(start, 1, true, true)).toEqual({
-      nextPage: 2,
+    const start = { nextPage: 0, passAfterDay: false, complete: false };
+    expect(nextCursor(start, 0, true, true)).toEqual({
+      nextPage: 1,
       passAfterDay: true,
       complete: false,
     });
-    expect(nextCursor(start, 2, false, true)).toEqual({
-      nextPage: 2,
+    expect(nextCursor(start, 1, false, true)).toEqual({
+      nextPage: 1,
       passAfterDay: true,
       complete: true,
     });
-    // Journée en cours : on relira tout, depuis la page 1.
-    expect(nextCursor(start, 3, false, false)).toEqual(start);
+    // Journée en cours : on relira tout, depuis la page 0.
+    expect(nextCursor(start, 2, false, false)).toEqual(start);
   });
 });
 
 describe('vérification périodique des tickets', () => {
-  it('lit une seule page par passage, dès la page 1, et vérifie l’achat une fois la vente trouvée', async () => {
+  it('lit une seule page par passage, dès la page 0, et vérifie l’achat une fois la vente trouvée', async () => {
     const s = await setup([photo()]);
     const fake = fakeSource({
       [YESTERDAY]: [
@@ -182,8 +182,8 @@ describe('vérification périodique des tickets', () => {
     expect(s.ambassador.entries[0]?.ticketCheck).toBe('pending');
     expect(await verifyAmbassadorTickets(deps, NOW)).toMatchObject({ fetched: true, verified: 1 });
     expect(fake.calls).toEqual([
+      [YESTERDAY, 0],
       [YESTERDAY, 1],
-      [YESTERDAY, 2],
     ]);
     // Seules les ventes des restaurants branchés de l'enseigne sont copiées.
     expect([...s.sales.sales.keys()]).toEqual([`${T}/${id(9)}`, `${T}/${id(1)}`]);
@@ -241,8 +241,8 @@ describe('vérification périodique des tickets', () => {
     expect(await verifyAmbassadorTickets(deps, NOW)).toMatchObject({ notFound: 0 });
     expect(await verifyAmbassadorTickets(deps, NOW)).toMatchObject({ notFound: 1 });
     expect(fake.calls).toEqual([
-      ['2026-11-23', 1],
-      [YESTERDAY, 1],
+      ['2026-11-23', 0],
+      [YESTERDAY, 0],
     ]);
   });
 
@@ -254,8 +254,8 @@ describe('vérification périodique des tickets', () => {
     // 26/11 à 01:30 Paris : la journée du 25 n'est pas terminée.
     await verifyAmbassadorTickets(deps, new Date('2026-11-26T00:30:00Z'));
     expect(fake.calls).toEqual([
-      [TODAY, 1],
-      [TODAY, 1],
+      [TODAY, 0],
+      [TODAY, 0],
     ]);
     expect(s.ambassador.entries[0]?.ticketCheck).toBe('pending');
     // 26/11 à 02:00 Paris : une lecture entière suffit à conclure.
@@ -263,7 +263,7 @@ describe('vérification périodique des tickets', () => {
     expect(await verifyAmbassadorTickets(deps, after)).toMatchObject({ notFound: 1 });
   });
 
-  it('journée lue avant sa fin puis terminée en cours de lecture : relue depuis la page 1', async () => {
+  it('journée lue avant sa fin puis terminée en cours de lecture : relue depuis la page 0', async () => {
     const s = await setup([photo({ ticketId: id(7), date: TODAY })]);
     const fake = fakeSource({
       [TODAY]: [
@@ -272,13 +272,13 @@ describe('vérification périodique des tickets', () => {
       ],
     });
     const deps = { ...s, source: fake.source };
-    await verifyAmbassadorTickets(deps, NOW); // page 1, journée en cours
+    await verifyAmbassadorTickets(deps, NOW); // page 0, journée en cours
     const tomorrow = new Date('2026-11-26T08:00:00Z');
-    await verifyAmbassadorTickets(deps, tomorrow); // page 2 : fin d'une lecture commencée trop tôt
+    await verifyAmbassadorTickets(deps, tomorrow); // page 1 : fin d'une lecture commencée trop tôt
     expect(s.ambassador.entries[0]?.ticketCheck).toBe('pending');
-    await verifyAmbassadorTickets(deps, tomorrow); // page 1
+    await verifyAmbassadorTickets(deps, tomorrow); // page 0
     expect(await verifyAmbassadorTickets(deps, tomorrow)).toMatchObject({ notFound: 1 });
-    expect(fake.calls.map(([, p]) => p)).toEqual([1, 2, 1, 2]);
+    expect(fake.calls.map(([, p]) => p)).toEqual([0, 1, 0, 1]);
   });
 
   it('ticket de borne scanné (QR) : journée de la participation et la précédente', async () => {
@@ -289,8 +289,8 @@ describe('vérification périodique des tickets', () => {
     await verifyAmbassadorTickets(deps, NOW);
     expect(await verifyAmbassadorTickets(deps, NOW)).toMatchObject({ verified: 1 });
     expect(fake.calls).toEqual([
-      [YESTERDAY, 1],
-      [TODAY, 1],
+      [YESTERDAY, 0],
+      [TODAY, 0],
     ]);
   });
 
@@ -305,11 +305,11 @@ describe('vérification périodique des tickets', () => {
     const fake = fakeSource({ '2026-11-22': [[]], [YESTERDAY]: [[sale()]] });
     const deps = { ...s, source: fake.source };
     await verifyAmbassadorTickets(deps, NOW);
-    expect(fake.calls).toEqual([['2026-11-22', 1]]);
+    expect(fake.calls).toEqual([['2026-11-22', 0]]);
     await verifyAmbassadorTickets(deps, NOW);
     expect(fake.calls).toEqual([
-      ['2026-11-22', 1],
-      [YESTERDAY, 1],
+      ['2026-11-22', 0],
+      [YESTERDAY, 0],
     ]);
     expect(s.ambassador.entries.map((e) => [e.tenantId, e.ticketCheck])).toEqual([
       [OTHER, 'verified'],

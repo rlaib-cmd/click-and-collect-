@@ -111,7 +111,7 @@ export interface Splash360Probe {
    * Quelques ventes brutes d'une journée (export des ventes, lot 19), pour découvrir leur format.
    * Rejette avec `retryAfterMs` si l'export a déjà été appelé dans la minute.
    */
-  rawSales?(date: string): Promise<unknown>;
+  rawSales?(date: string, pageSize?: number, page?: number): Promise<unknown>;
 }
 
 type C = Context<AdminEnv>;
@@ -350,7 +350,11 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       return apiError(c, 'invalid_request', 'Date attendue au format AAAA-MM-JJ');
     }
     try {
-      const raw = await deps.splash360.rawSales(date);
+      const size = Number(c.req.query('pageSize') ?? '5');
+      const pageSize = Number.isInteger(size) && size >= 1 && size <= 100 ? size : 5;
+      const p = Number(c.req.query('page') ?? '0');
+      const page = Number.isInteger(p) && p >= 0 && p <= 1000 ? p : 0;
+      const raw = await deps.splash360.rawSales(date, pageSize, page);
       await audit(c, 'splash360.sales_raw', c.req.param('id'), { date });
       c.header('Cache-Control', 'no-store');
       return c.json(raw);
