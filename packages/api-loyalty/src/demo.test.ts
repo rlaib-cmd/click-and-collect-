@@ -69,6 +69,7 @@ describe('fidélité de démonstration', () => {
       orderId: 'o1',
       orderNumber: 1002,
       earnPoints: 400,
+      amountCents: 4000,
       reward: null,
     });
     const settlement = {
@@ -76,6 +77,7 @@ describe('fidélité de démonstration', () => {
       orderId: 'o2',
       orderNumber: 1003,
       earnPoints: 181,
+      amountCents: 1810,
       reward: { id: 'rw-bb-frites', name: 'Frites', costPoints: 400 },
     };
     expect(await loyalty.settleOrder(bills, settlement)).toEqual({ ok: true });
@@ -103,6 +105,7 @@ describe('fidélité de démonstration', () => {
         orderId: 'o',
         orderNumber: 1,
         earnPoints: 0,
+        amountCents: 0,
         reward,
       }),
     ).toEqual({ ok: false, error: 'insufficient_points' });
@@ -112,6 +115,7 @@ describe('fidélité de démonstration', () => {
         orderId: 'o',
         orderNumber: 1,
         earnPoints: 10,
+        amountCents: 100,
         reward: null,
       }),
     ).toEqual({ ok: false, error: 'unknown_member' });

@@ -6,7 +6,8 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/youfid/fake-youfid.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -17,9 +18,11 @@
     "@splash360/config": "workspace:*",
     "eslint": "^9.39.5",
     "typescript": "~6.0.3",
-    "vitest": "^5.1.1"
+    "vitest": "^5.1.1",
+    "@types/node": "^22"
   },
   "dependencies": {
-    "@splash360/core": "workspace:*"
+    "@splash360/core": "workspace:*",
+    "zod": "^4.6.7"
   }
 }

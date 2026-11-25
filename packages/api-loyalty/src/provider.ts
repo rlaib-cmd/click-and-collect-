@@ -12,6 +12,12 @@ export interface LoyaltyProgram {
   readonly pointsPerEuro: number;
   readonly welcomePoints: number;
   readonly rewards: readonly LoyaltyReward[];
+  /**
+   * Origine du programme (lot 21, ADR 0026) : « youfid » quand il vient de l'API fidélité
+   * Splash360 (points par euro et bienvenue réglés par l'enseigne, historique limité aux
+   * opérations faites par l'application) ; absent ou « demo » sinon.
+   */
+  readonly source?: 'demo' | 'youfid';
 }
 
 export interface LoyaltyMember {
@@ -46,7 +52,28 @@ export interface LoyaltyMemberSummary extends LoyaltyMember {
 
 export type AdjustResult =
   | { readonly ok: true; readonly member: LoyaltyMember }
-  | { readonly ok: false; readonly error: 'unknown_member' | 'insufficient_points' };
+  | {
+      readonly ok: false;
+      readonly error:
+        | 'unknown_member'
+        | 'insufficient_points'
+        /** Retrait de points : non pris en charge par YouFID (lot 21). */
+        | 'unsupported'
+        /** YouFID : nombre de passages par jour atteint (`maximum_scans_reached`). */
+        | 'daily_limit'
+        /** Opération déjà faite, en cours ou à vérifier (registre local, lot 21). */
+        | 'already_processed'
+        /** Refus ou panne du fournisseur ; une issue inconnue est à vérifier au back-office. */
+        | 'provider_error';
+    };
+
+/** Options d'un ajustement (lot 21) : clé d'opération pour ne créditer qu'une fois. */
+export interface AdjustOptions {
+  /** Clé unique de l'opération (ex. « ambassador:<participation> ») ; un rejeu ne crédite pas. */
+  readonly operationKey?: string;
+  /** « bonus » : crédit automatique (Ambassadeur) ; « adjust » (défaut) : correction manuelle. */
+  readonly kind?: 'adjust' | 'bonus';
+}
 
 export interface LoyaltyMovement {
   /** adjust : correction manuelle depuis le back-office. */
@@ -61,7 +88,10 @@ export interface OrderSettlement {
   readonly memberId: string;
   readonly orderId: string;
   readonly orderNumber: number;
+  /** Estimation selon le programme (points par euro) ; YouFID calcule lui-même à partir du montant. */
   readonly earnPoints: number;
+  /** Montant payé en centimes, base du gain chez YouFID (lot 21). */
+  readonly amountCents: number;
   readonly reward: {
     readonly id: string;
     readonly name: string;
@@ -71,12 +101,34 @@ export interface OrderSettlement {
 
 export type SettleResult =
   | { readonly ok: true }
-  | { readonly ok: false; readonly error: 'unknown_member' | 'insufficient_points' };
+  | {
+      readonly ok: false;
+      readonly error:
+        | 'unknown_member'
+        | 'insufficient_points'
+        /** Même opération en cours ailleurs (appel concurrent). */
+        | 'in_progress'
+        /** Issue inconnue (panne réseau après envoi) : à vérifier, jamais rejouée seule. */
+        | 'uncertain'
+        | 'daily_limit'
+        | 'provider_error';
+    };
 
 /**
- * Programme de fidélité. L'implémentation réelle appellera l'API fidélité Splash360
- * (en attente) ; un fournisseur de démonstration sert en attendant (ADR 0009).
- * Seul ce paquet parle à cette API.
+ * Fonction non prise en charge par le fournisseur (ex. inscription sans téléphone chez YouFID).
+ * Le message est destiné au journal ; la route renvoie son propre texte.
+ */
+export class LoyaltyUnsupportedError extends Error {
+  constructor(readonly reason: 'phone_required') {
+    super(`Fidélité : opération non prise en charge (${reason})`);
+    this.name = 'LoyaltyUnsupportedError';
+  }
+}
+
+/**
+ * Programme de fidélité. Deux implémentations : l'API fidélité YouFID de Splash360 (lot 21,
+ * ADR 0026) pour les enseignes configurées, et le fournisseur de démonstration (ADR 0009) pour
+ * les autres, les tests et le développement local. Seul ce paquet parle à l'API fidélité.
  */
 export interface LoyaltyProvider {
   /** null : l'enseigne n'a pas de programme de fidélité. */
@@ -117,13 +169,20 @@ export interface LoyaltyProvider {
     search: string | null,
     limit: number,
   ): Promise<readonly LoyaltyMemberSummary[]>;
-  /** Ajout (delta > 0) ou retrait (delta < 0) manuel ; le solde ne peut pas devenir négatif. */
+  /**
+   * Ajout (delta > 0) ou retrait (delta < 0) manuel ; le solde ne peut pas devenir négatif.
+   * YouFID : ajout seulement (retrait refusé, « unsupported »).
+   */
   adjustPoints(
     tenant: LoyaltyTenant,
     memberId: string,
     delta: number,
     label: string,
+    options?: AdjustOptions,
   ): Promise<AdjustResult>;
-  /** Droit à l'effacement : le compte et son historique disparaissent. */
+  /**
+   * Droit à l'effacement : le compte et son historique disparaissent. YouFID : seul le lien
+   * local est effacé ; l'effacement chez YouFID se demande à Splash360 (ADR 0026).
+   */
   deleteMember(tenant: LoyaltyTenant, memberId: string): Promise<boolean>;
 }
