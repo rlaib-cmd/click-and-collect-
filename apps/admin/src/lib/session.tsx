@@ -1,6 +1,7 @@
 'use client';
 
 import { meSchema, type Me } from '@splash360/contracts';
+import { messages } from '@splash360/i18n';
 import { useRouter } from 'next/navigation';
 import {
   createContext,
@@ -70,6 +71,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // Enseigne demandée dont la réponse /me n'est pas encore arrivée (changement en cours).
   const [resolving, setResolving] = useState(false);
   const [refused, setRefused] = useState(false);
+  // Échec de /me hors refus de session : message et reprise sur clic, sans relance automatique.
+  const [meError, setMeError] = useState<string | null>(null);
+  const [meAttempt, setMeAttempt] = useState(0);
   const meGeneration = useRef(0);
   const redirected = useRef(false);
 
@@ -113,15 +117,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then((next) => {
         if (generation !== meGeneration.current) return;
         setMe(next);
+        setMeError(null);
         setResolving(false);
       })
       .catch((e: unknown) => {
-        if (generation !== meGeneration.current) return;
+        if (generation !== meGeneration.current || controller.signal.aborted) return;
         setResolving(false);
         if (e instanceof ApiError && (e.status === 401 || e.status === 403)) leave('?refus=1');
+        else setMeError(e instanceof Error ? e.message : String(e));
       });
     return () => controller.abort();
-  }, [token, tenantId, router, leave]);
+  }, [token, tenantId, router, leave, meAttempt]);
 
   const currentTenant = useRef<string | null>(null);
   currentTenant.current = tenantId;
@@ -156,6 +162,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         : null,
     [token, me, tenantId, resolving, refused, setTenant, reportUnauthorized, logout],
   );
+  if (!value && meError)
+    return (
+      <div className="center stack" role="alert">
+        <p className="muted">
+          {messages.admin.common.loadFailed} {meError}
+        </p>
+        <button
+          type="button"
+          className="primary"
+          onClick={() => {
+            setMeError(null);
+            setMeAttempt((n) => n + 1);
+          }}
+        >
+          {messages.admin.common.retry}
+        </button>
+      </div>
+    );
   if (!value) return <div className="center muted">…</div>;
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
