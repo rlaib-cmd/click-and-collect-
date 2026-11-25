@@ -1,4 +1,4 @@
-import { trackingInterval } from '@/lib/polling';
+import { readinessInterval, trackingInterval } from '@/lib/polling';
 import {
   availabilitySchema,
   deliveryCheckSchema,
@@ -127,7 +127,11 @@ export function usePlaceOrder() {
 }
 
 /** Suivi de commande, rafraîchi selon `trackingInterval`. */
-export function useOrderTracking(orderId: string, accessToken: string | null) {
+export function useOrderTracking(
+  orderId: string,
+  accessToken: string | null,
+  options: { bannerOnly?: boolean } = {},
+) {
   const { config } = useTenant();
   const sub = config.tenant.subdomain;
   return useQuery({
@@ -137,7 +141,11 @@ export function useOrderTracking(orderId: string, accessToken: string | null) {
         fetch(input, { ...init, headers: { Authorization: `Bearer ${accessToken ?? ''}` } }),
       ),
     enabled: accessToken !== null,
-    refetchInterval: (query) => trackingInterval(query.state.data?.status),
+    refetchInterval: (query) =>
+      trackingInterval(query.state.data?.status, {
+        failed: query.state.status === 'error',
+        bannerOnly: options.bannerOnly,
+      }),
   });
 }
 
@@ -159,7 +167,7 @@ export function usePosReadiness(orderId: string, accessToken: string | null, ena
       ),
     enabled: enabled && accessToken !== null,
     refetchInterval: (query) =>
-      !query.state.data || query.state.data.state === 'waiting' ? 1000 : false,
+      readinessInterval(query.state.data?.state, query.state.status === 'error'),
     gcTime: 0,
   });
 }

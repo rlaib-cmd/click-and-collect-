@@ -164,6 +164,16 @@ function PaymentSection({
     if (ready) mutate();
   }, [ready, mutate]);
 
+  // Erreur réseau ou serveur : on arrête d'interroger, le client relance lui-même.
+  if (readiness.isError)
+    return (
+      <View style={styles.payment}>
+        <Text style={{ color: palette.accent, textAlign: 'center' }} accessibilityRole="alert">
+          {messages.tenant.networkError}
+        </Text>
+        <PrimaryButton label={messages.app.retry} onPress={() => void readiness.refetch()} />
+      </View>
+    );
   if (readiness.data?.state === 'unavailable')
     return (
       <View style={styles.payment}>

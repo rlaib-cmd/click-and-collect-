@@ -45,7 +45,7 @@ export function OrderShortcuts() {
 
 function CurrentOrderBanner({ order }: { order: SavedOrder }) {
   const { palette, radii, style } = useTenant();
-  const tracking = useOrderTracking(order.orderId, order.accessToken);
+  const tracking = useOrderTracking(order.orderId, order.accessToken, { bannerOnly: true });
   const data = tracking.data;
   if (!data || FINISHED.includes(data.status)) return null;
   const toPay = data.status === 'pending_payment';
