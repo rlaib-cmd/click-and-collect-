@@ -10,7 +10,7 @@ export function titleStyle(style: ThemeStyle): TextStyle {
     : {};
 }
 
-const CHECKER_SIZE = 12;
+const CHECKER_SIZE = 10;
 const CHECKER_COLUMNS = 160;
 
 /** Bande en damier aux couleurs de l'enseigne (motif `checker`) ; décorative. */
