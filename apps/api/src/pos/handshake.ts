@@ -44,6 +44,8 @@ export async function openPosTicket(
 ): Promise<OpenOutcome> {
   const now = deps.now ?? (() => new Date());
   if (await deps.tickets.getTicket(tenantId, orderId)) return { ok: true };
+  // Une seule requête dépose la commande ; les autres attendent son ticket (pas de doublon).
+  if (!(await deps.tickets.reserveOpening(tenantId, orderId, now()))) return { ok: true };
   try {
     const order = await deps.orders.getOrderDetail(tenantId, orderId);
     const restaurant = order ? await deps.restaurants.findById(tenantId, order.restaurantId) : null;
@@ -86,7 +88,8 @@ export async function checkReadiness(
     const opened = await openPosTicket(deps, tenantId, orderId);
     if (!opened.ok) return 'unavailable';
     ticket = await deps.tickets.getTicket(tenantId, orderId);
-    if (!ticket) return 'unavailable';
+    // Dépôt en cours dans une autre requête : on attend son ticket.
+    if (!ticket) return 'waiting';
   }
   if (ticket.phase === 'failed') return 'unavailable';
   if (ticket.phase !== 'waiting') return 'ready';

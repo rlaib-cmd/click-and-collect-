@@ -74,6 +74,17 @@ describe.skipIf(!url)('PosTicketStore Postgres (ADR 0018)', () => {
     return id;
   }
 
+  it('réserve le dépôt en caisse une seule fois (pas de ticket en double)', async () => {
+    const id = await newOrder('reserve', false);
+    const at = new Date();
+    expect(await tickets.reserveOpening(BELLA, id, at)).toBe(true);
+    expect(await tickets.reserveOpening(BELLA, id, new Date(at.getTime() + 1000))).toBe(false);
+    // Réservation expirée (dépôt interrompu) : on peut réessayer.
+    expect(await tickets.reserveOpening(BELLA, id, new Date(at.getTime() + 31_000))).toBe(true);
+    await tickets.openTicket(BELLA, id, `T-${run}-reserve`, at);
+    expect(await tickets.reserveOpening(BELLA, id, new Date(at.getTime() + 90_000))).toBe(false);
+  });
+
   it('ne branche la caisse réelle que sur un seul restaurant à la fois', async () => {
     const [bella] = await restaurants.listByTenant(BELLA);
     const [green] = await restaurants.listByTenant(GREEN);

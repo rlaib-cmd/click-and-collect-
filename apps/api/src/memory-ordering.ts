@@ -35,6 +35,7 @@ export interface StoredOrder extends NewOrder {
   loyaltySettled?: boolean;
   /** Poignée de main avec la caisse (ADR 0018), comme les colonnes pos_* de Postgres. */
   pos?: { -readonly [K in keyof PosTicket]: PosTicket[K] };
+  posOpeningAt?: Date;
 }
 
 const PAID = ['paid', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'completed'];
@@ -428,6 +429,14 @@ export function createMemoryOrderBackend(
     getTicket(tenantId, orderId) {
       const pos = find(tenantId, orderId)?.pos;
       return Promise.resolve(pos ? { ...pos } : null);
+    },
+    reserveOpening(tenantId, orderId, at) {
+      const o = find(tenantId, orderId);
+      if (!o || o.pos) return Promise.resolve(false);
+      if (o.posOpeningAt && at.getTime() - o.posOpeningAt.getTime() < 30_000)
+        return Promise.resolve(false);
+      o.posOpeningAt = at;
+      return Promise.resolve(true);
     },
     openTicket(tenantId, orderId, ticketId, at) {
       const o = find(tenantId, orderId);

@@ -61,7 +61,10 @@ const required = (name: string) => {
 };
 
 const supabaseUrl = required('SUPABASE_URL');
-const databaseUrl = required('SUPABASE_DB_URL');
+// Pooler Supabase (Supavisor, mode transaction, port 6543) de préférence : SUPABASE_DB_URL est la
+// connexion directe, limitée à 60 connexions sur la petite instance et saturée dès que beaucoup de
+// copies de la fonction tournent en même temps (constaté en recette le 24/11).
+const databaseUrl = env('DATABASE_POOLER_URL') ?? required('SUPABASE_DB_URL');
 
 // Clé de dérivation des jetons de suivi : propre au projet, dérivée de la clé de service
 // (jamais exposée), sauf si ORDER_TOKEN_SECRET est fourni explicitement.

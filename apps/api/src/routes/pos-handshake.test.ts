@@ -116,6 +116,30 @@ describe('avant paiement : la caisse doit être prête', () => {
     expect(setup.backend.orders[0]?.pos).toMatchObject({ phase: 'ready' });
   });
 
+  it('ne dépose la commande qu’une fois en caisse, même avec des requêtes simultanées', async () => {
+    const c = clocked();
+    let opened = 0;
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((r) => (release = r));
+    const pos: PosGateway = {
+      async openTicket(order) {
+        opened += 1;
+        await slow; // Splash360 met du temps à répondre : la seconde requête arrive entre-temps.
+        return { ticketId: `T-${order.number}` };
+      },
+      ticketStatus: () => Promise.resolve({ state: 'pending', raw: 'pending' }),
+      submitPayment: () => Promise.resolve(),
+    };
+    const setup = testSetup({ pos, now: c.now });
+    const { readiness } = await place(setup);
+    const first = readiness();
+    const second = readiness();
+    await new Promise((r) => setTimeout(r, 20));
+    release();
+    expect(await Promise.all([first, second])).toEqual(['waiting', 'waiting']);
+    expect(opened).toBe(1);
+  });
+
   it('n’interroge pas la caisse plus d’une fois par seconde', async () => {
     const c = clocked();
     const s = scripted(() => 'pending');

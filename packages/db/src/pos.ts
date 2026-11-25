@@ -21,6 +21,11 @@ export interface PosTicket {
 
 export interface PosTicketStore {
   getTicket(tenantId: string, orderId: string): Promise<PosTicket | null>;
+  /**
+   * Réserve le dépôt en caisse avant d'appeler Splash360 : faux si la commande a déjà un ticket
+   * ou si un autre dépôt est en cours depuis moins de 30 s (pas de ticket en double).
+   */
+  reserveOpening(tenantId: string, orderId: string, at: Date): Promise<boolean>;
   /** Enregistre le ticket déposé (phase waiting) ; faux si la commande en a déjà un. */
   openTicket(tenantId: string, orderId: string, ticketId: string, at: Date): Promise<boolean>;
   /** Change de phase et date l'étape atteinte. */
@@ -82,6 +87,15 @@ export function createPostgresPosTicketStore(sql: Sql): PosTicketStore {
         lastStatus: r.pos_last_status,
         error: r.pos_error,
       };
+    },
+
+    async reserveOpening(tenantId, orderId, at) {
+      const rows = await sql`
+        update public.orders set pos_opening_at = ${at}
+        where tenant_id = ${tenantId} and id = ${orderId} and pos_ticket_id is null
+          and (pos_opening_at is null or pos_opening_at < ${new Date(at.getTime() - 30_000)})
+        returning id`;
+      return rows.length > 0;
     },
 
     async openTicket(tenantId, orderId, ticketId, at) {
