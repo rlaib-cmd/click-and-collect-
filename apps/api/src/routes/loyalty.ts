@@ -22,6 +22,9 @@ import type { Context, Hono } from 'hono';
 import { apiError } from '../errors';
 import { consumeOtp, startOtp, verifyOtp, type OtpDeps } from '../loyalty/otp';
 import { authenticateMember, memberToken, memberView } from '../loyalty/service';
+
+/** Nom affiché d'un membre qui n'a pas (encore) donné son prénom. */
+const DEFAULT_MEMBER_NAME = 'Membre';
 import { orderAccessToken } from '../payments/tokens';
 
 export interface LoyaltyRoutesDeps {
@@ -213,8 +216,9 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
       }
       return session(c, existing.id, false, true);
     }
-    // Pas encore de compte : le code reste valable un moment pour donner son prénom.
-    if (!name || !acceptedTerms) {
+    // Pas encore de compte : le code reste valable un moment pour accepter les conditions.
+    // Le prénom est facultatif (demande du 25/11) : il se complète ensuite dans « Fais connaissance ».
+    if (!acceptedTerms) {
       c.header('Cache-Control', 'no-store');
       return c.json({ needsName: true as const });
     }
@@ -222,7 +226,7 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
       return apiError(c, 'otp_expired', 'Code déjà utilisé : demande un nouveau code');
     }
     const { member, created } = await ctx.provider.join(ctx.tenant, {
-      name,
+      name: name && name.trim().length >= 2 ? name : DEFAULT_MEMBER_NAME,
       phone: channel === 'sms' ? v.identifier : null,
       email: channel === 'email' ? v.identifier : null,
     });

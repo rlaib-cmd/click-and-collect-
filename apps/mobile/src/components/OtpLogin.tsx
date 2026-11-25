@@ -49,7 +49,6 @@ export function OtpLogin({ onDemoLogin }: { onDemoLogin?: (() => void) | undefin
   const [channel, setChannel] = useState<OtpChannel>('sms');
   const [raw, setRaw] = useState('');
   const [code, setCode] = useState('');
-  const [name, setName] = useState('');
   const [terms, setTerms] = useState(false);
   const [step, setStep] = useState<Step>({ kind: 'identifier' });
   const [busy, setBusy] = useState(false);
@@ -117,7 +116,6 @@ export function OtpLogin({ onDemoLogin }: { onDemoLogin?: (() => void) | undefin
         channel,
         identifier: step.identifier,
         code: step.code,
-        name: name.trim(),
         acceptedTerms: true,
       });
     } catch (e) {
@@ -280,17 +278,6 @@ export function OtpLogin({ onDemoLogin }: { onDemoLogin?: (() => void) | undefin
           <Text style={[styles.center, { color: palette.textMuted, fontSize: 15 }]}>
             {t.nameIntro}
           </Text>
-          <TextInput
-            accessibilityLabel={tl.name}
-            placeholder={tl.name}
-            placeholderTextColor={palette.textMuted}
-            value={name}
-            onChangeText={setName}
-            autoComplete="given-name"
-            textContentType="givenName"
-            autoFocus
-            style={input}
-          />
           <View style={styles.toggle}>
             <Switch value={terms} onValueChange={setTerms} accessibilityLabel={tl.terms} />
             <Text style={{ color: palette.text, flex: 1 }}>{tl.terms}</Text>
@@ -302,7 +289,7 @@ export function OtpLogin({ onDemoLogin }: { onDemoLogin?: (() => void) | undefin
           </Pressable>
           <PrimaryButton
             label={t.create(welcome)}
-            disabled={busy || name.trim().length < 2 || !terms}
+            disabled={busy || !terms}
             onPress={() => void create()}
           />
         </>

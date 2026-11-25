@@ -467,7 +467,7 @@ export const fr = {
     resendIn: (s: number) => `Renvoyer le code dans ${s} s`,
     debugCode: (code: string) => `Recette : code de test ${code} (aucun SMS envoyé).`,
     nameTitle: 'Bienvenue au club !',
-    nameIntro: 'Dernière étape : ton prénom, pour ta carte de membre.',
+    nameIntro: 'Dernière étape : accepte les conditions pour créer ta carte de membre.',
     create: (n: number) => `Créer mon compte · +${n} pts`,
     invalidPhone: 'Numéro de mobile invalide : 06 ou 07 suivi de 8 chiffres.',
     invalidEmail: 'Adresse e-mail invalide.',

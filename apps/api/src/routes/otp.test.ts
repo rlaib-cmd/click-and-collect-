@@ -144,6 +144,21 @@ describe('connexion par code (lot 10)', () => {
     expect(replay.status).toBe(410);
   });
 
+  it('nouveau client sans prénom : compte créé dès l’acceptation des conditions (prénom facultatif)', async () => {
+    const s = setup();
+    await post(s, '/loyalty/otp/start', { channel: 'sms', identifier: '0600000009' });
+    const code = s.lastCode();
+    const done = await post(s, '/loyalty/otp/verify', {
+      channel: 'sms',
+      identifier: '0600000009',
+      code,
+      acceptedTerms: true,
+    });
+    expect(done.status).toBe(201);
+    const session = loyaltySessionSchema.parse(await done.json());
+    expect(session.member).toMatchObject({ name: 'Membre', phone: '+33600000009', points: 100 });
+  });
+
   it('client existant : retrouve son compte et ses points avec un nouveau code', async () => {
     const s = setup();
     await post(s, '/loyalty/otp/start', { channel: 'sms', identifier: '0600000002' });
