@@ -33,6 +33,7 @@ import { createApp } from './app';
 import { loadEnv } from './env';
 import { jsonLog } from './http/logging';
 import { createOtpDeps, createSmsSender } from './loyalty/otp';
+import { createClaudePhotoAnalyzer } from './loyalty/photo-check';
 import { createBanGeoProvider, createDemoGeoProvider } from './geo';
 import { createNotificationSender } from './notifications/sender';
 import { createStripeGateway } from './payments/gateway';
@@ -121,6 +122,16 @@ const app = createApp({
   admin: createPostgresAdminStore(sql),
   promos: createPostgresPromoStore(sql),
   ambassador: createPostgresAmbassadorStore(sql),
+  // Sans clé : la photo est « à vérifier » par l'équipe (aucune clé dans le dépôt).
+  ...(env.ANTHROPIC_API_KEY
+    ? {
+        photoAnalyzer: createClaudePhotoAnalyzer({
+          apiKey: env.ANTHROPIC_API_KEY,
+          ...(env.AMBASSADOR_PHOTO_MODEL ? { model: env.AMBASSADOR_PHOTO_MODEL } : {}),
+          log,
+        }),
+      }
+    : {}),
   verifier: createSupabaseVerifier({
     jwksUrl: env.SUPABASE_JWKS_URL,
     secret: env.SUPABASE_JWT_SECRET,
@@ -207,9 +218,22 @@ const dispatcher = setInterval(() => {
     );
 }, 15_000);
 
+// Ambassadeur (lot 17) : contrôles de story et crédits de points échus.
+const ambassador = setInterval(() => {
+  app
+    .runAmbassador()
+    .then((r) => {
+      if (r.checked + r.credited + r.rejected > 0) jsonLog('info', 'Ambassadeur traité', { ...r });
+    })
+    .catch((error: unknown) =>
+      jsonLog('error', 'Tâche ambassadeur en échec', { error: String(error) }),
+    );
+}, 60_000);
+
 function shutdown() {
   clearInterval(expiry);
   clearInterval(dispatcher);
+  clearInterval(ambassador);
   server.close();
   void sql.end({ timeout: 5 }).then(() => process.exit(0));
 }

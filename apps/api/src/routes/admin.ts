@@ -52,9 +52,14 @@ import {
   type AdminEnv,
   type TokenVerifier,
 } from '../admin/auth';
-import { toEntryDto } from './ambassador';
 import type { AuthInviter } from '../admin/invite';
 import { apiError } from '../errors';
+import {
+  confirmAmbassadorEntry,
+  markMentionReceived,
+  rejectAmbassadorEntry,
+  toAdminEntryDto,
+} from '../loyalty/ambassador';
 import { toMenuDto } from '../menu-dto';
 import { notifyStatus, type NotifyDeps } from '../notifications/service';
 import type { PaymentGateway } from '../payments/gateway';
@@ -878,7 +883,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     return (await deps.loyalty.getProgram(ref)) ? { provider: deps.loyalty, ref } : null;
   }
 
-  // ——— Ambassadeur (lot 15, ADR 0019) ———
+  // ——— Ambassadeur (lots 15 et 17, ADR 0019 et 0022) ———
   app.get('/ambassador', async (c) => {
     const denied = allow(c, 'loyalty');
     if (denied) return denied;
@@ -895,8 +900,29 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     const parsed = ambassadorSettingsSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success)
       return apiError(c, 'invalid_request', parsed.error.issues[0]?.message ?? 'Réglage invalide');
-    await deps.ambassador.saveSettings(tenantId(c), parsed.data);
-    await audit(c, 'ambassador.settings', null, { enabled: parsed.data.enabled });
+    // Délais et catégorie absents : valeurs actuelles conservées.
+    const current = await deps.ambassador.getSettings(tenantId(c));
+    const next = {
+      enabled: parsed.data.enabled,
+      instagramHandle: parsed.data.instagramHandle,
+      bonusPoints: parsed.data.bonusPoints,
+      checkAfterHours: parsed.data.checkAfterHours ?? current.checkAfterHours,
+      creditAfterHours: parsed.data.creditAfterHours ?? current.creditAfterHours,
+      photoCategory: parsed.data.photoCategory ?? current.photoCategory,
+    };
+    if (next.checkAfterHours > next.creditAfterHours)
+      return apiError(
+        c,
+        'invalid_request',
+        'Le contrôle doit avoir lieu avant le crédit des points',
+      );
+    await deps.ambassador.saveSettings(tenantId(c), next);
+    await audit(c, 'ambassador.settings', null, {
+      enabled: next.enabled,
+      bonusPoints: next.bonusPoints,
+      checkAfterHours: next.checkAfterHours,
+      creditAfterHours: next.creditAfterHours,
+    });
     return c.body(null, 204);
   });
 
@@ -905,15 +931,78 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     if (denied) return denied;
     if (!deps.ambassador) return apiError(c, 'not_found', 'Fonction indisponible');
     const entries = await deps.ambassador.listEntries(tenantId(c), 200);
-    return c.json({
-      entries: entries.map((e) => ({
-        ...toEntryDto(e),
-        memberId: e.memberId,
-        instagramHandle: e.instagramHandle,
-        scanned: e.ticketQr !== null,
-        decidedAt: e.decidedAt?.toISOString() ?? null,
-      })),
-    });
+    const events = await deps.ambassador.events(
+      tenantId(c),
+      entries.map((e) => e.id),
+    );
+    return c.json({ entries: entries.map((e) => toAdminEntryDto(e, events)) });
+  });
+
+  /** Participation de l'enseigne après une action, avec son historique à jour. */
+  async function entryView(c: C, id: string) {
+    const store = deps.ambassador;
+    const entry = store ? await store.getEntry(tenantId(c), id) : null;
+    if (!store || !entry) return apiError(c, 'not_found', 'Participation inconnue');
+    return c.json(toAdminEntryDto(entry, await store.events(tenantId(c), [id])));
+  }
+
+  // « Mention reçue » : la story tague bien l'enseigne ; départ des délais de contrôle et de crédit.
+  app.post('/ambassador/entries/:id/mention', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    if (!deps.ambassador) return apiError(c, 'not_found', 'Fonction indisponible');
+    const id = c.req.param('id');
+    const done = await markMentionReceived(
+      deps.ambassador,
+      tenantId(c),
+      id,
+      deps.now?.() ?? new Date(),
+      ctx(c).staff.email,
+    );
+    if (!done) return apiError(c, 'conflict', 'Mention déjà reçue, ou participation déjà décidée');
+    await audit(c, 'ambassador.mention', id);
+    return entryView(c, id);
+  });
+
+  // « Refuser » : possible tant que les points ne sont pas crédités.
+  app.post('/ambassador/entries/:id/reject', async (c) => {
+    const denied = allow(c, 'loyalty');
+    if (denied) return denied;
+    if (!deps.ambassador) return apiError(c, 'not_found', 'Fonction indisponible');
+    const input = await body(c, z.object({ reason: z.string().trim().max(200).optional() }));
+    const id = c.req.param('id');
+    const done = await rejectAmbassadorEntry(
+      deps.ambassador,
+      tenantId(c),
+      id,
+      deps.now?.() ?? new Date(),
+      ctx(c).staff.email,
+      input?.reason || undefined,
+    );
+    if (!done) return apiError(c, 'conflict', 'Participation déjà décidée');
+    await audit(c, 'ambassador.reject', id);
+    return entryView(c, id);
+  });
+
+  // « Valider maintenant » : crédit immédiat, réservé au propriétaire et à Splash360.
+  app.post('/ambassador/entries/:id/validate', async (c) => {
+    const denied = allow(c, 'loyalty.validate');
+    if (denied) return denied;
+    const tenant = ctx(c).tenant;
+    if (!deps.ambassador || !deps.loyalty || !tenant)
+      return apiError(c, 'not_found', 'Fonction indisponible');
+    const id = c.req.param('id');
+    const result = await confirmAmbassadorEntry(
+      { ambassador: deps.ambassador, loyalty: deps.loyalty },
+      { id: tenant.id, splash360Id: tenant.splash360Id },
+      id,
+      deps.now?.() ?? new Date(),
+      ctx(c).staff.email,
+    );
+    if (!result.ok && result.error === 'not_pending')
+      return apiError(c, 'conflict', 'Participation déjà décidée');
+    await audit(c, 'ambassador.validate', id, { credited: result.ok });
+    return entryView(c, id);
   });
 
   app.get('/loyalty/members', async (c) => {

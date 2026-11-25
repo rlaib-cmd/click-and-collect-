@@ -14,6 +14,7 @@
     "build:edge": "esbuild src/edge.ts --bundle --minify --platform=node --target=es2022 --format=esm --outfile=dist/edge/index.js --external:@sentry/node --external:zod --external:stripe --external:postgres --external:jose && node scripts/edge-deno-json.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.14.0",
     "@hono/node-server": "^2.1.11",
     "@sentry/node": "^11.16.0",
     "@splash360/api-loyalty": "workspace:*",
@@ -30,10 +31,10 @@
   "devDependencies": {
     "@splash360/config": "workspace:*",
     "@types/node": "^22",
+    "esbuild": "^0.28.2",
     "eslint": "^9.39.5",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
-    "vitest": "^5.1.1",
-    "esbuild": "^0.28.2"
+    "vitest": "^5.1.1"
   }
 }

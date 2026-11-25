@@ -46,6 +46,9 @@ const envSchema = z.object({
   EXPO_ACCESS_TOKEN: z.string().optional(),
   /** E-mails transactionnels Brevo ; sans clé, les e-mails sont seulement journalisés. */
   BREVO_API_KEY: z.string().min(10).optional(),
+  /** Analyse de la photo « Ambassadeur » (lot 17) ; absente = vérification manuelle. */
+  ANTHROPIC_API_KEY: z.string().min(10).optional(),
+  AMBASSADOR_PHOTO_MODEL: z.string().min(3).optional(),
   EMAIL_SENDER: z.email().optional(),
   EMAIL_SENDER_NAME: z.string().default('Commande en ligne'),
   /**

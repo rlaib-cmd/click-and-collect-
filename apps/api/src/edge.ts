@@ -44,6 +44,7 @@ import { createApp } from './app';
 import { createBanGeoProvider } from './geo';
 import { jsonLog } from './http/logging';
 import { createOtpDeps, createSmsSender } from './loyalty/otp';
+import { createClaudePhotoAnalyzer } from './loyalty/photo-check';
 import { createNotificationSender } from './notifications/sender';
 import { createStripeGateway } from './payments/gateway';
 import { expireUnpaidOrders } from './payments/service';
@@ -56,6 +57,7 @@ declare const Deno: {
 };
 
 const env = (name: string) => Deno.env.get(name);
+const anthropicKey = env('ANTHROPIC_API_KEY');
 const required = (name: string) => {
   const v = env(name);
   if (!v) throw new Error(`Variable manquante : ${name}`);
@@ -217,6 +219,16 @@ function build() {
     admin: createPostgresAdminStore(sql),
     promos: createPostgresPromoStore(sql),
     ambassador: createPostgresAmbassadorStore(sql),
+    // Sans clé : la photo est « à vérifier » par l'équipe (aucune clé dans le dépôt).
+    ...(anthropicKey
+      ? {
+          photoAnalyzer: createClaudePhotoAnalyzer({
+            apiKey: anthropicKey,
+            ...(env('AMBASSADOR_PHOTO_MODEL') ? { model: env('AMBASSADOR_PHOTO_MODEL') } : {}),
+            log,
+          }),
+        }
+      : {}),
     verifier,
     gateway,
     tokenSecret,
@@ -280,6 +292,7 @@ let inFlight = 0;
 // et les envois en caisse en attente (confirmation, nouveaux essais) avancent de la même façon.
 let lastExpiry = 0;
 let lastDispatch = 0;
+let lastAmbassador = 0;
 
 /**
  * Tâche de fond (envois en caisse, expirations) : comptée comme une requête en cours, pour que les
@@ -329,6 +342,11 @@ root.use('*', async (c, next) => {
   if (clientTraffic && now - lastDispatch > 10_000) {
     lastDispatch = now;
     background('caisse', current.app.runDispatches());
+  }
+  // Ambassadeur (lot 17) : contrôles et crédits échus, au plus une fois par minute.
+  if (clientTraffic && now - lastAmbassador > 60_000) {
+    lastAmbassador = now;
+    background('ambassadeur', current.app.runAmbassador());
   }
   inFlight += 1;
   try {

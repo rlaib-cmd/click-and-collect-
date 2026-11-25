@@ -36,6 +36,9 @@ import { jsonLog, requestLogger, type Log } from './http/logging';
 import { rateLimit } from './http/rate-limit';
 import type { OtpDeps } from './loyalty/otp';
 import { settleLoyalty } from './loyalty/settle';
+import { processAmbassadorEntries, type StoryChecker } from './loyalty/ambassador';
+import type { PhotoAnalyzer } from './loyalty/photo-check';
+import { MAX_PHOTO_BYTES } from '@splash360/contracts';
 import { tenantRoutes } from './routes/tenants';
 import { webhookRoutes } from './routes/webhooks';
 
@@ -80,7 +83,7 @@ export interface AppDeps {
   /** Sonde de disponibilité (base de données). */
   readonly ready?: () => Promise<boolean>;
   /** Requêtes par minute et par IP : création/paiement/devis, et lectures publiques. */
-  readonly rateLimits?: { orders: number; reads: number; admin?: number };
+  readonly rateLimits?: { orders: number; reads: number; admin?: number; photos?: number };
   /** Attente imposée à un back-office obsolète avant de lui répondre (défaut 60 s). */
   readonly outdatedClientHoldMs?: number;
   readonly trustProxy?: boolean;
@@ -92,6 +95,10 @@ export interface AppDeps {
   readonly memberSessions?: MemberSessionStore;
   /** Ambassadeur (lot 15, ADR 0019) ; absent = fonction désactivée. */
   readonly ambassador?: AmbassadorStore;
+  /** Analyse de la photo ambassadeur (lot 17) ; absente = vérification manuelle par l'équipe. */
+  readonly photoAnalyzer?: PhotoAnalyzer;
+  /** Contrôle « story toujours en ligne » (lot 17) ; absent = réputée en ligne (en attendant Meta). */
+  readonly storyChecker?: StoryChecker;
   /** Connexion au club par simple e-mail : données de test uniquement (ADR 0009). */
   readonly loyaltyDemoLogin?: boolean;
   /** Connexion du client par code SMS ou e-mail (lot 10) ; absent = désactivée. */
@@ -127,7 +134,19 @@ export function createApp(input: AppDeps) {
     maxSize: MAX_LOGO_BYTES + 1024,
     onError: (c) => apiError(c, 'payload_too_large', 'Logo trop lourd : 2 Mo maximum'),
   });
-  app.use('/v1/*', (c, next) => (c.req.path === LOGO_PATH ? logoBodies : smallBodies)(c, next));
+  // Photo « Ambassadeur » (lot 17) : 4 Mo d'image, soit environ 5,4 Mo une fois en base64.
+  const PHOTO_PATH = /^\/v1\/tenants\/[^/]+\/ambassador\/photo-check$/;
+  const photoBodies = bodyLimit({
+    maxSize: Math.ceil((MAX_PHOTO_BYTES * 4) / 3) + 4096,
+    onError: (c) => apiError(c, 'payload_too_large', 'Photo trop lourde : 4 Mo maximum'),
+  });
+  app.use('/v1/*', (c, next) =>
+    (c.req.path === LOGO_PATH
+      ? logoBodies
+      : PHOTO_PATH.test(c.req.path)
+        ? photoBodies
+        : smallBodies)(c, next),
+  );
   const origins = deps.corsOrigins ?? '*';
   app.use(
     '/v1/*',
@@ -168,6 +187,12 @@ export function createApp(input: AppDeps) {
   ]) {
     app.on('POST', path, strict);
   }
+  // Analyse de photo (appel payant à l'IA) : plafond propre, plus bas.
+  app.on(
+    'POST',
+    '/v1/tenants/:s/ambassador/photo-check',
+    rateLimit({ limit: limits.photos ?? 6, windowMs: 60_000, trustProxy, ipHeader }),
+  );
   app.use(
     '/v1/tenants/*',
     rateLimit({ limit: limits.reads, windowMs: 60_000, trustProxy, ipHeader }),
@@ -326,6 +351,19 @@ export function createApp(input: AppDeps) {
     return apiError(c, 'internal_error', 'Erreur interne');
   });
 
-  // Tâche périodique (serveur Node) ou au fil des requêtes (Edge) : suite des envois en caisse.
-  return Object.assign(app, { runDispatches: () => processDispatches(dispatch) });
+  // Tâches périodiques (serveur Node) ou au fil des requêtes (Edge) : suite des envois en caisse,
+  // contrôles et crédits « Ambassadeur » échus (lot 17).
+  const runAmbassador = () =>
+    deps.ambassador && deps.loyalty
+      ? processAmbassadorEntries(
+          {
+            ambassador: deps.ambassador,
+            loyalty: deps.loyalty,
+            ...(deps.storyChecker ? { storyChecker: deps.storyChecker } : {}),
+            log: warn,
+          },
+          deps.now?.() ?? new Date(),
+        )
+      : Promise.resolve({ checked: 0, credited: 0, rejected: 0 });
+  return Object.assign(app, { runDispatches: () => processDispatches(dispatch), runAmbassador });
 }

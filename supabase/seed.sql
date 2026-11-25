@@ -132,9 +132,10 @@ from public.restaurants r where r.tenant_id = '00000000-0000-4000-8000-000000000
 order by r.created_at limit 1;
 
 -- Lot 15 : ambassadeur Bills Burger (compte à taguer, 50 points par story, une fois par ticket).
-insert into public.ambassador_settings (tenant_id, enabled, instagram_handle, bonus_points)
-values ('00000000-0000-4000-8000-000000000005', true, 'billsburgerfr', 50)
-on conflict (tenant_id) do nothing;
+-- Lot 17 : enseigne de burgers (contexte de l'analyse de la photo).
+insert into public.ambassador_settings (tenant_id, enabled, instagram_handle, bonus_points, photo_category)
+values ('00000000-0000-4000-8000-000000000005', true, 'billsburgerfr', 50, 'burgers')
+on conflict (tenant_id) do update set photo_category = excluded.photo_category;
 
 -- Lot 16 (ADR 0021) : paliers Bills Burger par catégories entières de la carte de démonstration.
 insert into public.loyalty_reward_settings (tenant_id, reward_id, category_ids) values

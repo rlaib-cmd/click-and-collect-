@@ -25,6 +25,8 @@ export type Permission =
   | 'promos'
   /** Administration du club fidélité (membres, points). */
   | 'loyalty'
+  /** Ambassadeur : « Valider maintenant », crédit immédiat sans attendre les délais (lot 17). */
+  | 'loyalty.validate'
   | 'dashboard'
   /** Fichier clients, export et effacement RGPD. */
   | 'customers'
@@ -45,6 +47,7 @@ export const PERMISSIONS: readonly Permission[] = [
   'design',
   'promos',
   'loyalty',
+  'loyalty.validate',
   'dashboard',
   'customers',
   'audit',
@@ -69,7 +72,7 @@ const MANAGER: readonly Permission[] = [
 
 const GRANTS: Readonly<Record<StaffRole, ReadonlySet<Permission>>> = {
   super_admin: new Set(PERMISSIONS),
-  tenant_admin: new Set([...MANAGER, 'payments', 'team']),
+  tenant_admin: new Set([...MANAGER, 'loyalty.validate', 'payments', 'team']),
   manager: new Set(MANAGER),
   staff: new Set(['orders', 'menu.pause']),
 };

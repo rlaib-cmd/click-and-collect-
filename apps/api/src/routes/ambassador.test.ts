@@ -161,7 +161,9 @@ describe('ambassadeur', () => {
         await enter(s, session.memberToken, { ticketRef: 'BB2002', instagramHandle: 'moi' })
       ).json(),
     );
-    expect(await rejectAmbassadorEntry(s.ambassador, BELLA_ID, second.id, at)).toBe(true);
+    expect(
+      await rejectAmbassadorEntry(s.ambassador, BELLA_ID, second.id, at, 'equipe@bella.test'),
+    ).not.toBeNull();
     expect((await confirmAmbassadorEntry(deps, tenant, second.id, at)).ok).toBe(false);
     expect((await s.loyalty.getMember(tenant, memberId))?.points).toBe(session.member.points + 50);
   });
@@ -189,6 +191,9 @@ describe('ambassadeur', () => {
       enabled: true,
       instagramHandle: 'bella.paris',
       bonusPoints: 30,
+      checkAfterHours: 20,
+      creditAfterHours: 24,
+      photoCategory: 'restaurant',
     });
     const list = adminAmbassadorEntriesSchema.parse(
       await (await s.app.request('/v1/admin/ambassador/entries', { headers })).json(),

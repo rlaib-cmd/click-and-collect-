@@ -28,6 +28,10 @@ const PROBES: Record<
   design: { method: 'GET', path: '/theme/draft' },
   promos: { method: 'GET', path: '/promos' },
   loyalty: { method: 'GET', path: '/loyalty/members' },
+  'loyalty.validate': {
+    method: 'POST',
+    path: '/ambassador/entries/00000000-0000-4000-8000-0000000000ff/validate',
+  },
   dashboard: { method: 'GET', path: '/dashboard' },
   customers: { method: 'GET', path: '/customers' },
   audit: { method: 'GET', path: '/audit' },
