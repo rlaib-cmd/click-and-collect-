@@ -65,21 +65,43 @@ const supabaseUrl = required('SUPABASE_URL');
 // Pooler Supabase (Supavisor, mode transaction, port 6543) de préférence : SUPABASE_DB_URL est la
 // connexion directe, limitée à 60 connexions sur la petite instance et saturée dès que beaucoup de
 // copies de la fonction tournent en même temps (constaté en recette le 24/11).
-const databaseUrl = env('DATABASE_POOLER_URL') ?? required('SUPABASE_DB_URL');
+/**
+ * Adresse du pooler construite à partir de SUPABASE_DB_URL (fournie et tenue à jour par Supabase,
+ * y compris après une réinitialisation du mot de passe) et de l'hôte du pooler (DATABASE_POOLER_HOST,
+ * non secret) : aucun mot de passe à recopier à la main.
+ */
+function derivedPoolerUrl(): string | undefined {
+  const host = env('DATABASE_POOLER_HOST');
+  if (!host) return undefined;
+  try {
+    const direct = new URL(required('SUPABASE_DB_URL'));
+    const ref = new URL(supabaseUrl).hostname.split('.')[0];
+    const url = new URL(`postgresql://${host}:6543/postgres`);
+    url.username = `postgres.${ref}`;
+    url.password = direct.password;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+const poolerSource = env('DATABASE_POOLER_HOST')
+  ? 'pooler (construit)'
+  : env('DATABASE_POOLER_URL')
+    ? 'pooler'
+    : 'directe';
+const databaseUrl = derivedPoolerUrl() ?? env('DATABASE_POOLER_URL') ?? required('SUPABASE_DB_URL');
 // Diagnostic sans secret : type de connexion, hôte, port et utilisateur (jamais le mot de passe).
 try {
   const u = new URL(databaseUrl);
   jsonLog('info', 'Connexion base', {
-    via: env('DATABASE_POOLER_URL') ? 'pooler' : 'directe',
+    via: poolerSource,
     host: u.hostname,
     port: u.port,
     user: decodeURIComponent(u.username),
     passwordLength: decodeURIComponent(u.password).length,
   });
 } catch {
-  jsonLog('error', 'Adresse de base illisible', {
-    via: env('DATABASE_POOLER_URL') ? 'pooler' : 'directe',
-  });
+  jsonLog('error', 'Adresse de base illisible', { via: poolerSource });
 }
 
 // Clé de dérivation des jetons de suivi : propre au projet, dérivée de la clé de service

@@ -150,3 +150,13 @@ Créé le 25/11 : `splash360-commande-production`, référence `azenkeuuejwwtbud
 migrations sans `seed.sql`, fonction `api`, secrets de production (Stripe live, Splash360 par
 restaurant, `DATABASE_POOLER_URL`, `APP_ENV=production`, jamais `OTP_DEBUG_ECHO`), relance de caisse
 et purge, compte super-administrateur, puis back-office et app pointés vers ce projet.
+
+## Connexion à la base par le pooler (25/11)
+
+Le serveur se connecte par le pooler Supabase (Supavisor, mode transaction, port 6543) dès que
+`DATABASE_POOLER_HOST` est posé (valeur non secrète, ex. `aws-0-eu-west-3.pooler.supabase.com`,
+lue dans Supabase → Connect → Transaction pooler). L'adresse est construite avec le mot de passe de
+`SUPABASE_DB_URL`, fourni et tenu à jour par Supabase : aucun mot de passe à recopier, y compris
+après une réinitialisation. Le journal « Connexion base » indique au démarrage le mode utilisé.
+`DATABASE_POOLER_URL` (adresse complète saisie à la main) reste accepté si l'hôte n'est pas posé.
+Vérification : `pg_stat_activity` ne montre que quelques connexions « Supavisor ».
