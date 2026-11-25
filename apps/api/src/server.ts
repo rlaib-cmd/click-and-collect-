@@ -19,6 +19,7 @@ import {
   createPostgresOrderingStore,
   createPostgresOrderReader,
   createPostgresPaymentStore,
+  createPostgresStripeCustomerStore,
   createPostgresPosTicketStore,
   createPostgresRestaurantStore,
   createPostgresTenantStore,
@@ -36,6 +37,7 @@ import { createOtpDeps, createSmsSender } from './loyalty/otp';
 import { createClaudePhotoAnalyzer } from './loyalty/photo-check';
 import { createBanGeoProvider, createDemoGeoProvider } from './geo';
 import { createNotificationSender } from './notifications/sender';
+import { createStripeCardGateway } from './payments/cards';
 import { createStripeGateway } from './payments/gateway';
 import { createDemoPosGateway, createRoutingPosGateway } from './pos/gateway';
 import { createSplash360PosGateway, splash360Probe } from './pos/splash360';
@@ -74,6 +76,14 @@ const gateway =
         webhookSecret: env.STRIPE_WEBHOOK_SECRET,
       })
     : null;
+// Cartes enregistrées (lot 18, ADR 0023) : seulement si le paiement en ligne est configuré.
+const cardGateway =
+  gateway && env.STRIPE_SECRET_KEY && env.STRIPE_PUBLISHABLE_KEY
+    ? createStripeCardGateway({
+        secretKey: env.STRIPE_SECRET_KEY,
+        publishableKey: env.STRIPE_PUBLISHABLE_KEY,
+      })
+    : undefined;
 if (!gateway) jsonLog('warn', 'Clés Stripe absentes : paiement en ligne désactivé');
 
 const payments = createPostgresPaymentStore(sql);
@@ -155,6 +165,9 @@ const app = createApp({
         })
       : null,
   gateway,
+  cardGateway,
+  stripeCustomers: createPostgresStripeCustomerStore(sql),
+  clientAppUrl: env.CLIENT_APP_URL,
   tokenSecret: env.ORDER_TOKEN_SECRET,
   ...(env.LOYALTY === 'demo'
     ? {

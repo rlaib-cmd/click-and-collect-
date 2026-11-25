@@ -1,4 +1,4 @@
-import type { MemberSessionStore } from '@splash360/db';
+import type { MemberSessionStore, StripeCustomerStore } from '@splash360/db';
 import type { LoyaltyProvider } from '@splash360/api-loyalty';
 import type { AuthInviter } from './admin/invite';
 import type { MenuCache } from '@splash360/api-menu';
@@ -16,6 +16,7 @@ import type {
 } from '@splash360/db';
 import type { NotificationSender } from './notifications/sender';
 import { notifyStatus, tenantNameResolver } from './notifications/service';
+import type { CardGateway } from './payments/cards';
 import type { PaymentGateway } from './payments/gateway';
 import { withRewardCategories } from './loyalty/reward-settings';
 import { processDispatches } from './pos/dispatcher';
@@ -107,6 +108,11 @@ export interface AppDeps {
   readonly assets?: AssetStorage | null;
   /** Test de connexion à l'API Splash360 réelle ; absent : identifiants non posés. */
   readonly splash360?: Splash360Probe | null;
+  /** Cartes enregistrées des membres (lot 18, ADR 0023) ; absent = fonction désactivée. */
+  readonly cardGateway?: CardGateway | undefined;
+  readonly stripeCustomers?: StripeCustomerStore | undefined;
+  /** Adresse de retour 3-D Secure de l'app web (paiement avec carte enregistrée). */
+  readonly clientAppUrl?: string | undefined;
 }
 
 /**
@@ -153,7 +159,13 @@ export function createApp(input: AppDeps) {
     cors({
       origin: origins === '*' ? '*' : [...origins],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-      allowHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id', 'X-Splash360-Client'],
+      allowHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Tenant-Id',
+        'X-Splash360-Client',
+        'X-Member-Token',
+      ],
       // Préflight gardé 10 min par le navigateur : la moitié des requêtes de la rafale du 24/11
       // étaient des OPTIONS. Retry-After et X-Request-Id lisibles pour la reprise et le diagnostic.
       maxAge: 600,
@@ -178,6 +190,8 @@ export function createApp(input: AppDeps) {
   for (const path of [
     '/v1/tenants/:s/orders',
     '/v1/tenants/:s/orders/:id/payment',
+    '/v1/tenants/:s/orders/:id/payment/saved-card',
+    '/v1/tenants/:s/loyalty/me/cards/setup',
     '/v1/tenants/:s/restaurants/:r/quote',
     '/v1/tenants/:s/loyalty/join',
     '/v1/tenants/:s/loyalty/login',

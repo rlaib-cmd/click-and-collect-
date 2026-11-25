@@ -18,12 +18,18 @@ import { isValidPreviewToken } from '../admin/theme-preview';
 import { apiError } from '../errors';
 import { toMenuDto } from '../menu-dto';
 import { registerAmbassadorRoutes, type AmbassadorRoutesDeps } from './ambassador';
+import { registerCardRoutes, type CardRoutesDeps } from './cards';
 import { registerLoyaltyRoutes, type LoyaltyRoutesDeps } from './loyalty';
 import { registerOrderingRoutes, type OrderingRoutesDeps } from './ordering';
 import { registerPaymentRoutes, type PaymentRoutesDeps } from './payments';
 
 export interface TenantRoutesDeps
-  extends OrderingRoutesDeps, PaymentRoutesDeps, LoyaltyRoutesDeps, AmbassadorRoutesDeps {
+  extends
+    OrderingRoutesDeps,
+    PaymentRoutesDeps,
+    LoyaltyRoutesDeps,
+    AmbassadorRoutesDeps,
+    CardRoutesDeps {
   readonly admin: AdminStore;
   readonly tenants: TenantStore;
   readonly restaurants: RestaurantStore;
@@ -137,6 +143,7 @@ export function tenantRoutes(deps: TenantRoutesDeps) {
   registerPaymentRoutes(app, deps);
   registerLoyaltyRoutes(app, deps);
   registerAmbassadorRoutes(app, deps);
+  registerCardRoutes(app, deps);
 
   return app;
 }

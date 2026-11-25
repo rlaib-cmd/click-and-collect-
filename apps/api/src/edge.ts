@@ -28,6 +28,7 @@ import {
   createPostgresOrderingStore,
   createPostgresOrderReader,
   createPostgresPaymentStore,
+  createPostgresStripeCustomerStore,
   createPostgresPosTicketStore,
   createPostgresRestaurantStore,
   createPostgresTenantStore,
@@ -46,6 +47,7 @@ import { jsonLog } from './http/logging';
 import { createOtpDeps, createSmsSender } from './loyalty/otp';
 import { createClaudePhotoAnalyzer } from './loyalty/photo-check';
 import { createNotificationSender } from './notifications/sender';
+import { createStripeCardGateway } from './payments/cards';
 import { createStripeGateway } from './payments/gateway';
 import { expireUnpaidOrders } from './payments/service';
 import { createDemoPosGateway, createRoutingPosGateway } from './pos/gateway';
@@ -130,6 +132,11 @@ const gateway =
           .filter(Boolean),
       })
     : null;
+// Cartes enregistrées (lot 18, ADR 0023) : seulement si le paiement en ligne est configuré.
+const cardGateway =
+  gateway && stripeSecret && stripePublishable
+    ? createStripeCardGateway({ secretKey: stripeSecret, publishableKey: stripePublishable })
+    : undefined;
 
 const log = (m: string, d?: Record<string, unknown>) => jsonLog('warn', m, d);
 // Partagés entre les générations de connexions : cache de carte et clés publiques Supabase Auth.
@@ -231,6 +238,9 @@ function build() {
       : {}),
     verifier,
     gateway,
+    cardGateway,
+    stripeCustomers: createPostgresStripeCustomerStore(sql),
+    clientAppUrl: env('CLIENT_APP_URL'),
     tokenSecret,
     // Aperçu : fidélité de test, connexion par e-mail (ADR 0009).
     loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),

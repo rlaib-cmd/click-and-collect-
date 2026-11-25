@@ -35,6 +35,8 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
   /** URL publique du back-office (retours Stripe). */
   ADMIN_URL: z.url().default('http://localhost:3000'),
+  /** App web des clients : retour après 3-D Secure (cartes enregistrées, lot 18). */
+  CLIENT_APP_URL: z.url().startsWith('https://').optional(),
   /** Derrière un proxy de confiance (hébergeur) : adresse client lue dans X-Forwarded-For. */
   TRUST_PROXY: z.enum(['0', '1']).default('0'),
   /** En-tête d'adresse client de l'hébergeur (Fly : fly-client-ip). */
