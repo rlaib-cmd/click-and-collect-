@@ -1,4 +1,5 @@
 import { messages } from '@splash360/i18n';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +9,9 @@ import { AmbassadorCard } from '@/components/AmbassadorCard';
 import { FeaturedProducts } from '@/components/FeaturedProducts';
 import { FidelityCard, JoinCard } from '@/components/loyalty';
 import { TenantLogo } from '@/components/TenantLogo';
+import { useCart } from '@/cart/CartProvider';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
+import { tierProducts, useRewardCatalog } from '@/loyalty/rewards';
 import { useTenant } from '@/tenant/TenantProvider';
 
 const t = messages.loyalty;
@@ -20,6 +23,8 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const brand = style.header === 'brand';
   const club = program?.enabled ? program : null;
+  const { cart } = useCart();
+  const catalog = useRewardCatalog(cart);
 
   return (
     <ScrollView style={{ backgroundColor: palette.background }} contentContainerStyle={styles.page}>
@@ -85,20 +90,8 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Membre du club (bonus de bienvenue déjà reçu) : les produits que la marque pousse. */}
-        {member ? <FeaturedProducts /> : null}
-
-        {club ? (
-          member ? (
-            <FidelityCard
-              member={member}
-              rewards={club.rewards}
-              pointsPerEuro={club.pointsPerEuro}
-            />
-          ) : (
-            <JoinCard welcomePoints={club.welcomePoints} />
-          )
-        ) : null}
+        {/* Photos des produits mis en avant par la marque, pour tous les visiteurs. */}
+        <FeaturedProducts />
 
         {club ? (
           <>
@@ -118,29 +111,48 @@ export default function HomeScreen() {
             </View>
             <View style={styles.grid}>
               {club.rewards.slice(0, 2).map((r) => (
-                <View
+                <Pressable
                   key={r.id}
+                  accessibilityRole="link"
+                  onPress={() => router.navigate('/avantages')}
                   style={[
                     styles.tile,
                     { backgroundColor: palette.surface, borderRadius: radii.card },
                   ]}
                 >
+                  {(() => {
+                    const photo =
+                      tierProducts(r, catalog).find((p) => p.imageUrl)?.imageUrl ?? null;
+                    return photo ? (
+                      <Image
+                        source={{ uri: photo }}
+                        style={[styles.tilePhoto, { borderRadius: radii.card - 4 }]}
+                        contentFit="cover"
+                        accessibilityIgnoresInvertColors
+                      />
+                    ) : null;
+                  })()}
                   <Text style={[styles.tileName, titleStyle(style), { color: palette.text }]}>
                     {r.name}
                   </Text>
                   <Text style={{ color: palette.textMuted, fontSize: 13 }}>
                     {t.rewardCost(r.costPoints)}
                   </Text>
-                </View>
+                </Pressable>
               ))}
             </View>
-            <View
-              style={[styles.tip, { backgroundColor: palette.surface, borderRadius: radii.card }]}
-            >
-              <Text style={{ color: palette.text, fontWeight: '700' }}>{t.cashierTip}</Text>
-              <Text style={{ color: palette.textMuted, fontSize: 13 }}>{t.cashierHint}</Text>
-            </View>
           </>
+        ) : null}
+        {club ? (
+          member ? (
+            <FidelityCard
+              member={member}
+              rewards={club.rewards}
+              pointsPerEuro={club.pointsPerEuro}
+            />
+          ) : (
+            <JoinCard welcomePoints={club.welcomePoints} />
+          )
         ) : null}
       </View>
     </ScrollView>
@@ -173,7 +185,7 @@ const styles = StyleSheet.create({
   h2: { fontSize: 20, fontWeight: '800' },
   link: { minHeight: 44, justifyContent: 'center' },
   grid: { flexDirection: 'row', gap: 12 },
-  tile: { flex: 1, padding: 14, gap: 4 },
-  tileName: { fontSize: 19, fontWeight: '800' },
-  tip: { padding: 14, gap: 4 },
+  tile: { flex: 1, padding: 10, gap: 4 },
+  tilePhoto: { width: '100%', aspectRatio: 4 / 3, marginBottom: 4 },
+  tileName: { fontSize: 17, fontWeight: '800' },
 });
