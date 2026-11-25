@@ -49,9 +49,10 @@ ni de client copiée).
   `order_end`, `production_*`, `shipping_*`).
 - `items[]` : `itemid` (UUID), `nom`, `produitid`, `plu`, `produit_fk`, `quantite`,
   `prix_unitaire_ttc`, `prix_ttc`, `prix_ht`, `montant_tva` (entiers), `ingredients[]`.
-- À confirmer avec Splash360 : unité des montants entiers (centimes ?), lien entre le QR code imprimé
-  sur le ticket et `ticket_id` / `local_id` / `numero` (nécessaire pour l'« achat vérifié » du
-  programme ambassadeur).
+- À confirmer avec Splash360 : unité des montants entiers (centimes ?).
+- Réponses de Splash360 (25/11, ADR 0025) : le `ticket_id` est imprimé en texte sur le ticket de
+  caisse (UUID seul sur sa ligne, sous le « #numéro ») et encodé dans le QR des tickets de borne ;
+  `jour_comptable` : une vente avant 02:00 (Paris) appartient à la veille ; pagination à partir de 1.
 
 ## Correspondance avec notre application
 

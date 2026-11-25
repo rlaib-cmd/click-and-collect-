@@ -27,4 +27,4 @@ Format : Contexte, Décision, Conséquences, Statut.
 | [0022](0022-ambassadeur-complet.md) | Ambassadeur complet : compte Instagram mémorisé, photo analysée, mention, délais, historique | Acceptée |
 | [0023](0023-cartes-bancaires-enregistrees.md) | Cartes bancaires enregistrées : client Stripe de la plateforme, carte clonée au paiement | Acceptée |
 | [0024](0024-splash360-v2-appels-sequentiels.md) | Splash360 v2 : jeton api2, appels séquentiels par identifiant client (verrou Postgres), une minute entre deux exports des ventes, options par étapes | Acceptée |
-| [0025](0025-verification-ticket-photo.md) | « Achat vérifié » : ticket de caisse photographié, lu par l'IA, vérifié dans l'export des ventes Splash360 avant tout crédit automatique | Acceptée |
+| [0025](0025-verification-ticket-photo.md) | « Achat vérifié » : ticket identifié par son `ticket_id` (photo lue par l'IA ou QR de borne), vérifié dans l'export des ventes Splash360 (journée comptable coupée à 02:00) avant tout crédit automatique | Acceptée |

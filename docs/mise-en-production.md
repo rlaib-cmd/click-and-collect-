@@ -215,8 +215,8 @@ qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS po
 
 ## Achat vérifié : ticket photographié (lot 20, ADR 0025)
 
-1. Migration `20261125100000_ambassador_ticket_photo.sql` (recette puis production), avant la
-   fonction `api` qui l'utilise.
+1. Migrations `20261125100000_ambassador_ticket_photo.sql` (déjà en recette) puis
+   `20261125110000_ambassador_ticket_id.sql` (recette puis production), avant la fonction `api`.
 2. Aucune nouvelle variable : `ANTHROPIC_API_KEY` (et `AMBASSADOR_PHOTO_MODEL`) servent aussi à
    lire le ticket ; l'export des ventes utilise les identifiants Splash360 existants
    (`SPLASH360_ORDERS_*` s'ils sont posés). Sans clé, le client tape le numéro ; sans identifiants
