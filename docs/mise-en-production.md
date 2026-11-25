@@ -213,6 +213,18 @@ qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS po
 3. Rien à planifier : la tâche « ambassadeur » (contrôle à +20 h, crédit à +24 h) tourne au fil du
    trafic client (Edge) ou chaque minute (serveur Node), comme la relance de la caisse.
 
+## Achat vérifié : ticket photographié (lot 20, ADR 0025)
+
+1. Migration `20261125100000_ambassador_ticket_photo.sql` (recette puis production), avant la
+   fonction `api` qui l'utilise.
+2. Aucune nouvelle variable : `ANTHROPIC_API_KEY` (et `AMBASSADOR_PHOTO_MODEL`) servent aussi à
+   lire le ticket ; l'export des ventes utilise les identifiants Splash360 existants
+   (`SPLASH360_ORDERS_*` s'ils sont posés). Sans clé, le client tape le numéro ; sans identifiants
+   ou sans restaurant branché (`splash360_live`), les tickets photographiés restent « à vérifier »
+   par l'équipe et ne sont jamais crédités automatiquement.
+3. Rien à planifier : la vérification passe dans la même tâche « ambassadeur » (une page de
+   l'export par minute au plus).
+
 ## Cartes bancaires enregistrées (lot 18, ADR 0023)
 
 1. Migration `20261125080000_stripe_customers.sql` (recette puis production), avant la fonction
