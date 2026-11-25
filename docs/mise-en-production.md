@@ -151,8 +151,9 @@ select cron.schedule('nettoyage-historique-cron', '17 3 * * *',
 
 ## Mise en ligne : liste complète (état au 26/11)
 
-Tout ce qui suit est **prêt et vérifié en recette** (`yfrvtrebukdbxnuqhlfy`). La production
-(`azenkeuuejwwtbudvwqt`) a les 23 premières migrations, la fonction `api` du 25/11 et pg_cron.
+Tout ce qui suit est **prêt et vérifié en recette** (`yfrvtrebukdbxnuqhlfy`). **Fait le 26/11** en
+production (`azenkeuuejwwtbudvwqt`) : les 11 migrations de l'étape 1 (34 au total, RLS active sur
+les 35 tables) et la fonction `api` à jour (version 4, `GET /health` → 200).
 Ordre à respecter : migrations → secrets → fonction `api` → données → applications.
 
 **1. Migrations à appliquer en production** (dans l'ordre, chacune dans une transaction, avant la
