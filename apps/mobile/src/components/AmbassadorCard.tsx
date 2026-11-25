@@ -26,19 +26,19 @@ export function AmbassadorCard() {
       style={[
         styles.card,
         {
-          backgroundColor: palette.primary,
-          borderColor: palette.border,
+          backgroundColor: palette.text,
+          borderColor: palette.text,
           borderRadius: radii.card + 6,
         },
       ]}
     >
-      <View style={[styles.icon, { backgroundColor: palette.onPrimary }]}>
+      <View style={[styles.icon, { backgroundColor: palette.background }]}>
         <Icon name="star" color={palette.primary} size={22} />
       </View>
-      <Text style={[styles.title, titleStyle(style), { color: palette.onPrimary, flex: 1 }]}>
+      <Text style={[styles.title, titleStyle(style), { color: palette.background, flex: 1 }]}>
         {title}
       </Text>
-      <Text style={{ color: palette.onPrimary, fontSize: 20 }}>›</Text>
+      <Text style={{ color: palette.background, fontSize: 20 }}>›</Text>
     </Pressable>
   );
 }
