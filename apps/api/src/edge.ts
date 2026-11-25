@@ -84,6 +84,10 @@ const gateway =
         secretKey: stripeSecret,
         publishableKey: stripePublishable,
         webhookSecret: stripeWebhook,
+        paymentDomains: (env('STRIPE_PAYMENT_DOMAINS') ?? '')
+          .split(',')
+          .map((d) => d.trim())
+          .filter(Boolean),
       })
     : null;
 

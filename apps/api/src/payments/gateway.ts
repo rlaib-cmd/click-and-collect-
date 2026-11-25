@@ -103,6 +103,11 @@ export function createStripeGateway(options: {
   secretKey: string;
   publishableKey: string;
   webhookSecret: string;
+  /**
+   * Domaines de l'app web (sans https://) à déclarer chez Stripe pour chaque restaurant :
+   * sans cela, Apple Pay et Google Pay ne s'affichent pas sur le web (paiements directs).
+   */
+  paymentDomains?: readonly string[];
 }): PaymentGateway {
   const stripe = new Stripe(options.secretKey, { maxNetworkRetries: 2, timeout: 15_000 });
   // SubtleCrypto (Web Crypto) : disponible sous Node 22 comme sous Deno (Supabase Edge).
@@ -175,6 +180,13 @@ export function createStripeGateway(options: {
     },
 
     async createOnboardingLink(accountId, urls) {
+      // Apple Pay / Google Pay sur le web : domaines déclarés sur le compte du restaurant.
+      // Idempotent côté métier : un domaine déjà déclaré renvoie une erreur ignorée ici.
+      for (const domain of options.paymentDomains ?? []) {
+        await stripe.paymentMethodDomains
+          .create({ domain_name: domain }, { stripeAccount: accountId })
+          .catch(() => undefined);
+      }
       const link = await stripe.accountLinks.create({
         account: accountId,
         type: 'account_onboarding',

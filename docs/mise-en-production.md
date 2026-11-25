@@ -25,6 +25,7 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 | `CORS_ORIGINS` | oui en prod | Origines web autorisées (`https://*.domaine` n'est pas accepté : lister ou passer par un proxy) |
 | `TRUST_PROXY` | selon hébergeur | `1` derrière le proxy de l'hébergeur (limitation de débit par IP réelle) |
 | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` | pour encaisser | Compte plateforme Stripe Connect ; webhook Connect sur `/v1/webhooks/stripe` |
+| `STRIPE_PAYMENT_DOMAINS` | pour Apple Pay / Google Pay web | Domaines de l'app web (séparés par des virgules, sans https), déclarés chez Stripe pour chaque restaurant à son inscription |
 | `SUPABASE_JWKS_URL` | pour le back-office | `https://<projet>.supabase.co/auth/v1/.well-known/jwks.json` |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | pour inviter | Invitations des comptes du back-office (lien « Choisir mon mot de passe ») ; clé de service côté serveur uniquement |
 | `SPLASH360_CLIENT_ID`, `SPLASH360_CLIENT_SECRET` | pour la vraie caisse | Accès OAuth2 à l'API Click & Collect Splash360 (ADR 0018) ; sans eux, carte et caisse de démonstration. À poser en secret du serveur uniquement |
