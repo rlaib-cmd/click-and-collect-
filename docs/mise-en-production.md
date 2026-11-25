@@ -149,6 +149,62 @@ select cron.schedule('nettoyage-historique-cron', '17 3 * * *',
   $$delete from cron.job_run_details where end_time < now() - interval '2 days'$$);
 ```
 
+## Mise en ligne : liste complète (état au 26/11)
+
+Tout ce qui suit est **prêt et vérifié en recette** (`yfrvtrebukdbxnuqhlfy`). La production
+(`azenkeuuejwwtbudvwqt`) a les 23 premières migrations, la fonction `api` du 25/11 et pg_cron.
+Ordre à respecter : migrations → secrets → fonction `api` → données → applications.
+
+**1. Migrations à appliquer en production** (dans l'ordre, chacune dans une transaction, avant la
+fonction `api` qui les utilise) :
+
+| Fichier | Sujet |
+|---|---|
+| `20261125040000_ambassador_ticket_qr.sql` | QR du ticket (ambassadeur) |
+| `20261125050000_staff_multi_tenant.sql` | Équipe sur plusieurs enseignes (audit, ADR 0020) |
+| `20261125060000_loyalty_member_sessions.sql` | Sessions membres (90 jours, révocables) |
+| `20261125070000_ambassador_flow.sql` | Ambassadeur complet (lot 17) |
+| `20261125071600_loyalty_rewards_profile.sql` | Cadeaux par catégorie, profil (lot 16) |
+| `20261125080000_stripe_customers.sql` | Cartes enregistrées (lot 18) |
+| `20261125090000_splash360_call_slots.sql` | Appels Splash360 séquentiels (lot 19) |
+| `20261125100000_ambassador_ticket_photo.sql` | Ticket photographié, copie des ventes (lot 20) |
+| `20261125110000_ambassador_ticket_id.sql` | Ticket identifié par `ticket_id` (lot 20) |
+| `20261125120000_pos_sales_page_zero.sql` | Export des ventes paginé à partir de 0 (lot 20) |
+| `20261126000000_loyalty_youfid.sql` | Fidélité YouFID (lot 21) |
+
+**2. Secrets de la fonction `api` en production** (Supabase → Edge Functions → Secrets ; jamais
+dans le dépôt ni par message) :
+
+| Secret | Valeur | Fourni par |
+|---|---|---|
+| `SPLASH360_CLIENT_ID`, `SPLASH360_CLIENT_SECRET` | Accès principal (commandes, ventes) — **nouveaux** identifiants, les actuels ont circulé par message | Splash360 |
+| `SPLASH360_TOKEN_URL`, `SPLASH360_SCOPE` | `https://api2.splash360.fr/oauth/v2/token`, `user` | — |
+| `SPLASH360_MENU_CLIENT_ID`, `SPLASH360_MENU_CLIENT_SECRET` | Accès carte (nouveaux, idem) | Splash360 |
+| `SPLASH360_MENU_TOKEN_URL`, `SPLASH360_MENU_TOKEN_AUTH`, `SPLASH360_MENU_PATH` | `https://api.splash360.fr/oauth/v2/token`, `body`, `/api/export/v2/menus` | — |
+| `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` | Clés **live** + webhook Connect live vers `…/functions/v1/api/v1/webhooks/stripe` | Propriétaire (Stripe) |
+| `STRIPE_PAYMENT_DOMAINS` | Domaine web de production (Apple Pay / Google Pay) | Équipe |
+| `BREVO_API_KEY`, `EMAIL_SENDER`, `EMAIL_SENDER_NAME` | Clé Brevo de production, expéditeur vérifié | Propriétaire (Brevo) |
+| `LOYALTY_OTP=1`, `LOYALTY_DEMO_LOGIN=0` | Déjà posés | — |
+| `ANTHROPIC_API_KEY` | Lecture des tickets et des photos (ambassadeur) | Propriétaire |
+| `YOUFID_ACCOUNTS` | `{"chickenstreet":{"login":"…","password":"…"}}` (une ligne) | Propriétaire / Splash360 |
+| `ADMIN_URL` | URL du back-office de production | Équipe |
+| Jamais en production | `OTP_DEBUG_ECHO`, `NEXT_PUBLIC_SHOW_TEST_ACCOUNTS` | — |
+
+**3. Fonction `api`** : déployer la même version que la recette, puis `GET /health` → 200 et, au
+back-office (super-admin) : « Tester Splash360 » et « Tester YouFID » sur l'enseigne.
+
+**4. Données de production** (back-office super-admin) : enseigne Chicken Street (sous-domaine
+`chickenstreet`, thème, logo) ; restaurant « Chicken Street Siège » avec l'identifiant Splash360
+**`1274`** (celui de l'export des ventes ; le 164 donné au départ ne correspond pas) et la caisse
+réelle activée ; compte Stripe connecté **live** du restaurant ; programme ambassadeur (compte
+Instagram, bonus) ; compte super-administrateur du propriétaire.
+
+**5. Applications** : export web de production pointé vers l'API de production
+(`EXPO_PUBLIC_API_URL`), domaine et `STRIPE_PAYMENT_DOMAINS` ; back-office de production
+(`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, clé publiable de production) ; Supabase Auth
+(URL du site, SMTP Brevo) ; build EAS de production iOS/Android (caméra, partage, cartes
+enregistrées, ticket en photo) puis publication sur les stores.
+
 ## Projet Supabase de production
 
 `splash360-commande-production`, référence `azenkeuuejwwtbudvwqt`, région Paris (eu-west-3), créé
