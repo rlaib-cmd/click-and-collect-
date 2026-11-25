@@ -48,6 +48,7 @@ import { createBanGeoProvider } from './geo';
 import { jsonLog } from './http/logging';
 import { createOtpDeps, createSmsSender } from './loyalty/otp';
 import { createClaudePhotoAnalyzer } from './loyalty/photo-check';
+import { createClaudeTicketReader } from './loyalty/ticket-read';
 import { createNotificationSender } from './notifications/sender';
 import { createStripeCardGateway } from './payments/cards';
 import { createStripeGateway } from './payments/gateway';
@@ -246,6 +247,12 @@ function build() {
     ...(anthropicKey
       ? {
           photoAnalyzer: createClaudePhotoAnalyzer({
+            apiKey: anthropicKey,
+            ...(env('AMBASSADOR_PHOTO_MODEL') ? { model: env('AMBASSADOR_PHOTO_MODEL') } : {}),
+            log,
+          }),
+          // Achat vérifié (lot 20) : même clé et même modèle que l'analyse de la photo.
+          ticketReader: createClaudeTicketReader({
             apiKey: anthropicKey,
             ...(env('AMBASSADOR_PHOTO_MODEL') ? { model: env('AMBASSADOR_PHOTO_MODEL') } : {}),
             log,

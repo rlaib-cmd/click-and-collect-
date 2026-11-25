@@ -39,6 +39,7 @@ import type { OtpDeps } from './loyalty/otp';
 import { settleLoyalty } from './loyalty/settle';
 import { processAmbassadorEntries, type StoryChecker } from './loyalty/ambassador';
 import type { PhotoAnalyzer } from './loyalty/photo-check';
+import type { TicketReader } from './loyalty/ticket-read';
 import { MAX_PHOTO_BYTES } from '@splash360/contracts';
 import { tenantRoutes } from './routes/tenants';
 import { webhookRoutes } from './routes/webhooks';
@@ -98,6 +99,8 @@ export interface AppDeps {
   readonly ambassador?: AmbassadorStore;
   /** Analyse de la photo ambassadeur (lot 17) ; absente = vérification manuelle par l'équipe. */
   readonly photoAnalyzer?: PhotoAnalyzer;
+  /** Lecture du ticket photographié (lot 20) ; absente = le client tape le numéro. */
+  readonly ticketReader?: TicketReader;
   /** Contrôle « story toujours en ligne » (lot 17) ; absent = réputée en ligne (en attendant Meta). */
   readonly storyChecker?: StoryChecker;
   /** Connexion au club par simple e-mail : données de test uniquement (ADR 0009). */
@@ -141,7 +144,8 @@ export function createApp(input: AppDeps) {
     onError: (c) => apiError(c, 'payload_too_large', 'Logo trop lourd : 2 Mo maximum'),
   });
   // Photo « Ambassadeur » (lot 17) : 4 Mo d'image, soit environ 5,4 Mo une fois en base64.
-  const PHOTO_PATH = /^\/v1\/tenants\/[^/]+\/ambassador\/photo-check$/;
+  // Photo du ticket de caisse (lot 20) : même limite.
+  const PHOTO_PATH = /^\/v1\/tenants\/[^/]+\/ambassador\/(?:photo-check|ticket-photo)$/;
   const photoBodies = bodyLimit({
     maxSize: Math.ceil((MAX_PHOTO_BYTES * 4) / 3) + 4096,
     onError: (c) => apiError(c, 'payload_too_large', 'Photo trop lourde : 4 Mo maximum'),
@@ -202,11 +206,17 @@ export function createApp(input: AppDeps) {
     app.on('POST', path, strict);
   }
   // Analyse de photo (appel payant à l'IA) : plafond propre, plus bas.
-  app.on(
-    'POST',
+  // Lecture du ticket photographié (lot 20) : même plafond, compté à part.
+  for (const path of [
     '/v1/tenants/:s/ambassador/photo-check',
-    rateLimit({ limit: limits.photos ?? 6, windowMs: 60_000, trustProxy, ipHeader }),
-  );
+    '/v1/tenants/:s/ambassador/ticket-photo',
+  ]) {
+    app.on(
+      'POST',
+      path,
+      rateLimit({ limit: limits.photos ?? 6, windowMs: 60_000, trustProxy, ipHeader }),
+    );
+  }
   app.use(
     '/v1/tenants/*',
     rateLimit({ limit: limits.reads, windowMs: 60_000, trustProxy, ipHeader }),

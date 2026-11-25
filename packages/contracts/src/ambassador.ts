@@ -119,15 +119,63 @@ export const ambassadorConfigSchema = z.discriminatedUnion('enabled', [
 export type AmbassadorConfig = z.infer<typeof ambassadorConfigSchema>;
 
 /** POST /v1/tenants/{subdomain}/ambassador/entries (membre connecté). */
-export const ambassadorEntryRequestSchema = z.object({
-  ticketRef: ticketRefSchema,
-  /** Contenu brut du QR scanné : le serveur en déduit lui-même `ticketRef` (ticketRefFromQr). */
-  ticketQr: ticketQrSchema.optional(),
-  instagramHandle: instagramHandleSchema,
-  /** Jeton du verdict de la photo (POST …/ambassador/photo-check) ; absent = « à vérifier ». */
-  photoCheck: z.string().max(2200).optional(),
-});
+export const ambassadorEntryRequestSchema = z
+  .object({
+    /** Numéro saisi (ou déduit du QR) ; facultatif avec `ticketPhoto`, dont le serveur le déduit. */
+    ticketRef: ticketRefSchema.optional(),
+    /** Contenu brut du QR scanné : le serveur en déduit lui-même `ticketRef` (ticketRefFromQr). */
+    ticketQr: ticketQrSchema.optional(),
+    /**
+     * Jeton de la photo du ticket (POST …/ambassador/ticket-photo, lot 20) : le serveur en déduit
+     * la référence du ticket et vérifie l'achat auprès de la caisse.
+     */
+    ticketPhoto: z.string().max(2200).optional(),
+    instagramHandle: instagramHandleSchema,
+    /** Jeton du verdict de la photo (POST …/ambassador/photo-check) ; absent = « à vérifier ». */
+    photoCheck: z.string().max(2200).optional(),
+  })
+  .refine((r) => !(r.ticketQr && r.ticketPhoto), {
+    message: 'Un seul ticket : scanné ou photographié',
+    path: ['ticketPhoto'],
+  })
+  .refine((r) => r.ticketPhoto !== undefined || r.ticketRef !== undefined, {
+    message: 'Numéro de ticket invalide',
+    path: ['ticketRef'],
+  });
 export type AmbassadorEntryRequest = z.input<typeof ambassadorEntryRequestSchema>;
+
+/**
+ * Vérification du ticket (lot 20, ADR 0025) :
+ * - unverified : ticket scanné ou saisi, jamais vérifié ;
+ * - pending : ticket photographié, vérification auprès de la caisse en cours ;
+ * - verified : achat vérifié (commande encaissée trouvée) ;
+ * - unpaid : commande annulée en caisse (participation refusée) ;
+ * - not_found : ticket introuvable, vérification par le restaurant.
+ */
+export const ticketCheckSchema = z.enum([
+  'unverified',
+  'pending',
+  'verified',
+  'unpaid',
+  'not_found',
+]);
+export type TicketCheckDto = z.infer<typeof ticketCheckSchema>;
+
+/** Âge maximal d'un ticket photographié, en jours (journée de Paris). */
+export const TICKET_PHOTO_MAX_AGE_DAYS = 7;
+
+/** POST /v1/tenants/{subdomain}/ambassador/ticket-photo : même format que la photo du produit. */
+export const ticketPhotoResponseSchema = z.object({
+  /** Faux : ticket illisible (ou lecture indisponible), le client tape le numéro. */
+  readable: z.boolean(),
+  orderNumber: z.string().nullable(),
+  /** Journée du ticket (AAAA-MM-JJ). */
+  date: z.string().nullable(),
+  totalCents: z.number().int().nonnegative().nullable(),
+  /** À renvoyer avec la participation (valable 30 minutes) ; null si illisible. */
+  token: z.string().nullable(),
+});
+export type TicketPhotoResponse = z.infer<typeof ticketPhotoResponseSchema>;
 
 export const ambassadorStatusSchema = z.enum(['pending', 'confirmed', 'rejected']);
 export const photoVerdictSchema = z.enum(['accepted', 'rejected', 'doubtful']);
@@ -161,6 +209,8 @@ export const ambassadorEntrySchema = z.object({
   creditDueAt: z.iso.datetime().nullable(),
   photoVerdict: photoVerdictSchema.nullable(),
   decidedAt: z.iso.datetime().nullable(),
+  /** Vérification du ticket auprès de la caisse (lot 20). */
+  ticketCheck: ticketCheckSchema.default('unverified'),
 });
 export type AmbassadorEntryDto = z.infer<typeof ambassadorEntrySchema>;
 
@@ -262,6 +312,10 @@ export const adminAmbassadorEntrySchema = ambassadorEntrySchema.extend({
   checkResult: z.enum(['online', 'removed']).nullable(),
   photoReason: z.string().nullable(),
   needsReview: z.boolean(),
+  /** Données lues sur la photo du ticket (lot 20) ; null pour un ticket scanné ou saisi. */
+  ticketDate: z.string().nullable().default(null),
+  ticketNumber: z.string().nullable().default(null),
+  ticketTotalCents: z.number().int().nullable().default(null),
   events: z.array(ambassadorEventSchema),
 });
 export type AdminAmbassadorEntryDto = z.infer<typeof adminAmbassadorEntrySchema>;

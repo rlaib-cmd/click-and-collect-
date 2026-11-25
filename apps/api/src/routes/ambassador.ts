@@ -10,6 +10,7 @@ import {
   type AmbassadorConfig,
   type AmbassadorProfileDto,
   type PhotoCheckResponse,
+  type TicketPhotoResponse,
 } from '@splash360/contracts';
 import type {
   AmbassadorEventInput,
@@ -29,6 +30,15 @@ import {
   type PhotoAnalyzer,
 } from '../loyalty/photo-check';
 import { authenticateMember } from '../loyalty/service';
+import {
+  manualTicketReader,
+  readTicketPhotoToken,
+  ticketDateMessage,
+  ticketDateProblem,
+  ticketPhotoToken,
+  ticketRefFromReceipt,
+  type TicketReader,
+} from '../loyalty/ticket-read';
 
 type Env = { Variables: { tenant: TenantWithTheme } };
 
@@ -39,6 +49,8 @@ export interface AmbassadorRoutesDeps {
   readonly tokenSecret: string;
   /** Analyse de la photo (lot 17) ; absente = vérification manuelle par l'équipe. */
   readonly photoAnalyzer?: PhotoAnalyzer | undefined;
+  /** Lecture du ticket photographié (lot 20) ; absente = le client tape le numéro. */
+  readonly ticketReader?: TicketReader | undefined;
   /** Carte de l'enseigne : noms des produits, contexte de l'analyse de la photo. */
   readonly restaurants: RestaurantStore;
   readonly menus: MenuCache;
@@ -127,6 +139,25 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
     if (!memberId) return apiError(c, 'unauthorized', 'Connexion au club requise');
     const s = await settings(c);
     if (!s) return apiError(c, 'not_found', 'Programme ambassadeur indisponible');
+    const image = await readImage(c);
+    if (image instanceof Response) return image;
+    const analyzer = deps.photoAnalyzer ?? manualPhotoAnalyzer;
+    const analysis = await analyzer.analyze(image, {
+      brand: tenant.name,
+      category: s.photoCategory,
+      products: await productNames(tenant.id),
+    });
+    const body: PhotoCheckResponse = {
+      verdict: analysis.verdict,
+      reason: analysis.verdict === 'rejected' ? photoRejectedMessage(tenant.name) : analysis.reason,
+      token: photoCheckToken(deps.tokenSecret, tenant.id, memberId, analysis, now()),
+    };
+    c.header('Cache-Control', 'no-store');
+    return c.json(body);
+  });
+
+  /** Image envoyée en base64 : octets et type réel, ou réponse d'erreur. */
+  async function readImage(c: Context<Env>) {
     const parsed = photoCheckRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success)
       return apiError(c, 'invalid_request', parsed.error.issues[0]?.message ?? 'Photo illisible');
@@ -135,17 +166,45 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
       return apiError(c, 'payload_too_large', 'Photo trop lourde : 4 Mo maximum');
     const mediaType = sniffImage(data);
     if (!mediaType) return apiError(c, 'invalid_request', 'Format accepté : JPEG, PNG ou WebP');
-    const analyzer = deps.photoAnalyzer ?? manualPhotoAnalyzer;
-    const analysis = await analyzer.analyze(
-      { data, mediaType },
-      { brand: tenant.name, category: s.photoCategory, products: await productNames(tenant.id) },
-    );
-    const body: PhotoCheckResponse = {
-      verdict: analysis.verdict,
-      reason: analysis.verdict === 'rejected' ? photoRejectedMessage(tenant.name) : analysis.reason,
-      token: photoCheckToken(deps.tokenSecret, tenant.id, memberId, analysis, now()),
-    };
+    return { data, mediaType };
+  }
+
+  // « Achat vérifié » (lot 20, ADR 0025) : le ticket photographié est lu (numéro, journée, total),
+  // puis oublié ; les données lues partent signées avec la participation.
+  app.post('/:subdomain/ambassador/ticket-photo', async (c) => {
+    const tenant = c.get('tenant');
+    const memberId = await member(c);
+    if (!memberId) return apiError(c, 'unauthorized', 'Connexion au club requise');
+    const s = await settings(c);
+    if (!s) return apiError(c, 'not_found', 'Programme ambassadeur indisponible');
+    const image = await readImage(c);
+    if (image instanceof Response) return image;
+    const reading = await (deps.ticketReader ?? manualTicketReader).read(image);
     c.header('Cache-Control', 'no-store');
+    if (!reading.readable || !reading.orderNumber || !reading.date || reading.totalCents === null) {
+      const body: TicketPhotoResponse = {
+        readable: false,
+        orderNumber: null,
+        date: null,
+        totalCents: null,
+        token: null,
+      };
+      return c.json(body);
+    }
+    const problem = ticketDateProblem(reading.date, now());
+    if (problem) return apiError(c, 'invalid_request', ticketDateMessage(problem));
+    const data = {
+      date: reading.date,
+      number: reading.orderNumber,
+      totalCents: reading.totalCents,
+    };
+    const body: TicketPhotoResponse = {
+      readable: true,
+      orderNumber: reading.orderNumber,
+      date: reading.date,
+      totalCents: reading.totalCents,
+      token: ticketPhotoToken(deps.tokenSecret, tenant.id, memberId, data, now()),
+    };
     return c.json(body);
   });
 
@@ -185,16 +244,53 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
     );
     if (photo?.verdict === 'rejected')
       return apiError(c, 'invalid_request', photoRejectedMessage(tenant.name));
+    // Ticket photographié (lot 20) : seulement les données que le serveur a signées pour ce membre.
+    let ticketPhoto = null;
+    if (parsed.data.ticketPhoto !== undefined) {
+      ticketPhoto = readTicketPhotoToken(
+        deps.tokenSecret,
+        tenant.id,
+        memberId,
+        parsed.data.ticketPhoto,
+        now(),
+      );
+      if (!ticketPhoto)
+        return apiError(c, 'invalid_request', 'Photo du ticket expirée : reprends-la en photo');
+      const problem = ticketDateProblem(ticketPhoto.date, now());
+      if (problem) return apiError(c, 'invalid_request', ticketDateMessage(problem));
+    }
     // QR scanné : la référence est recalculée ici à partir du contenu brut (pas de confiance au client).
-    const ticketQr = parsed.data.ticketQr ?? null;
-    const ticketRef = ticketQr ? ticketRefFromQr(ticketQr) : parsed.data.ticketRef;
+    const ticketQr = ticketPhoto ? null : (parsed.data.ticketQr ?? null);
+    const ticketRef = ticketPhoto
+      ? ticketRefFromReceipt(ticketPhoto)
+      : ticketQr
+        ? ticketRefFromQr(ticketQr)
+        : parsed.data.ticketRef;
+    if (!ticketRef) return apiError(c, 'invalid_request', 'Numéro de ticket invalide');
     const handle = parsed.data.instagramHandle;
     const events: AmbassadorEventInput[] = [
       {
         type: 'created',
         actor: CLIENT_ACTOR,
-        detail: { ticketRef, ticket: ticketQr ? 'scanné' : 'saisi', instagram: handle },
+        detail: {
+          ticketRef,
+          ticket: ticketPhoto ? 'photographié' : ticketQr ? 'scanné' : 'saisi',
+          instagram: handle,
+        },
       },
+      ...(ticketPhoto
+        ? [
+            {
+              type: 'ticket_read' as const,
+              actor: 'IA',
+              detail: {
+                orderNumber: ticketPhoto.number,
+                date: ticketPhoto.date,
+                totalCents: ticketPhoto.totalCents,
+              },
+            },
+          ]
+        : []),
       photo
         ? {
             type: 'photo_checked',
@@ -218,6 +314,7 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
         photoVerdict: photo?.verdict ?? null,
         photoReason: photo?.reason ?? 'Photo non analysée',
         needsReview: photo?.verdict !== 'accepted',
+        ticketPhoto,
       },
       events,
     );

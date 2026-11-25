@@ -36,6 +36,7 @@ import { loadEnv } from './env';
 import { jsonLog } from './http/logging';
 import { createOtpDeps, createSmsSender } from './loyalty/otp';
 import { createClaudePhotoAnalyzer } from './loyalty/photo-check';
+import { createClaudeTicketReader } from './loyalty/ticket-read';
 import { createBanGeoProvider, createDemoGeoProvider } from './geo';
 import { createNotificationSender } from './notifications/sender';
 import { createStripeCardGateway } from './payments/cards';
@@ -140,6 +141,12 @@ const app = createApp({
   ...(env.ANTHROPIC_API_KEY
     ? {
         photoAnalyzer: createClaudePhotoAnalyzer({
+          apiKey: env.ANTHROPIC_API_KEY,
+          ...(env.AMBASSADOR_PHOTO_MODEL ? { model: env.AMBASSADOR_PHOTO_MODEL } : {}),
+          log,
+        }),
+        // Achat vérifié (lot 20) : même clé et même modèle que l'analyse de la photo.
+        ticketReader: createClaudeTicketReader({
           apiKey: env.ANTHROPIC_API_KEY,
           ...(env.AMBASSADOR_PHOTO_MODEL ? { model: env.AMBASSADOR_PHOTO_MODEL } : {}),
           log,

@@ -20,6 +20,7 @@ const entry = (over: Partial<AmbassadorEntryDto>): AmbassadorEntryDto => ({
   creditDueAt: null,
   photoVerdict: 'accepted',
   decidedAt: null,
+  ticketCheck: 'unverified',
   ...over,
 });
 

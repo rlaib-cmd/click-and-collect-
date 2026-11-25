@@ -51,6 +51,7 @@ export const toEntryDto = (e: AmbassadorEntry): AmbassadorEntryDto => ({
   creditDueAt: iso(e.creditDueAt),
   photoVerdict: e.photoVerdict,
   decidedAt: iso(e.decidedAt),
+  ticketCheck: e.ticketCheck,
 });
 
 export const toAdminEntryDto = (
@@ -66,6 +67,9 @@ export const toAdminEntryDto = (
   checkResult: e.checkResult,
   photoReason: e.photoReason,
   needsReview: e.needsReview,
+  ticketDate: e.ticketDate,
+  ticketNumber: e.ticketNumber,
+  ticketTotalCents: e.ticketTotalCents,
   events: events
     .filter((ev) => ev.entryId === e.id)
     .map((ev) => ({ type: ev.type, actor: ev.actor, detail: ev.detail, at: ev.at.toISOString() })),
