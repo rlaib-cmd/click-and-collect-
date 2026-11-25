@@ -18,6 +18,7 @@ import { restaurantsSchema } from '@/components/RestaurantPicker';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.team;
 const roles = messages.admin.roles;
@@ -35,10 +36,13 @@ const AVATARS: [string, string][] = [
   ['#ECFCCB', '#3F6212'],
 ];
 
+// Schéma stable (audit du 25/11, F01) : jamais recréé pendant le rendu.
+const teamSchema = z.object({ staff: z.array(staffMemberSchema) });
+
 /** Équipe et accès (maquette du lot 13, ADR 0017) : comptes, droits par rôle, invitation. */
 export default function TeamPage() {
   const { auth, me } = useSession();
-  const staff = useApi('/staff', z.object({ staff: z.array(staffMemberSchema) }));
+  const staff = useApi('/staff', teamSchema);
   const restaurants = useApi('/restaurants', restaurantsSchema);
   const [form, setForm] = useState({
     email: '',
@@ -130,6 +134,13 @@ export default function TeamPage() {
 
   return (
     <>
+      <LoadError
+        error={staff.error ?? restaurants.error}
+        onRetry={() => {
+          void staff.reload();
+          void restaurants.reload();
+        }}
+      />
       <header className="row wrap" style={{ gap: 14 }}>
         <Link href="/accueil" className="row" style={{ gap: 6, fontWeight: 600, fontSize: 14 }}>
           <Icon name="back" size={18} />

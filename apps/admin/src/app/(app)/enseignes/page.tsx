@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import { tenantState, type ConsoleState } from '@/lib/console';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.tenants;
 const c = messages.admin.console;
@@ -34,11 +35,15 @@ const readableOn = (hex: string | null) => {
   return lum > 0.55 ? '#17171C' : '#FFFFFF';
 };
 
+// Schéma stable (audit du 25/11, F01) : jamais recréé pendant le rendu.
+const tenantsSchema = z.object({ tenants: z.array(tenantSummarySchema) });
+
 /** Console Splash360 (maquette du lot 13) : toutes les enseignes, « voir comme le client ». */
 export default function ConsolePage() {
   const { auth, me, setTenant } = useSession();
   const router = useRouter();
-  const tenants = useApi('/tenants', z.object({ tenants: z.array(tenantSummarySchema) }));
+  // Pas de lecture pour un rôle sans droit à la console (audit du 25/11, F04).
+  const tenants = useApi(me.role === 'super_admin' ? '/tenants' : null, tenantsSchema);
   const [filter, setFilter] = useState<Filter>('all');
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: '', subdomain: '', splash360Id: '', adminEmail: '' });
@@ -112,6 +117,7 @@ export default function ConsolePage() {
 
   return (
     <>
+      <LoadError error={tenants.error} onRetry={() => void tenants.reload()} />
       <header className="page-head">
         <div>
           <h1>{c.title}</h1>

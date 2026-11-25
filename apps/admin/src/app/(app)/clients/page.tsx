@@ -7,15 +7,19 @@ import { z } from 'zod';
 import { api, download, euros } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.customers;
+
+// Schéma stable (audit du 25/11, F01) : jamais recréé pendant le rendu.
+const customersSchema = z.object({ customers: z.array(customerRowSchema) });
 
 export default function CustomersPage() {
   const { auth } = useSession();
   const [q, setQ] = useState('');
-  const { data, reload } = useApi(
+  const { data, error, reload } = useApi(
     `/customers${q.trim().length >= 2 ? `?q=${encodeURIComponent(q.trim())}` : ''}`,
-    z.object({ customers: z.array(customerRowSchema) }),
+    customersSchema,
   );
 
   const remove = async (id: string) => {
@@ -26,6 +30,7 @@ export default function CustomersPage() {
 
   return (
     <div className="stack">
+      <LoadError error={error} onRetry={() => void reload()} />
       <header className="row between">
         <h1>{messages.admin.nav.customers}</h1>
         <button

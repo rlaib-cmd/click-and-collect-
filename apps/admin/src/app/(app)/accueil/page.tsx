@@ -18,6 +18,7 @@ import { homeFor } from '@/lib/nav';
 import { usePreviewData } from '@/lib/preview-data';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.home;
 const fields = messages.admin.design.fields;
@@ -73,6 +74,10 @@ const TILES: (Tile & { permission: Parameters<typeof can>[1] })[] = [
   },
 ];
 
+// Schémas stables (audit du 25/11, F01) : jamais recréés pendant le rendu.
+const homeRestaurantsSchema = z.object({ restaurants: z.array(adminRestaurantSchema) });
+const homeStaffSchema = z.object({ staff: z.array(staffMemberSchema) });
+
 /** Accueil du studio (maquette du lot 13) : état de l'application, raccourcis, mise en route. */
 export default function HomePage() {
   const { me } = useSession();
@@ -85,14 +90,8 @@ export default function HomePage() {
 
   const theme = useApi(allowed ? '/theme/draft' : null, themeDraftStateSchema);
   const audit = useApi(allowed && can(me.role, 'audit') ? '/audit' : null, auditSchema);
-  const restaurants = useApi(
-    allowed ? '/restaurants' : null,
-    z.object({ restaurants: z.array(adminRestaurantSchema) }),
-  );
-  const team = useApi(
-    allowed && can(me.role, 'team') ? '/staff' : null,
-    z.object({ staff: z.array(staffMemberSchema) }),
-  );
+  const restaurants = useApi(allowed ? '/restaurants' : null, homeRestaurantsSchema);
+  const team = useApi(allowed && can(me.role, 'team') ? '/staff' : null, homeStaffSchema);
   const preview = usePreviewData(me.tenant?.subdomain ?? null);
 
   if (!allowed || !me.tenant) return null;
@@ -124,6 +123,15 @@ export default function HomePage() {
 
   return (
     <>
+      <LoadError
+        error={theme.error ?? audit.error ?? restaurants.error ?? team.error}
+        onRetry={() => {
+          void theme.reload();
+          void audit.reload();
+          void restaurants.reload();
+          void team.reload();
+        }}
+      />
       <header className="page-head">
         <div>
           <p className="eyebrow">

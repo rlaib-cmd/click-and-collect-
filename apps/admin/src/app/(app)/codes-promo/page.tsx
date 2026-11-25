@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.promos;
 const createdSchema = z.object({ id: z.uuid() });
@@ -75,6 +76,10 @@ export default function PromosPage() {
 
   return (
     <div className="stack">
+      <LoadError
+        error={loadError instanceof ApiError && loadError.status === 404 ? null : loadError}
+        onRetry={() => void reload()}
+      />
       <h1>{messages.admin.nav.promos}</h1>
       <p className="muted">{t.hint}</p>
       <table>

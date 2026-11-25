@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.club;
 const membersSchema = z.object({ members: z.array(clubMemberSchema) });
@@ -75,6 +76,10 @@ export default function ClubPage() {
 
   return (
     <div className="stack">
+      <LoadError
+        error={loadError instanceof ApiError && loadError.status === 404 ? null : loadError}
+        onRetry={() => void reload()}
+      />
       <h1>{messages.admin.nav.club}</h1>
       <p className="muted">{t.demo}</p>
       {error ? (

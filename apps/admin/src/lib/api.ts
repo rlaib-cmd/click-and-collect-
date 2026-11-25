@@ -10,9 +10,47 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    /** Délai demandé par le serveur avant tout nouvel essai (en-tête Retry-After, en secondes). */
+    readonly retryAfterSeconds: number | null = null,
   ) {
     super(message);
   }
+}
+
+/** Réponse hors contrat (JSON illisible ou schéma non respecté) : on ne relit pas en boucle. */
+export class ContractError extends Error {
+  constructor(readonly path: string) {
+    super(`Réponse inattendue du serveur (${path})`);
+  }
+}
+
+/** Délai maximal d'une requête du back-office. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
+/** Signal annulé par l'appelant OU au bout du délai maximal. */
+function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new DOMException('Délai dépassé', 'TimeoutError')),
+    ms,
+  );
+  const stop = () => {
+    clearTimeout(timer);
+    controller.abort(signal?.reason);
+  };
+  if (signal?.aborted) stop();
+  else signal?.addEventListener('abort', stop, { once: true });
+  controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
+  return controller.signal;
+}
+
+function retryAfter(res: Response): number | null {
+  const raw = res.headers.get('Retry-After');
+  if (!raw) return null;
+  const n = Number(raw);
+  if (Number.isFinite(n)) return Math.max(0, n);
+  const at = Date.parse(raw);
+  return Number.isNaN(at) ? null : Math.max(0, Math.ceil((at - Date.now()) / 1000));
 }
 
 export interface Auth {
@@ -25,9 +63,10 @@ export async function api<T extends z.ZodType>(
   auth: Auth,
   path: string,
   schema: T,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; signal?: AbortSignal } = {},
 ): Promise<z.infer<T>> {
   const res = await fetch(`${API_URL}/v1/admin${path}`, {
+    signal: withTimeout(init.signal, REQUEST_TIMEOUT_MS),
     method: init.method ?? 'GET',
     headers: {
       Authorization: `Bearer ${auth.token}`,
@@ -43,11 +82,16 @@ export async function api<T extends z.ZodType>(
       res.status,
       err.success ? err.data.error.code : 'internal_error',
       err.success ? err.data.error.message : res.statusText,
+      retryAfter(res),
     );
   }
-  if (res.status === 204) return schema.parse(undefined);
-  return schema.parse(await res.json());
+  const raw: unknown = res.status === 204 ? undefined : await res.json().catch(() => INVALID);
+  const parsed = raw === INVALID ? null : schema.safeParse(raw);
+  if (!parsed?.success) throw new ContractError(path);
+  return parsed.data as z.infer<T>;
 }
+
+const INVALID = Symbol('json-invalide');
 
 /** Téléchargement d'un fichier (export CSV). */
 export async function download(auth: Auth, path: string, filename: string) {

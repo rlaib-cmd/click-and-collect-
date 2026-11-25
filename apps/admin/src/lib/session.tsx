@@ -8,6 +8,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -20,7 +21,14 @@ const TENANT = 'splash360:tenant';
 interface Session {
   readonly auth: Auth;
   readonly me: Me;
+  /**
+   * Faux pendant la résolution d'un changement d'enseigne ou après un refus de session :
+   * les lectures dépendantes sont alors suspendues (pas d'appel avec un contexte périmé).
+   */
+  readonly ready: boolean;
   setTenant(id: string | null): void;
+  /** Session refusée (401) par une lecture : suspend tout et renvoie une seule fois à la connexion. */
+  reportUnauthorized(): void;
   logout(): Promise<void>;
 }
 
@@ -59,6 +67,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null | undefined>(undefined);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
+  // Enseigne demandée dont la réponse /me n'est pas encore arrivée (changement en cours).
+  const [resolving, setResolving] = useState(false);
+  const [refused, setRefused] = useState(false);
+  const meGeneration = useRef(0);
+  const redirected = useRef(false);
 
   useEffect(() => {
     setTenantId(read(TENANT));
@@ -79,23 +92,48 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => data.subscription.unsubscribe();
   }, []);
 
+  const leave = useCallback(
+    (query: string) => {
+      if (redirected.current) return;
+      redirected.current = true;
+      setRefused(true);
+      write(DEV_TOKEN, null);
+      router.replace(`/login${query}`);
+    },
+    [router],
+  );
+
   useEffect(() => {
     if (token === null) router.replace('/login');
     if (!token) return;
-    api({ token, tenantId }, '/me', meSchema)
-      .then(setMe)
+    // Seule la réponse à la dernière demande compte (changement d'enseigne rapide A → B).
+    const generation = ++meGeneration.current;
+    const controller = new AbortController();
+    api({ token, tenantId }, '/me', meSchema, { signal: controller.signal })
+      .then((next) => {
+        if (generation !== meGeneration.current) return;
+        setMe(next);
+        setResolving(false);
+      })
       .catch((e: unknown) => {
-        if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
-          write(DEV_TOKEN, null);
-          router.replace('/login?refus=1');
-        }
+        if (generation !== meGeneration.current) return;
+        setResolving(false);
+        if (e instanceof ApiError && (e.status === 401 || e.status === 403)) leave('?refus=1');
       });
-  }, [token, tenantId, router]);
+    return () => controller.abort();
+  }, [token, tenantId, router, leave]);
 
+  const currentTenant = useRef<string | null>(null);
+  currentTenant.current = tenantId;
   const setTenant = useCallback((id: string | null) => {
     write(TENANT, id);
+    // Même enseigne : pas de nouvelle demande /me, donc rien à attendre.
+    if (id === currentTenant.current) return;
+    setResolving(true);
     setTenantId(id);
   }, []);
+
+  const reportUnauthorized = useCallback(() => leave('?expire=1'), [leave]);
 
   const logout = useCallback(async () => {
     write(DEV_TOKEN, null);
@@ -107,9 +145,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () =>
       token && me
-        ? { auth: { token, tenantId: me.tenant?.id ?? tenantId }, me, setTenant, logout }
+        ? {
+            auth: { token, tenantId: resolving ? tenantId : (me.tenant?.id ?? tenantId) },
+            me,
+            ready: !resolving && !refused,
+            setTenant,
+            reportUnauthorized,
+            logout,
+          }
         : null,
-    [token, me, tenantId, setTenant, logout],
+    [token, me, tenantId, resolving, refused, setTenant, reportUnauthorized, logout],
   );
   if (!value) return <div className="center muted">…</div>;
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

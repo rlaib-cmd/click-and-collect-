@@ -249,6 +249,12 @@ export const adminFr = {
     none: 'Aucun élément.',
     yes: 'Oui',
     no: 'Non',
+    /** Lecture suspendue après une erreur (audit du 25/11) : reprise par action explicite. */
+    loadFailed: 'Le chargement a échoué : les mises à jour automatiques sont suspendues.',
+    retry: 'Réessayer',
+    tooManyRequests: (seconds: number) =>
+      `Trop de requêtes : nouvel essai possible dans ${seconds} s.`,
+    badResponse: 'Réponse inattendue du serveur.',
   },
   orders: {
     new: 'Nouvelles',

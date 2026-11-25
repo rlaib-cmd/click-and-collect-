@@ -623,9 +623,12 @@ function StyleStep({
   );
 }
 
+// Schéma stable (audit du 25/11, F01) : jamais recréé pendant le rendu.
+const legalSchema = z.object({ text: z.string().nullable() });
+
 function TextStep({ form, setForm }: StepProps) {
   const { auth } = useSession();
-  const legal = useApi('/legal', z.object({ text: z.string().nullable() }));
+  const legal = useApi('/legal', legalSchema);
   const [text, setText] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const value = text ?? legal.data?.text ?? '';

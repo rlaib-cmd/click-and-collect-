@@ -5,6 +5,7 @@ import { messages } from '@splash360/i18n';
 import { useState } from 'react';
 import { euros } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.dashboard;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -13,11 +14,12 @@ export default function DashboardPage() {
   const today = new Date();
   const [from, setFrom] = useState(iso(new Date(today.getTime() - 29 * 86_400_000)));
   const [to, setTo] = useState(iso(today));
-  const { data } = useApi(`/dashboard?from=${from}&to=${to}`, dashboardSchema);
+  const { data, error, reload } = useApi(`/dashboard?from=${from}&to=${to}`, dashboardSchema);
   const max = Math.max(1, ...(data?.byDay.map((d) => d.revenueCents) ?? []));
 
   return (
     <div className="stack">
+      <LoadError error={error} onRetry={() => void reload()} />
       <header className="row between">
         <h1>{messages.admin.nav.dashboard}</h1>
         <div className="row">

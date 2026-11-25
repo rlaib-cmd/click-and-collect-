@@ -3,6 +3,7 @@
 import { messages } from '@splash360/i18n';
 import { z } from 'zod';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.audit;
 const schema = z.object({
@@ -18,9 +19,10 @@ const schema = z.object({
 });
 
 export default function AuditPage() {
-  const { data } = useApi('/audit', schema);
+  const { data, error, reload } = useApi('/audit', schema);
   return (
     <div className="stack">
+      <LoadError error={error} onRetry={() => void reload()} />
       <h1>{messages.admin.nav.audit}</h1>
       <table>
         <thead>

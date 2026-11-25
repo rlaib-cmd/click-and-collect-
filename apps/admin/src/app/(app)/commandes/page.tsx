@@ -14,6 +14,7 @@ import { restaurantsSchema } from '@/components/RestaurantPicker';
 import { api, euros, toCents } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.orders;
 const STATUS = messages.order.status;
@@ -50,16 +51,20 @@ const time = (iso: string) =>
     timeZone: 'Europe/Paris',
   });
 
-/** Tableau des commandes en temps réel (rafraîchi toutes les 5 s). */
+// Schémas stables (audit du 25/11, F01) : jamais recréés pendant le rendu.
+const ordersListSchema = z.object({ orders: z.array(adminOrderSchema) });
+const alertsSchema = z.object({ alerts: z.array(alertSchema) });
+const ORDERS_REFRESH_MS = 15_000;
+const ALERTS_REFRESH_MS = 30_000;
+const DETAIL_REFRESH_MS = 10_000;
+
+/** Tableau des commandes (rafraîchi toutes les 15 s, onglet visible). */
 export default function OrdersPage() {
   const { auth } = useSession();
-  const orders = useApi(
-    `/orders?status=${ACTIVE}`,
-    z.object({ orders: z.array(adminOrderSchema) }),
-    5000,
-  );
-  const alerts = useApi('/alerts', z.object({ alerts: z.array(alertSchema) }), 15000);
-  const restaurants = useApi('/restaurants', restaurantsSchema, 15000);
+  // Cadences validées par l'audit du 25/11 : commandes 15 s, alertes 30 s, restaurants à l'ouverture.
+  const orders = useApi(`/orders?status=${ACTIVE}`, ordersListSchema, ORDERS_REFRESH_MS);
+  const alerts = useApi('/alerts', alertsSchema, ALERTS_REFRESH_MS);
+  const restaurants = useApi('/restaurants', restaurantsSchema);
   const [selected, setSelected] = useState<string | null>(null);
 
   const togglePause = async (id: string, paused: boolean) => {
@@ -72,6 +77,14 @@ export default function OrdersPage() {
 
   return (
     <div className="stack">
+      <LoadError
+        error={orders.error ?? alerts.error ?? restaurants.error}
+        onRetry={() => {
+          void orders.reload();
+          void alerts.reload();
+          void restaurants.reload();
+        }}
+      />
       <header className="row between">
         <h1>{messages.admin.nav.orders}</h1>
         <div className="row">
@@ -178,7 +191,8 @@ function OrderDrawer({
   onChange: () => void;
 }) {
   const { auth, me } = useSession();
-  const detail = useApi(`/orders/${id}`, adminOrderDetailSchema, 5000);
+  // Volet de détail : lu seulement pendant qu'il est ouvert.
+  const detail = useApi(`/orders/${id}`, adminOrderDetailSchema, DETAIL_REFRESH_MS);
   const [refund, setRefund] = useState('');
   const [error, setError] = useState<string | null>(null);
   const o = detail.data;

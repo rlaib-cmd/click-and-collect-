@@ -9,7 +9,8 @@
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "build:static": "ADMIN_STATIC_EXPORT=1 next build"
+    "build:static": "ADMIN_STATIC_EXPORT=1 next build",
+    "test": "vitest run"
   },
   "dependencies": {
     "@splash360/contracts": "workspace:*",
@@ -26,11 +27,14 @@
   },
   "devDependencies": {
     "@splash360/config": "workspace:*",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^22",
     "@types/qrcode": "1.5.5",
     "@types/react": "~19.3.0",
     "@types/react-dom": "~19.3.0",
     "eslint": "^9.39.5",
-    "typescript": "~6.0.3"
+    "jsdom": "^31.0.1",
+    "typescript": "~6.0.3",
+    "vitest": "^5.1.1"
   }
 }

@@ -8,12 +8,13 @@ import { restaurantsSchema } from '@/components/RestaurantPicker';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.payments;
 
 export default function PaymentsPage() {
   const { auth } = useSession();
-  const { data, reload } = useApi('/restaurants', restaurantsSchema);
+  const { data, error: loadError, reload } = useApi('/restaurants', restaurantsSchema);
   const [error, setError] = useState<string | null>(null);
   const [tests, setTests] = useState<Record<string, string>>({});
 
@@ -64,6 +65,7 @@ export default function PaymentsPage() {
 
   return (
     <div className="stack">
+      <LoadError error={loadError} onRetry={() => void reload()} />
       <h1>{messages.admin.nav.payments}</h1>
       <p className="muted">{t.help}</p>
       {error ? (

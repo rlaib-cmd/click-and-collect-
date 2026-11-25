@@ -9,6 +9,7 @@ import { RestaurantPicker } from '@/components/RestaurantPicker';
 import { api, euros } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
+import { LoadError } from '@/components/LoadError';
 
 const t = messages.admin.menu;
 
@@ -65,6 +66,7 @@ export default function MenuPage() {
 
   return (
     <div className="stack">
+      <LoadError error={menu.error} onRetry={() => void menu.reload()} />
       <header className="row between">
         <h1>{messages.admin.nav.menu}</h1>
         <div className="row">
