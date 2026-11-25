@@ -199,3 +199,13 @@ qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS po
    ne pas poser `LOYALTY_DEMO_LOGIN` (désactivée par défaut).
 3. Option : `OTP_TENANT_HOURLY_LIMIT` (codes par enseigne et par heure, défaut 300).
 4. Les membres du club devront se reconnecter une fois (nouveau format de jeton).
+
+## Ambassadeur complet (lot 17, ADR 0022)
+
+1. Migration `20261125070000_ambassador_flow.sql` (recette puis production), avant la fonction `api`
+   qui l'utilise.
+2. Secret `ANTHROPIC_API_KEY` (fonction Edge `api` et serveur Node) pour l'analyse de la photo ;
+   option `AMBASSADOR_PHOTO_MODEL` (défaut `claude-opus-5-5`). Sans clé : toutes les photos sont
+   « à vérifier » par le restaurant. La clé n'est jamais dans le dépôt ni dans l'application.
+3. Rien à planifier : la tâche « ambassadeur » (contrôle à +20 h, crédit à +24 h) tourne au fil du
+   trafic client (Edge) ou chaque minute (serveur Node), comme la relance de la caisse.
