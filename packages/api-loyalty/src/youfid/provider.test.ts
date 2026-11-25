@@ -415,6 +415,11 @@ describe('aiguillage par enseigne et configuration', () => {
     const ok = parseYoufidAccounts('{"chickenstreet":{"login":"l","password":"p4ss"}}');
     expect(ok.get('chickenstreet')).toEqual({ login: 'l', password: 'p4ss' });
     expect(() => parseYoufidAccounts('{pas du json p4ss')).toThrow('JSON invalide');
+    // Libellé ou adresse collés avant l'objet : seul l'objet est lu.
+    const pasted = parseYoufidAccounts(
+      'https://api-loyalty.splash360.fr/dev/service/\n{"chickenstreet":{"login":"l","password":"p:4ss"}}',
+    );
+    expect(pasted.get('chickenstreet')).toEqual({ login: 'l', password: 'p:4ss' });
     // L'aide au diagnostic décrit la forme de la saisie sans citer son contenu.
     try {
       parseYoufidAccounts('{pas du json p4ss');

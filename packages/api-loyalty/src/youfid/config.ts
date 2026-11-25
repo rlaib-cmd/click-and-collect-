@@ -50,8 +50,12 @@ export function parseYoufidAccounts(
 ): ReadonlyMap<string, YoufidCredentials> {
   if (!raw || !raw.trim()) return new Map();
   let json: unknown;
+  const text = normalizeQuotes(raw);
+  // Texte collé avant ou après l'objet (libellé, adresse…) : seul l'objet { … } compte.
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
   try {
-    json = JSON.parse(normalizeQuotes(raw));
+    json = JSON.parse(start >= 0 && end > start ? text.slice(start, end + 1) : text);
   } catch {
     throw new Error(`YOUFID_ACCOUNTS : JSON invalide (${jsonShape(raw)})`);
   }
