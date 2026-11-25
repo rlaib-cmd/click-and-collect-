@@ -79,6 +79,8 @@ export interface AppDeps {
   readonly ready?: () => Promise<boolean>;
   /** Requêtes par minute et par IP : création/paiement/devis, et lectures publiques. */
   readonly rateLimits?: { orders: number; reads: number; admin?: number };
+  /** Attente imposée à un back-office obsolète avant de lui répondre (défaut 120 s). */
+  readonly outdatedClientHoldMs?: number;
   readonly trustProxy?: boolean;
   /** Club fidélité Splash360 (lot 8) ; absent = pas de fidélité. */
   readonly loyalty?: LoyaltyProvider;
@@ -122,7 +124,7 @@ export function createApp(deps: AppDeps) {
     cors({
       origin: origins === '*' ? '*' : [...origins],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-      allowHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id'],
+      allowHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id', 'X-Splash360-Client'],
       // Préflight gardé 10 min par le navigateur : la moitié des requêtes de la rafale du 24/11
       // étaient des OPTIONS. Retry-After et X-Request-Id lisibles pour la reprise et le diagnostic.
       maxAge: 600,
@@ -156,6 +158,16 @@ export function createApp(deps: AppDeps) {
     app.on('POST', path, strict);
   }
   app.use('/v1/tenants/*', rateLimit({ limit: limits.reads, windowMs: 60_000, trustProxy }));
+  // Back-office obsolète (onglet resté ouvert sur la version qui bouclait, 24/11) : il n'annonce
+  // pas sa version. On le fait patienter avant de répondre « rechargez » : l'ancien code ne relance
+  // qu'après une réponse, sa boucle passe d'environ 200 requêtes/s à une toutes les 2 minutes.
+  const hold = deps.outdatedClientHoldMs ?? 120_000;
+  app.use('/v1/admin/*', async (c, next) => {
+    if (c.req.method === 'OPTIONS' || c.req.header('X-Splash360-Client') === 'back-office-2')
+      return next();
+    if (hold > 0) await new Promise((r) => setTimeout(r, hold));
+    return apiError(c, 'client_outdated', 'Version obsolète du back-office : rechargez la page');
+  });
   // Back-office : plafond par adresse, vérifié avant toute lecture en base. Un onglet qui boucle
   // (bug constaté le 24/11 : ~200 requêtes/s) est arrêté ici au lieu de saturer Postgres.
   app.use('/v1/admin/*', rateLimit({ limit: limits.admin ?? 600, windowMs: 60_000, trustProxy }));

@@ -5,6 +5,13 @@ import type { z } from 'zod';
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787';
 
+/**
+ * Version du back-office annoncée à l'API. Un onglet resté sur une ancienne version (boucle de
+ * requêtes du 24/11) ne l'envoie pas : l'API le fait patienter puis lui demande de recharger.
+ */
+export const CLIENT_HEADER = 'X-Splash360-Client';
+export const CLIENT_VERSION = 'back-office-2';
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -70,6 +77,7 @@ export async function api<T extends z.ZodType>(
     method: init.method ?? 'GET',
     headers: {
       Authorization: `Bearer ${auth.token}`,
+      [CLIENT_HEADER]: CLIENT_VERSION,
       ...(auth.tenantId ? { 'X-Tenant-Id': auth.tenantId } : {}),
       ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     },
@@ -98,6 +106,7 @@ export async function download(auth: Auth, path: string, filename: string) {
   const res = await fetch(`${API_URL}/v1/admin${path}`, {
     headers: {
       Authorization: `Bearer ${auth.token}`,
+      [CLIENT_HEADER]: CLIENT_VERSION,
       ...(auth.tenantId ? { 'X-Tenant-Id': auth.tenantId } : {}),
     },
   });
@@ -128,6 +137,7 @@ export async function upload<T extends z.ZodType>(
     method: 'POST',
     headers: {
       Authorization: `Bearer ${auth.token}`,
+      [CLIENT_HEADER]: CLIENT_VERSION,
       ...(auth.tenantId ? { 'X-Tenant-Id': auth.tenantId } : {}),
       'Content-Type': file.type || 'application/octet-stream',
     },

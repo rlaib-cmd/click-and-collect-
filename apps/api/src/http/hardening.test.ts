@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BELLA_RESTO, testApp } from '../test-fixtures';
+import { BELLA_RESTO, testApp, testSetup } from '../test-fixtures';
 
 const json = { 'Content-Type': 'application/json' };
 
@@ -33,6 +33,30 @@ describe('durcissement de l’API', () => {
     for (let i = 0; i < 6; i++) statuses.push((await app.request('/v1/admin/restaurants')).status);
     expect(statuses.slice(0, 4).every((s) => s === 401)).toBe(true);
     expect(statuses.slice(4)).toEqual([429, 429]);
+  });
+
+  it('fait patienter puis renvoie « rechargez » à un back-office obsolète, sans toucher la base', async () => {
+    const setup = testSetup({ outdatedClientHoldMs: 0 });
+    let reads = 0;
+    setup.deps.restaurants.listByTenant = () => {
+      reads += 1;
+      return Promise.resolve([]);
+    };
+    // Requête brute, sans l'en-tête de version (ancien onglet).
+    const raw = new Request('http://local/v1/admin/restaurants', {
+      headers: { Authorization: 'Bearer x' },
+    });
+    const res = await setup.app.fetch(raw);
+    expect(res.status).toBe(426);
+    expect(reads).toBe(0);
+    // Le préflight CORS reste servi normalement.
+    const pre = await setup.app.fetch(
+      new Request('http://local/v1/admin/restaurants', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://x.test', 'Access-Control-Request-Method': 'GET' },
+      }),
+    );
+    expect(pre.status).toBe(204);
   });
 
   it('refuse un corps de requête trop volumineux', async () => {

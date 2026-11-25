@@ -242,7 +242,27 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
     now: () => NOW,
     ...overrides,
   };
-  return { app: createApp(deps), backend, stripe, pos, notifications, deps, admin };
+  return {
+    app: asCurrentBackOffice(createApp(deps)),
+    backend,
+    stripe,
+    pos,
+    notifications,
+    deps,
+    admin,
+  };
+}
+
+/** Les tests parlent au back-office comme sa version actuelle (en-tête X-Splash360-Client). */
+function asCurrentBackOffice<T extends { request: (...args: never[]) => unknown }>(app: T): T {
+  const original = (app.request as (input: string, init?: RequestInit) => unknown).bind(app);
+  const request = (input: string, init: RequestInit = {}) => {
+    if (!String(input).startsWith('/v1/admin')) return original(input, init);
+    const headers = new Headers(init.headers);
+    if (!headers.has('X-Splash360-Client')) headers.set('X-Splash360-Client', 'back-office-2');
+    return original(input, { ...init, headers });
+  };
+  return Object.assign(app, { request });
 }
 
 export const testApp = (overrides: Partial<AppDeps> = {}) => testSetup(overrides).app;

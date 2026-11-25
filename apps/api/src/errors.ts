@@ -13,6 +13,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   forbidden: 403,
   conflict: 409,
   rate_limited: 429,
+  client_outdated: 426,
   payload_too_large: 413,
   payments_unavailable: 503,
   order_not_payable: 409,
