@@ -33,6 +33,8 @@ import {
   createPostgresRestaurantStore,
   createPostgresTenantStore,
   createSql,
+  createPostgresSplash360Gate,
+  type Sql,
   createPostgresOtpStore,
   createPostgresMemberSessionStore,
 } from '@splash360/db';
@@ -142,7 +144,16 @@ const log = (m: string, d?: Record<string, unknown>) => jsonLog('warn', m, d);
 // Partagés entre les générations de connexions : cache de carte et clés publiques Supabase Auth.
 // Splash360 (ADR 0018) : identifiants en secrets de fonction ; sans eux, démonstration.
 const splash360 = splash360CredentialsFrom(env);
-const splash360Client = splash360 ? createSplash360Client(splash360) : null;
+// Appels séquentiels par identifiant client, aussi entre copies de la fonction (ADR 0024) :
+// verrou consultatif Postgres sur la connexion de la génération en cours.
+let gateSql: Sql | null = null;
+const splash360Gate = createPostgresSplash360Gate(() => {
+  if (!gateSql) throw new Error('Connexion Postgres pas encore ouverte');
+  return gateSql;
+});
+const splash360Client = splash360
+  ? createSplash360Client({ ...splash360, gate: splash360Gate })
+  : null;
 const menus = createMenuCache(
   createRoutingMenuProvider({
     demo: createDemoMenuProvider(),
@@ -206,6 +217,7 @@ const appEnv = env('APP_ENV') ?? 'production';
 function build() {
   // 2 connexions par copie de la fonction : la base directe n'en accepte que 60 au total.
   const sql = createSql(databaseUrl, { max: 2, idleTimeout: 10 });
+  gateSql = sql;
   const payments = createPostgresPaymentStore(sql);
   const app = createApp({
     tenants: createPostgresTenantStore(sql),

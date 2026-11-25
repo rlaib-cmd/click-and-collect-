@@ -24,6 +24,7 @@ import {
   createPostgresRestaurantStore,
   createPostgresTenantStore,
   createSql,
+  createPostgresSplash360Gate,
   createPostgresOtpStore,
   createPostgresMemberSessionStore,
 } from '@splash360/db';
@@ -51,7 +52,10 @@ const origins = env.CORS_ORIGINS === '*' ? '*' : env.CORS_ORIGINS.split(',').map
 // Splash360 (ADR 0018) : carte et caisse réelles pour les restaurants branchés, si les
 // identifiants sont posés ; démonstration sinon.
 const splash360 = splash360CredentialsFrom((name) => process.env[name]);
-const splash360Client = splash360 ? createSplash360Client(splash360) : null;
+// Appels séquentiels par identifiant client, aussi entre instances (ADR 0024).
+const splash360Client = splash360
+  ? createSplash360Client({ ...splash360, gate: createPostgresSplash360Gate(() => sql) })
+  : null;
 if (!splash360Client)
   jsonLog('warn', 'Identifiants Splash360 absents : carte et caisse de démonstration');
 const menus = createMenuCache(

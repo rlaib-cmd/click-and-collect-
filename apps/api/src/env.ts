@@ -57,10 +57,22 @@ const envSchema = z.object({
    * API Click & Collect Splash360 (ADR 0018) : lues directement dans l'environnement par
    * `splash360CredentialsFrom` (SPLASH360_API_URL, SPLASH360_CLIENT_ID, SPLASH360_CLIENT_SECRET).
    * Sans identifiants : carte et caisse de démonstration.
+   * Lot 19 (ADR 0024), facultatives : SPLASH360_TOKEN_URL (défaut api2), SPLASH360_SCOPE (`user`),
+   * SPLASH360_MENU_PATH (`/api/export/v2/menus`), SPLASH360_ORDERS_API_URL (api2) et, pour l'export
+   * des ventes avec d'autres identifiants, SPLASH360_ORDERS_CLIENT_ID / _SECRET (les deux ou aucun).
    */
   SPLASH360_API_URL: z.url().optional(),
   SPLASH360_CLIENT_ID: z.string().min(1).optional(),
   SPLASH360_CLIENT_SECRET: z.string().min(1).optional(),
+  SPLASH360_TOKEN_URL: z.url().optional(),
+  SPLASH360_SCOPE: z.string().min(1).optional(),
+  SPLASH360_MENU_PATH: z
+    .string()
+    .regex(/^\/api\/export\//)
+    .optional(),
+  SPLASH360_ORDERS_API_URL: z.url().optional(),
+  SPLASH360_ORDERS_CLIENT_ID: z.string().min(1).optional(),
+  SPLASH360_ORDERS_CLIENT_SECRET: z.string().min(1).optional(),
   /** Taux de TVA des frais envoyés à la caisse (à confirmer avec Splash360). */
   SPLASH360_FEE_VAT_RATE: z.coerce.number().min(0).max(1).default(0.2),
   /** Attente maximale de la caisse avant paiement, puis après paiement. */
