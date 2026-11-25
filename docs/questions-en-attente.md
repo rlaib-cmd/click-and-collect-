@@ -48,3 +48,12 @@ Le lot 8 tourne sur des données de test (ADR 0009). À obtenir de Splash360 :
 
 1. Format du QR code que la caisse Splash360 sait lire pour retrouver une commande en ligne (provisoire : `S360-CMD-<numéro>-<8 caractères>`).
 2. La caisse peut-elle recevoir une commande « à encaisser » (non payée) et l'encaisser au retrait ?
+
+## Fidélité dans le click & collect (lot 16, ADR 0021)
+
+- Le prénom doit-il devenir facultatif dès la création du compte ? Aujourd'hui il est demandé avec
+  l'acceptation des conditions (nom affiché sur la carte et transmis à la caisse) ; l'écran
+  « Fais connaissance » le rend seulement modifiable. L'API fidélité Splash360 accepte-t-elle un
+  membre sans nom ?
+- La date de naissance doit-elle déclencher une offre anniversaire (points, cadeau) ? Rien n'est
+  construit tant que la règle n'est pas donnée.

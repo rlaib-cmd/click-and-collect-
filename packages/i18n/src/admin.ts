@@ -521,6 +521,18 @@ export const adminFr = {
     noClub: 'Cette enseigne n’a pas de club fidélité.',
     demo: 'Données de test : la fidélité sera gérée par l’API Splash360.',
   },
+  /** Lot 16 (ADR 0021) : catégories entières offertes par palier. */
+  rewardTiers: {
+    title: 'Cadeaux des paliers',
+    intro:
+      'Cochez les catégories offertes à chaque palier : tous leurs produits disponibles pourront être choisis par le client, en plus des produits listés par le programme.',
+    points: (n: number) => `${n} points`,
+    listed: (n: number) => (n > 0 ? `${n} produit(s) prévus par le programme` : ''),
+    save: 'Enregistrer les paliers',
+    saved: 'Paliers enregistrés.',
+    none: 'Aucun palier dans le programme.',
+    noMenu: 'Carte indisponible : impossible de lister les catégories.',
+  },
   /** Lot 15 (ADR 0019) : story Instagram taguée = bonus de points, une fois par ticket. */
   ambassador: {
     title: 'Ambassadeur : story Instagram',

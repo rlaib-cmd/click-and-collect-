@@ -229,7 +229,14 @@ export default function CheckoutScreen() {
                   >{`\n${l.options.map((o) => o.name).join(', ')}`}</Text>
                 ) : null}
               </Text>
-              <Text style={{ color: palette.text }}>{formatPrice(l.totalCents)}</Text>
+              <View style={styles.price}>
+                <Text style={{ color: palette.text }}>{formatPrice(l.totalCents)}</Text>
+                {cart.reward?.productId === l.productId && q.totals.discountCents > 0 ? (
+                  <Text style={{ color: palette.loyalty, fontWeight: '800', fontSize: 13 }}>
+                    {messages.gift.offeredOne(l.quantity)}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           ))}
         </View>
@@ -469,7 +476,7 @@ function Rewards({
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <View style={styles.giftRow}>
-                      {tierProducts(r, catalog.products).map((p) => {
+                      {tierProducts(r, catalog).map((p) => {
                         const on = tierOn && selected?.productId === p.id;
                         return (
                           <Pressable
@@ -731,6 +738,7 @@ function Toggle({
 }
 
 const styles = StyleSheet.create({
+  price: { alignItems: 'flex-end', gap: 2 },
   rewardsBox: { padding: 14, gap: 10 },
   rewardsHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   reward: { paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, gap: 6 },

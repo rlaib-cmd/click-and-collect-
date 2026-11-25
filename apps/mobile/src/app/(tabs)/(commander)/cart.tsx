@@ -35,6 +35,11 @@ export default function CartScreen() {
   const giftName = cart.reward
     ? (lines.find((l) => l.product?.id === cart.reward?.productId)?.product?.name ?? null)
     : null;
+  // Le cadeau compte pour une unité (calcul serveur) : « Offert » si c'est la seule.
+  const giftPrice = (productId: string, quantity: number, totalCents: number) =>
+    cart.reward?.productId === productId && quantity === 1
+      ? messages.gift.offered
+      : formatPrice(totalCents);
   const onlyGift =
     cart.reward !== null && cart.lines.every((l) => l.productId === cart.reward?.productId);
 
@@ -83,9 +88,16 @@ export default function CartScreen() {
                 </Pressable>
               </View>
             </View>
-            <Text style={[styles.price, { color: palette.text }]}>
-              {product ? formatPrice(totalCents) : ''}
-            </Text>
+            <View style={styles.priceCol}>
+              <Text style={[styles.price, { color: palette.text }]}>
+                {product ? giftPrice(line.productId, line.quantity, totalCents) : ''}
+              </Text>
+              {product && cart.reward?.productId === line.productId ? (
+                <Text style={{ color: palette.loyalty, fontWeight: '800', fontSize: 13 }}>
+                  {messages.gift.offeredOne(line.quantity)}
+                </Text>
+              ) : null}
+            </View>
           </View>
         ))}
         {giftName ? (
@@ -164,6 +176,7 @@ const styles = StyleSheet.create({
   },
   lineText: { flex: 1, gap: 4 },
   name: { fontSize: 17, fontWeight: '600' },
+  priceCol: { alignItems: 'flex-end', gap: 2 },
   price: { fontSize: 16, fontWeight: '600' },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
   qtyButton: {

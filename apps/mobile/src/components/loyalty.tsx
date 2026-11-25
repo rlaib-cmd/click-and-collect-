@@ -28,12 +28,12 @@ export function FidelityCard({
 }) {
   const { palette, radii, style } = useTenant();
   const { cart } = useCart();
-  const { products } = useRewardCatalog(cart);
+  const catalog = useRewardCatalog(cart);
   const usable = usablePoints(member);
   const next = nextReward(rewards, usable);
   const tier = next?.reward ?? null;
   const image = tier
-    ? (tierProducts(tier, products).find((p) => p.imageUrl)?.imageUrl ?? null)
+    ? (tierProducts(tier, catalog).find((p) => p.imageUrl)?.imageUrl ?? null)
     : null;
   const progress = tier ? Math.min(1, usable / tier.costPoints) : 1;
   return (

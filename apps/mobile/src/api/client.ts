@@ -60,3 +60,23 @@ export function apiPost<T extends z.ZodType>(
     fetchImpl,
   );
 }
+
+/** Appel PATCH authentifié (profil du membre, lot 16). */
+export function apiPatch<T extends z.ZodType>(
+  path: string,
+  body: unknown,
+  schema: T,
+  bearer: string,
+  fetchImpl: typeof fetch = fetch,
+) {
+  return request(
+    path,
+    schema,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${bearer}` },
+      body: JSON.stringify(body),
+    },
+    fetchImpl,
+  );
+}

@@ -122,9 +122,32 @@ export default function OrderScreen() {
                   <Text style={{ color: palette.textMuted }}>{` · ${l.options.join(', ')}`}</Text>
                 ) : null}
               </Text>
-              <Text style={{ color: palette.text }}>{formatPrice(l.totalCents)}</Text>
+              <View style={styles.price}>
+                <Text style={{ color: palette.text }}>{formatPrice(l.totalCents)}</Text>
+                {l.gift ? (
+                  <Text style={{ color: palette.loyalty, fontWeight: '800', fontSize: 13 }}>
+                    {messages.gift.offeredOne(l.quantity)}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           ))}
+          {order.totals.discountCents > 0 ? (
+            <View style={styles.line}>
+              <Text style={{ color: palette.text, flex: 1 }}>{messages.loyalty.discount}</Text>
+              <Text style={{ color: palette.text }}>
+                {`− ${formatPrice(order.totals.discountCents)}`}
+              </Text>
+            </View>
+          ) : null}
+          {order.totals.promoDiscountCents > 0 ? (
+            <View style={styles.line}>
+              <Text style={{ color: palette.text, flex: 1 }}>{messages.promo.title}</Text>
+              <Text style={{ color: palette.text }}>
+                {`− ${formatPrice(order.totals.promoDiscountCents)}`}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.line}>
             <Text style={[styles.total, { color: palette.text }]}>{messages.checkout.total}</Text>
             <Text style={[styles.total, { color: palette.text }]}>
@@ -300,6 +323,7 @@ function Steps({ order }: { order: OrderTracking }) {
 
 const styles = StyleSheet.create({
   pickup: { alignItems: 'center', gap: 10, padding: 20 },
+  price: { alignItems: 'flex-end', gap: 2 },
   pickupTitle: { fontSize: 20, fontWeight: '900' },
   qrBox: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 14 },
   toPay: { fontSize: 20, fontWeight: '900' },

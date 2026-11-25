@@ -21,6 +21,16 @@ export default function AccountScreen() {
   const brand = style.header === 'brand';
 
   const rows: readonly { icon: IconName; title: string; hint: string; href: Href }[] = [
+    ...(member
+      ? [
+          {
+            icon: 'user' as const,
+            title: messages.profile.menuTitle,
+            hint: messages.profile.menuHint,
+            href: '/mes-informations' as const,
+          },
+        ]
+      : []),
     { icon: 'receipt', title: t.orders, hint: t.ordersHint, href: '/mes-commandes' },
     { icon: 'tag', title: t.promos, hint: t.promosHint, href: '/mes-codes-promo' },
     { icon: 'card', title: t.payments, hint: t.paymentsHint, href: '/moyens-de-paiement' },

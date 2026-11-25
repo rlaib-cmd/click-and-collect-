@@ -74,7 +74,7 @@ export default function RewardsScreen() {
           .map((r) => {
             const missing = member ? Math.max(0, r.costPoints - usablePoints(member)) : null;
             const locked = missing !== null && missing > 0;
-            const items = tierProducts(r, catalog.products);
+            const items = tierProducts(r, catalog);
             return (
               <View key={r.id} style={styles.tier}>
                 <View style={styles.tierHead}>

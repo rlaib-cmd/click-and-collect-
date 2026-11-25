@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMenu } from '@/api/hooks';
 import { CartBar } from '@/components/CartBar';
 import { ProductCard } from '@/components/ProductCard';
+import { RewardBanner } from '@/components/RewardBanner';
 import { SetupSummary } from '@/components/SetupSummary';
 import { BrandBar, titleStyle } from '@/components/brand';
 import { TenantLogo } from '@/components/TenantLogo';
@@ -96,6 +97,8 @@ export default function MenuScreen() {
       <View style={styles.summary}>
         <SetupSummary />
       </View>
+
+      <RewardBanner restaurantId={restaurantId} />
 
       {menu.data.stale ? (
         <Text

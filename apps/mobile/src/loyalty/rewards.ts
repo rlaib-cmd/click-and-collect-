@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { useMenu, useRestaurants } from '@/api/hooks';
 import type { CartAction, CartState } from '@/cart/cart';
+import { rewardProducts } from './points';
 
 /**
  * Carte servant à illustrer les cadeaux : celle du restaurant du panier, sinon du premier
@@ -12,25 +13,23 @@ export function useRewardCatalog(cart: Pick<CartState, 'restaurantId'>) {
   const restaurants = useRestaurants();
   const restaurantId = cart.restaurantId ?? restaurants.data?.[0]?.id ?? '';
   const menu = useMenu(restaurantId);
+  const categories = useMemo(() => menu.data?.categories ?? [], [menu.data]);
   const products = useMemo(
-    () =>
-      new Map(
-        (menu.data?.categories ?? []).flatMap((c) => c.products.map((p) => [p.id, p] as const)),
-      ),
-    [menu.data],
+    () => new Map(categories.flatMap((c) => c.products.map((p) => [p.id, p] as const))),
+    [categories],
   );
-  return { restaurantId, products };
+  return { restaurantId, products, categories };
 }
 
-/** Produits d'un palier présents sur la carte, dans l'ordre du palier. */
+/**
+ * Produits d'un palier présents sur la carte : ceux du palier puis toutes ses catégories
+ * (lot 16 : « toutes les boissons »), disponibles et sans doublon.
+ */
 export function tierProducts(
-  reward: Pick<LoyaltyRewardDto, 'productIds'>,
-  products: ReadonlyMap<string, ProductDto>,
+  reward: Pick<LoyaltyRewardDto, 'productIds' | 'categoryIds'>,
+  catalog: { readonly categories: readonly { id: string; products: ProductDto[] }[] },
 ): ProductDto[] {
-  return reward.productIds.flatMap((id) => {
-    const p = products.get(id);
-    return p ? [p] : [];
-  });
+  return rewardProducts(reward, catalog.categories);
 }
 
 /** Un produit sans choix obligatoire s'ajoute directement ; sinon on ouvre sa fiche. */

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { titleStyle } from '@/components/brand';
 import { Icon } from '@/components/icons';
 import { JoinForm } from '@/components/JoinForm';
+import { ProfileForm } from '@/components/ProfileForm';
 import { Loading } from '@/components/ui';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { useTenant } from '@/tenant/TenantProvider';
@@ -14,7 +15,7 @@ const t = messages.loyalty;
 /** Ma carte : QR code à scanner en caisse, ou adhésion au club. */
 export default function CardScreen() {
   const { palette, style, radii, config } = useTenant();
-  const { program, member, memberLoading } = useLoyalty();
+  const { program, member, memberLoading, welcome, finishWelcome } = useLoyalty();
   const insets = useSafeAreaInsets();
   if (!program || memberLoading) return <Loading />;
   if (!program.enabled) {
@@ -30,7 +31,9 @@ export default function CardScreen() {
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
       keyboardShouldPersistTaps="handled"
     >
-      {member ? (
+      {member && welcome ? (
+        <ProfileForm welcome onDone={finishWelcome} />
+      ) : member ? (
         <>
           <Text
             style={[styles.h1, titleStyle(style), { color: palette.text }]}

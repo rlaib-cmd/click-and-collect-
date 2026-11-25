@@ -6,6 +6,7 @@ import {
   otpStartResponseSchema,
   otpVerifyResponseSchema,
   type LoyaltyJoinRequest,
+  type MemberProfileUpdateDto,
   type OtpChannel,
   type OtpStartResponse,
   type OtpVerifyRequest,
@@ -22,7 +23,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { apiGet, apiPost, ApiRequestError } from '@/api/client';
+import { apiGet, apiPatch, apiPost, ApiRequestError } from '@/api/client';
 import { useTenant } from '@/tenant/TenantProvider';
 
 interface LoyaltyContextValue {
@@ -41,6 +42,11 @@ interface LoyaltyContextValue {
   readonly verifyCode: (input: OtpVerifyRequest) => Promise<'connected' | 'needsName'>;
   readonly logout: () => void;
   readonly refresh: () => void;
+  /** Compte tout juste créé : écran « Fais connaissance » à montrer avant la carte (lot 16). */
+  readonly welcome: boolean;
+  readonly finishWelcome: () => void;
+  /** Prénom, e-mail, date de naissance (tous facultatifs sauf le prénom déjà connu). */
+  readonly updateProfile: (input: MemberProfileUpdateDto) => Promise<void>;
 }
 
 const LoyaltyContext = createContext<LoyaltyContextValue | null>(null);
@@ -60,6 +66,7 @@ export function LoyaltyProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient();
   const [memberToken, setMemberToken] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
+  const [welcome, setWelcome] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(storageKey(sub))
@@ -139,12 +146,29 @@ export function LoyaltyProvider({ children }: { children: ReactNode }) {
         if ('needsName' in r) return 'needsName';
         client.setQueryData(['loyalty-me', sub, r.memberToken], r.member);
         store(r.memberToken);
+        // Prénom transmis : c'est une création de compte, on propose de compléter le profil.
+        if (input.name) setWelcome(true);
         return 'connected';
       },
-      logout: () => store(null),
+      logout: () => {
+        setWelcome(false);
+        store(null);
+      },
       refresh: () => void member.refetch(),
+      welcome: welcome && memberToken !== null,
+      finishWelcome: () => setWelcome(false),
+      updateProfile: async (input) => {
+        if (!memberToken) throw new ApiRequestError('unauthorized', 401);
+        const updated = await apiPatch(
+          `/v1/tenants/${sub}/loyalty/me`,
+          input,
+          loyaltyMemberSchema,
+          memberToken,
+        );
+        client.setQueryData(['loyalty-me', sub, memberToken], updated);
+      },
     }),
-    [program.data, restored, memberToken, member, sessionMutation, store, sub, client],
+    [program.data, restored, memberToken, member, sessionMutation, store, sub, client, welcome],
   );
 
   return <LoyaltyContext.Provider value={value}>{children}</LoyaltyContext.Provider>;

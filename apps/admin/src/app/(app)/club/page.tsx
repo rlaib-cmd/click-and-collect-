@@ -9,6 +9,7 @@ import { useSession } from '@/lib/session';
 import { useApi } from '@/lib/use-api';
 import { AmbassadorPanel } from '@/components/AmbassadorPanel';
 import { LoadError } from '@/components/LoadError';
+import { RewardTiersPanel } from '@/components/RewardTiersPanel';
 
 const t = messages.admin.club;
 const membersSchema = z.object({ members: z.array(clubMemberSchema) });
@@ -83,6 +84,7 @@ export default function ClubPage() {
       />
       <h1>{messages.admin.nav.club}</h1>
       <p className="muted">{t.demo}</p>
+      <RewardTiersPanel />
       <AmbassadorPanel />
       {error ? (
         <p className="banner danger" role="alert">
