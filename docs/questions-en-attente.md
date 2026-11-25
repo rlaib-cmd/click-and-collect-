@@ -20,6 +20,7 @@ Tenu à jour pendant le développement autonome. Chaque point indique ce qu'il b
 | 14 | Nom de domaine des enseignes (`<enseigne>.<domaine>`) et hébergeurs retenus | Lot 7 | Recommandations dans `mise-en-production.md` |
 | 15 | Enseigne pilote, ses comptes Apple Developer / Google Play, icône et écran de démarrage | Lot 7 | Marques de démonstration `bella`, `greenbowl` |
 | 16 | Réponses de Splash360 sur l'API Click & Collect (liste dans `docs/api-splash360/analyse-api-click-collect.md`). Prioritaires pour brancher : **caisse de test** (une commande d'essai arrive-t-elle dans une vraie caisse ?), **un identifiant par restaurant** (la carte n'a pas de paramètre de restaurant), **valeurs exactes des statuts** de `cmdstatus`, **annulation** d'une commande `standby` jamais payée, **taux de TVA des frais**, **champ pour l'heure de retrait**, format des options (`composition`, `steps`) | Branchement d'un restaurant réel (lot 14) | Code prêt (ADR 0018) : statuts lus de façon tolérante, heure de retrait en commentaire, frais à 20 %, produits sans options ; aucun restaurant branché |
+| 17 | Ambassadeur (ADR 0019) : **format du QR des tickets Splash360** et moyen de vérifier qu'un ticket existe ; **compte Meta Business** de chaque enseigne et application Meta validée pour recevoir les mentions en story | Vérification automatique et crédit des 50 points | Participations enregistrées « en attente », numéro de ticket saisi à la main, aucun point crédité |
 
 ## API fidélité Splash360 (lot 8)
 
