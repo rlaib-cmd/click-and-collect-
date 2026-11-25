@@ -179,6 +179,30 @@ describe('client Splash360', () => {
     expect(server.calls.at(-1)?.headers.Authorization).toBe('Bearer tok-m');
   });
 
+  it('envoie les identifiants de carte dans le corps quand c’est demandé, sans en-tête Basic', async () => {
+    const server = fakeServer({
+      '/oauth/v2/token': (c) => {
+        const form = new URLSearchParams(String(c.body));
+        return !c.headers.Authorization &&
+          form.get('client_id') === 'carte' &&
+          form.get('client_secret') === 's4' &&
+          form.get('grant_type') === 'client_credentials'
+          ? token('tok-c')()
+          : { status: 400, body: { error: 'invalid_client' } };
+      },
+      '/api/export/v2/menus': () => ({ status: 200, body: { produits: [] } }),
+    });
+    const client = createSplash360Client({
+      ...creds,
+      menuClientId: 'carte',
+      menuClientSecret: 's4',
+      menuTokenAuth: 'body',
+      fetch: server.fetch,
+    });
+    await client.getMenus();
+    expect(server.calls.at(-1)?.headers.Authorization).toBe('Bearer tok-c');
+  });
+
   it('repasse sur les identifiants principaux si ceux de la carte sont refusés', async () => {
     const server = fakeServer({
       '/oauth/v2/token': (c) =>

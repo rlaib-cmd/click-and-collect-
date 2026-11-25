@@ -36,6 +36,11 @@ export interface Splash360Credentials {
   readonly menuClientSecret?: string;
   /** URL du jeton pour ces identifiants de carte (défaut : celle des identifiants principaux). */
   readonly menuTokenUrl?: string;
+  /**
+   * Envoi des identifiants de carte : en-tête Basic (défaut) ou dans le corps du formulaire
+   * (client_id / client_secret), comme l'exige le client 4114 d'après Splash360.
+   */
+  readonly menuTokenAuth?: 'basic' | 'body';
   readonly ordersClientSecret?: string;
   /** Serveur de l'export des ventes (défaut https://api2.splash360.fr). */
   readonly ordersBaseUrl?: string;
@@ -277,20 +282,27 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
     clientId: string,
     clientSecret: string,
     url: string = tokenUrl,
+    auth: 'basic' | 'body' = 'basic',
   ): TokenSource {
     let token: { value: string; expiresAt: number } | null = null;
     let pending: Promise<string> | null = null;
 
     async function fetchToken(): Promise<string> {
-      const basic = btoa(`${clientId}:${clientSecret}`);
+      const form = new URLSearchParams({ grant_type: 'client_credentials', scope });
+      if (auth === 'body') {
+        form.set('client_id', clientId);
+        form.set('client_secret', clientSecret);
+      }
       const res = await call(clientId, url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           Accept: 'application/json',
-          Authorization: `Basic ${basic}`,
+          ...(auth === 'basic'
+            ? { Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}` }
+            : {}),
         },
-        body: new URLSearchParams({ grant_type: 'client_credentials', scope }).toString(),
+        body: form.toString(),
       });
       if (!res.ok) {
         // 400/401 : identifiants refusés, inutile d'insister ; 5xx : panne passagère.
@@ -333,7 +345,12 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
   const menuClientSecret = options.menuClientSecret?.trim();
   const menuToken =
     menuClientId && menuClientSecret
-      ? tokenSource(menuClientId, menuClientSecret, options.menuTokenUrl?.trim() || tokenUrl)
+      ? tokenSource(
+          menuClientId,
+          menuClientSecret,
+          options.menuTokenUrl?.trim() || tokenUrl,
+          options.menuTokenAuth ?? 'basic',
+        )
       : mainToken;
   /**
    * Lecture de la carte : identifiants dédiés s'ils sont posés ; si Splash360 les refuse
@@ -480,6 +497,7 @@ export function splash360CredentialsFrom(
   const menuClientId = optional('SPLASH360_MENU_CLIENT_ID');
   const menuClientSecret = optional('SPLASH360_MENU_CLIENT_SECRET');
   const menuTokenUrl = optional('SPLASH360_MENU_TOKEN_URL');
+  const menuTokenAuth = optional('SPLASH360_MENU_TOKEN_AUTH');
   return {
     baseUrl: optional('SPLASH360_API_URL') ?? 'https://api.splash360.fr',
     clientId,
@@ -491,5 +509,6 @@ export function splash360CredentialsFrom(
     ...(ordersBaseUrl ? { ordersBaseUrl } : {}),
     ...(menuClientId && menuClientSecret ? { menuClientId, menuClientSecret } : {}),
     ...(menuTokenUrl ? { menuTokenUrl } : {}),
+    ...(menuTokenAuth === 'body' || menuTokenAuth === 'basic' ? { menuTokenAuth } : {}),
   };
 }
