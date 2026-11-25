@@ -71,6 +71,20 @@ describe('fournisseur YouFID', () => {
     expect(fake.calls.filter((c) => c.route === 'marchandGetMerchantDetailsV2')).toHaveLength(1);
   });
 
+  it('inscription avec un numéro au format national : enregistré en +33', async () => {
+    const { loyalty, fake } = setup();
+    const { member } = await loyalty.join(tenant, {
+      name: 'Léa',
+      email: null,
+      phone: '06 12 34 56 78',
+    });
+    expect(member.phone).toBe('+33612345678');
+    expect(fake.customers.some((c) => c.phone === '0612345678')).toBe(true);
+    await expect(
+      loyalty.join(tenant, { name: 'Léa', email: null, phone: 'pas un numéro' }),
+    ).rejects.toThrow();
+  });
+
   it('inscription par SMS : client créé chez YouFID, QR code, prénom et bienvenue crédités', async () => {
     const { loyalty, fake, store } = setup();
     expect(await loyalty.findByPhone(tenant, '+33612345678')).toBeNull();

@@ -261,12 +261,15 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
         if (existing) return { member: existing, created: false };
         throw new LoyaltyUnsupportedError('phone_required');
       }
-      const reg = await client.registerByPhone(input.phone);
+      // Téléphone toujours enregistré au format international (+33…), quel que soit l'appelant.
+      const phone = normalizeFrenchPhone(input.phone);
+      if (!phone) throw new LoyaltyUnsupportedError('phone_required');
+      const reg = await client.registerByPhone(phone);
       const created = !reg.existing;
       const link = await store.saveLink(tenant.id, {
         usrId: reg.usrId,
         qrCode: reg.qrCode,
-        phone: input.phone,
+        phone,
       });
       if (created) {
         const answers: [ProfileQuestionType, string][] = [];
