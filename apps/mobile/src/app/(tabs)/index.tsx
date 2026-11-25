@@ -41,19 +41,6 @@ export default function HomeScreen() {
             {config.tenant.name}
           </Text>
         ) : null}
-        {config.theme.tagline ? (
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            style={[
-              styles.tagline,
-              titleStyle(style),
-              { color: brand ? palette.onPrimary : palette.textMuted },
-            ]}
-          >
-            {config.theme.tagline}
-          </Text>
-        ) : null}
       </View>
       {brand ? <CheckerBand /> : null}
 
@@ -164,7 +151,6 @@ const styles = StyleSheet.create({
   page: { paddingBottom: 32 },
   hero: { alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingBottom: 10 },
   brandName: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
-  tagline: { fontSize: 12, textAlign: 'center', fontWeight: '700' },
   content: {
     padding: 16,
     paddingTop: 12,

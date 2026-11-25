@@ -87,11 +87,6 @@ export default function HomeScreen() {
                 {config.tenant.name}
               </Text>
             )}
-            {config.theme.tagline ? (
-              <Text style={[styles.tagline, titleStyle(style), { color: palette.onPrimary }]}>
-                {config.theme.tagline}
-              </Text>
-            ) : null}
           </View>
           <CheckerBand />
         </View>
@@ -104,11 +99,6 @@ export default function HomeScreen() {
           >
             {config.tenant.name}
           </Text>
-          {config.theme.tagline ? (
-            <Text style={[styles.tagline, { color: palette.textMuted }]}>
-              {config.theme.tagline}
-            </Text>
-          ) : null}
         </View>
       )}
 
@@ -190,7 +180,6 @@ const styles = StyleSheet.create({
   hero: { alignSelf: 'stretch', marginHorizontal: -16 },
   heroBar: { alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 28 },
   title: { fontSize: 28, fontWeight: '700', textAlign: 'center' },
-  tagline: { fontSize: 16, textAlign: 'center' },
   cta: { marginTop: 8 },
   list: { alignSelf: 'stretch', gap: 12, maxWidth: 560, width: '100%', marginHorizontal: 'auto' },
   subtitle: { fontSize: 18, fontWeight: '600' },
