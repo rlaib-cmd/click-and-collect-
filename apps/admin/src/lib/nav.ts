@@ -19,6 +19,7 @@ export const NAV: readonly NavItem[] = [
   { href: '/carte', label: t.menu, icon: 'burger', permission: 'menu.pause' },
   { href: '/club', label: t.club, icon: 'gift', permission: 'loyalty' },
   { href: '/codes-promo', label: t.promos, icon: 'tag', permission: 'promos' },
+  { href: '/bons-plans', label: t.proximity, icon: 'phone', permission: 'proximity' },
   { href: '/reglages', label: t.settings, icon: 'store', permission: 'restaurants.settings' },
   { href: '/tableau-de-bord', label: t.dashboard, icon: 'chart', permission: 'dashboard' },
   { href: '/clients', label: t.customers, icon: 'users', permission: 'customers' },
