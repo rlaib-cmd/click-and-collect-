@@ -145,11 +145,34 @@ select cron.schedule('nettoyage-historique-cron', '17 3 * * *',
 
 ## Projet Supabase de production
 
-Créé le 25/11 : `splash360-commande-production`, référence `azenkeuuejwwtbudvwqt`, région Paris
-(eu-west-3). Vide : aucune migration, aucune fonction, aucun secret. À faire, avec accord explicite :
-migrations sans `seed.sql`, fonction `api`, secrets de production (Stripe live, Splash360 par
-restaurant, `DATABASE_POOLER_URL`, `APP_ENV=production`, jamais `OTP_DEBUG_ECHO`), relance de caisse
-et purge, compte super-administrateur, puis back-office et app pointés vers ce projet.
+`splash360-commande-production`, référence `azenkeuuejwwtbudvwqt`, région Paris (eu-west-3), créé
+le 25/11. URL de l'API : `https://azenkeuuejwwtbudvwqt.supabase.co/functions/v1/api`.
+
+### Installé et vérifié le 25/11
+
+- Les 23 migrations de `supabase/migrations/`, versions alignées sur les fichiers
+  (`supabase_migrations.schema_migrations`). **Aucune donnée** : ni `seed.sql`, ni enseigne,
+  ni compte de test. 25 tables, RLS active sur toutes (accès serveur uniquement, ADR 0002).
+- Contrôles Supabase : seulement des signalements « INFO » attendus (tables sans règle d'accès :
+  voulu ; index inutilisés : base vide).
+- Fonction Edge `api` (même code que la recette), `verify_jwt` désactivé (authentification faite
+  par l'API). `GET /health` → 200 ; une enseigne inconnue → 404 propre.
+- Secrets posés : `APP_ENV=production`, `DATABASE_POOLER_HOST` (connexion par le pooler,
+  vérifiée : connexions « Supavisor » uniquement). Les autres (`SUPABASE_*`) sont fournis par
+  Supabase.
+- pg_cron : relance de caisse toutes les 10 s (`/health`) et purge nocturne de son historique
+  (3h17 UTC). Premiers passages réussis.
+
+### Reste à faire, et qui le fournit
+
+| Élément | Qui | Variables / action |
+|---|---|---|
+| Compte super-administrateur | L'utilisateur (accord direct requis) | Compte Supabase Auth à l'adresse du propriétaire + ligne `staff_users` rôle `super_admin` (rattachée au compte par l'e-mail à la première connexion, comme `resolveStaff`). Le propriétaire choisit son mot de passe par le lien « mot de passe oublié » du back-office de production (Supabase Auth, e-mail de réinitialisation) une fois l'URL du site et l'envoi d'e-mails réglés. |
+| Paiement en ligne | L'utilisateur (Stripe) | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` (clés **live**), webhook Connect live → `STRIPE_WEBHOOK_SECRET`, `STRIPE_PAYMENT_DOMAINS`. Sans elles, seul le paiement sur place fonctionne. |
+| Caisse Splash360 | Splash360 (Abdoul) | Accès par restaurant (`SPLASH360_CLIENT_ID`, `SPLASH360_CLIENT_SECRET`, `SPLASH360_API_URL` si différent). |
+| SMS et e-mails | L'utilisateur (Brevo) | `BREVO_API_KEY`, `EMAIL_SENDER`, `EMAIL_SENDER_NAME`, puis `LOYALTY_OTP=1` pour la connexion par code. Jamais `OTP_DEBUG_ECHO` en production. |
+| Back-office et app de production | Équipe projet | Domaines, puis builds pointés vers l'API de production ; `ADMIN_URL` (liens d'invitation et retours Stripe). Jamais `NEXT_PUBLIC_SHOW_TEST_ACCOUNTS` en production. |
+| Supabase Auth | L'utilisateur (tableau de bord) | URL du site et URL de redirection = back-office de production ; protection contre les mots de passe compromis ; SMTP personnalisé (Brevo) pour les e-mails d'invitation et de réinitialisation. |
 
 ## Connexion à la base par le pooler (25/11)
 
