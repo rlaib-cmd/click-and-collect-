@@ -8,7 +8,7 @@ import {
 import type { AmbassadorEntry, AmbassadorStore, TenantWithTheme } from '@splash360/db';
 import type { Context, Hono } from 'hono';
 import { apiError } from '../errors';
-import { verifyMemberToken } from '../loyalty/service';
+import { authenticateMember } from '../loyalty/service';
 
 type Env = { Variables: { tenant: TenantWithTheme } };
 
@@ -19,7 +19,9 @@ export interface AmbassadorRoutesDeps {
 }
 
 const bearer = (c: Context) =>
-  /^Bearer ([0-9a-f-]{36}_[A-Za-z0-9_-]{20,100})$/i.exec(c.req.header('Authorization') ?? '')?.[1];
+  /^Bearer (m2\.[0-9a-f-]{36}\.[0-9a-z]{1,13}\.\d{1,6}\.[A-Za-z0-9_-]{20,100})$/i.exec(
+    c.req.header('Authorization') ?? '',
+  )?.[1];
 
 export const toEntryDto = (e: AmbassadorEntry): AmbassadorEntryDto => ({
   id: e.id,
@@ -52,7 +54,7 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
 
   app.get('/:subdomain/ambassador/entries', async (c) => {
     const tenant = c.get('tenant');
-    const memberId = verifyMemberToken(deps.tokenSecret, tenant.id, bearer(c));
+    const memberId = await authenticateMember(deps, tenant.id, bearer(c));
     if (!memberId || !deps.ambassador)
       return apiError(c, 'unauthorized', 'Connexion au club requise');
     const entries = await deps.ambassador.memberEntries(tenant.id, memberId);
@@ -62,7 +64,7 @@ export function registerAmbassadorRoutes(app: Hono<Env>, deps: AmbassadorRoutesD
 
   app.post('/:subdomain/ambassador/entries', async (c) => {
     const tenant = c.get('tenant');
-    const memberId = verifyMemberToken(deps.tokenSecret, tenant.id, bearer(c));
+    const memberId = await authenticateMember(deps, tenant.id, bearer(c));
     if (!memberId) return apiError(c, 'unauthorized', 'Connexion au club requise');
     const s = await settings(c);
     if (!s || !deps.ambassador || !deps.loyalty)

@@ -1,3 +1,4 @@
+import type { MemberSessionStore } from '@splash360/db';
 import type { LoyaltyMember, LoyaltyProvider, LoyaltyTenant } from '@splash360/api-loyalty';
 import { reservedRewardPoints } from '@splash360/core';
 import {
@@ -14,7 +15,7 @@ import type { OrderingStore, TenantWithTheme } from '@splash360/db';
 import type { Context, Hono } from 'hono';
 import { apiError } from '../errors';
 import { consumeOtp, startOtp, verifyOtp, type OtpDeps } from '../loyalty/otp';
-import { memberToken, memberView, verifyMemberToken } from '../loyalty/service';
+import { authenticateMember, memberToken, memberView } from '../loyalty/service';
 import { orderAccessToken } from '../payments/tokens';
 
 export interface LoyaltyRoutesDeps {
@@ -24,6 +25,8 @@ export interface LoyaltyRoutesDeps {
   readonly loyaltyDemoLogin?: boolean | undefined;
   /** Connexion par code SMS ou e-mail (lot 10, ADR 0012) ; absent = désactivée. */
   readonly otp?: OtpDeps | undefined;
+  /** Version de session des membres (audit M4). */
+  readonly memberSessions?: MemberSessionStore | undefined;
 }
 
 /** Commandes en cours avec cadeau : leurs points sont réservés (ADR 0013). */
@@ -41,7 +44,9 @@ const asLoyaltyTenant = (t: TenantWithTheme): LoyaltyTenant => ({
 
 /** Lit « Authorization: Bearer <jeton de membre> ». */
 const bearerMember = (c: Context) =>
-  /^Bearer ([0-9a-f-]{36}_[A-Za-z0-9_-]{20,100})$/i.exec(c.req.header('Authorization') ?? '')?.[1];
+  /^Bearer (m2\.[0-9a-f-]{36}\.[0-9a-z]{1,13}\.\d{1,6}\.[A-Za-z0-9_-]{20,100})$/i.exec(
+    c.req.header('Authorization') ?? '',
+  )?.[1];
 
 /** Club fidélité de l'enseigne (lot 8), monté sous /v1/tenants/:subdomain. */
 export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & ReservationDeps) {
@@ -71,13 +76,26 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
     );
   }
 
-  async function session(c: Context<Env>, memberId: string, created: boolean) {
+  /**
+   * Session du membre. `confirmed` : connexion prouvée par code (SMS ou e-mail) : nouvelle version
+   * de session, les jetons précédents (par exemple d'une adhésion frauduleuse) sont révoqués.
+   */
+  async function session(c: Context<Env>, memberId: string, created: boolean, confirmed = false) {
     const ctx = await context(c);
     if (!ctx) return apiError(c, 'not_found', 'Pas de club fidélité');
     const member = await ctx.provider.getMember(ctx.tenant, memberId);
     if (!member) return apiError(c, 'not_found', 'Compte fidélité introuvable');
+    const sessions = deps.memberSessions;
+    const version = sessions
+      ? confirmed
+        ? await sessions.bump(ctx.tenant.id, member.id)
+        : await sessions.current(ctx.tenant.id, member.id)
+      : 0;
     const body: LoyaltySession = {
-      memberToken: memberToken(deps.tokenSecret, ctx.tenant.id, member.id),
+      memberToken: memberToken(deps.tokenSecret, ctx.tenant.id, member.id, {
+        now: deps.now?.() ?? new Date(),
+        version,
+      }),
       member: await view(ctx, member),
     };
     c.header('Cache-Control', 'no-store');
@@ -183,7 +201,7 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
       if (!(await consumeOtp(otp, v.challengeId))) {
         return apiError(c, 'otp_expired', 'Code déjà utilisé : demande un nouveau code');
       }
-      return session(c, existing.id, false);
+      return session(c, existing.id, false, true);
     }
     // Pas encore de compte : le code reste valable un moment pour donner son prénom.
     if (!name || !acceptedTerms) {
@@ -198,11 +216,11 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
       phone: channel === 'sms' ? v.identifier : null,
       email: channel === 'email' ? v.identifier : null,
     });
-    return session(c, member.id, created);
+    return session(c, member.id, created, true);
   });
 
   app.get('/:subdomain/loyalty/me', async (c) => {
-    const memberId = verifyMemberToken(deps.tokenSecret, c.get('tenant').id, bearerMember(c));
+    const memberId = await authenticateMember(deps, c.get('tenant').id, bearerMember(c));
     if (!memberId) return apiError(c, 'unauthorized', 'Session fidélité invalide');
     const ctx = await context(c);
     if (!ctx) return apiError(c, 'not_found', 'Pas de club fidélité');
@@ -215,7 +233,7 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
   /** Historique « Mes commandes » (lot 11) : uniquement les commandes du membre connecté. */
   app.get('/:subdomain/loyalty/me/orders', async (c) => {
     const tenant = c.get('tenant');
-    const memberId = verifyMemberToken(deps.tokenSecret, tenant.id, bearerMember(c));
+    const memberId = await authenticateMember(deps, tenant.id, bearerMember(c));
     if (!memberId) return apiError(c, 'unauthorized', 'Session fidélité invalide');
     if (!deps.ordering) return apiError(c, 'not_found', 'Historique indisponible');
     const before = Number(c.req.query('before'));

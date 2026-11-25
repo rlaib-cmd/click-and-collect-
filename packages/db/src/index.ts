@@ -10,3 +10,4 @@ export * from './otp';
 export * from './promos';
 export * from './pos';
 export * from './ambassador';
+export * from './member-sessions';

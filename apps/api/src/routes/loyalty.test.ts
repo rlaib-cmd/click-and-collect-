@@ -31,14 +31,14 @@ const programs = new Map<string, LoyaltyProgram>([
   ],
 ]);
 
-function setup(demoLogin = true) {
+function setup(demoLogin = true, now?: () => Date) {
   let n = 0;
   const loyalty = createDemoLoyaltyProvider(
     createMemoryDemoLoyaltyStore(),
     () => `carte-${++n}-0000-0000-0000`,
     programs,
   );
-  return testSetup({ loyalty, loyaltyDemoLogin: demoLogin });
+  return testSetup({ loyalty, loyaltyDemoLogin: demoLogin, ...(now ? { now } : {}) });
 }
 
 const json = { 'Content-Type': 'application/json' };
@@ -119,6 +119,21 @@ describe('club fidélité', () => {
         })
       ).status,
     ).toBe(401);
+  });
+
+  it('le jeton de membre expire au bout de 90 jours (audit M4)', async () => {
+    let clock = new Date('2026-11-25T10:00:00Z');
+    const s = setup(true, () => clock);
+    const session = await join(s, 'm4@example.fr');
+    const me = () =>
+      s.app.request(`${base}/loyalty/me`, {
+        headers: { Authorization: `Bearer ${session.memberToken}` },
+      });
+    expect((await me()).status).toBe(200);
+    clock = new Date(clock.getTime() + 89 * 24 * 3600 * 1000);
+    expect((await me()).status).toBe(200);
+    clock = new Date(clock.getTime() + 2 * 24 * 3600 * 1000);
+    expect((await me()).status).toBe(401);
   });
 
   it('connexion par e-mail seulement avec les données de test', async () => {

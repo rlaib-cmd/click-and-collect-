@@ -23,7 +23,7 @@ import {
   type Totals,
 } from '@splash360/core';
 import type { OrderingConfig, OrderingStore, Restaurant } from '@splash360/db';
-import { verifyMemberToken, type LoyaltyDeps } from '../loyalty/service';
+import { authenticateMember, type LoyaltyDeps } from '../loyalty/service';
 
 export interface OrderingDeps extends LoyaltyDeps {
   readonly ordering: OrderingStore;
@@ -227,7 +227,7 @@ export async function quote(
   let loyalty: Extract<QuoteResult, { ok: true }>['loyalty'] = null;
   let loyaltyProgram: { readonly pointsPerEuro: number } | null = null;
   if (request.loyalty && tenant && deps.loyalty) {
-    const memberId = verifyMemberToken(deps.tokenSecret, tenant.id, request.loyalty.memberToken);
+    const memberId = await authenticateMember(deps, tenant.id, request.loyalty.memberToken);
     const [program, member] = await Promise.all([
       deps.loyalty.getProgram(tenant),
       memberId ? deps.loyalty.getMember(tenant, memberId) : Promise.resolve(null),

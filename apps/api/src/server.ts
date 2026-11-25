@@ -24,6 +24,7 @@ import {
   createPostgresTenantStore,
   createSql,
   createPostgresOtpStore,
+  createPostgresMemberSessionStore,
 } from '@splash360/db';
 import { createSupabaseVerifier } from './admin/auth';
 import { createSupabaseAssetStorage } from './admin/logo';
@@ -147,6 +148,7 @@ const app = createApp({
   ...(env.LOYALTY === 'demo'
     ? {
         loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
+        memberSessions: createPostgresMemberSessionStore(sql),
         loyaltyDemoLogin: env.LOYALTY_DEMO_LOGIN === '1' && env.APP_ENV !== 'production',
         ...(env.LOYALTY_OTP === '1'
           ? {

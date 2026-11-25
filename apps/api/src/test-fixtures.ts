@@ -9,6 +9,7 @@ import {
   type Restaurant,
   type RestaurantSettingsRecord,
   type TenantWithTheme,
+  createMemoryMemberSessionStore,
 } from '@splash360/db';
 import { SignJWT } from 'jose';
 import { createSupabaseVerifier } from './admin/auth';
@@ -239,6 +240,7 @@ export function testSetup(overrides: Partial<AppDeps> = {}) {
     notifier: notifications.sender,
     posWebhookSecret: POS_SECRET,
     geo: createDemoGeoProvider(),
+    memberSessions: createMemoryMemberSessionStore(),
     now: () => NOW,
     ...overrides,
   };

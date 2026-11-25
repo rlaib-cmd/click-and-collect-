@@ -165,6 +165,38 @@ describe('connexion par code (lot 10)', () => {
     expect(loyaltySessionSchema.parse(await login.json()).member.name).toBe('Lou');
   });
 
+  it('une nouvelle connexion par code révoque les jetons précédents (audit M4)', async () => {
+    const s = setup();
+    await post(s, '/loyalty/otp/start', { channel: 'sms', identifier: '0600000003' });
+    const first = loyaltySessionSchema.parse(
+      await (
+        await post(s, '/loyalty/otp/verify', {
+          channel: 'sms',
+          identifier: '0600000003',
+          code: s.lastCode(),
+          name: 'Noé',
+          acceptedTerms: true,
+        })
+      ).json(),
+    );
+    const me = (token: string) =>
+      s.app.request(`${base}/loyalty/me`, { headers: { Authorization: `Bearer ${token}` } });
+    expect((await me(first.memberToken)).status).toBe(200);
+    s.advance(61_000);
+    await post(s, '/loyalty/otp/start', { channel: 'sms', identifier: '0600000003' });
+    const second = loyaltySessionSchema.parse(
+      await (
+        await post(s, '/loyalty/otp/verify', {
+          channel: 'sms',
+          identifier: '0600000003',
+          code: s.lastCode(),
+        })
+      ).json(),
+    );
+    expect((await me(second.memberToken)).status).toBe(200);
+    expect((await me(first.memberToken)).status).toBe(401);
+  });
+
   it('refuse un mauvais code, puis bloque le code après 5 essais', async () => {
     const s = setup();
     await post(s, '/loyalty/otp/start', { channel: 'sms', identifier: '0600000003' });

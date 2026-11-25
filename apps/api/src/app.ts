@@ -1,3 +1,4 @@
+import type { MemberSessionStore } from '@splash360/db';
 import type { LoyaltyProvider } from '@splash360/api-loyalty';
 import type { AuthInviter } from './admin/invite';
 import type { MenuCache } from '@splash360/api-menu';
@@ -86,6 +87,8 @@ export interface AppDeps {
   readonly clientIpHeader?: string;
   /** Club fidélité Splash360 (lot 8) ; absent = pas de fidélité. */
   readonly loyalty?: LoyaltyProvider;
+  /** Version de session des membres du club (audit M4). */
+  readonly memberSessions?: MemberSessionStore;
   /** Ambassadeur (lot 15, ADR 0019) ; absent = fonction désactivée. */
   readonly ambassador?: AmbassadorStore;
   /** Connexion au club par simple e-mail : données de test uniquement (ADR 0009). */

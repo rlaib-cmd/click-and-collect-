@@ -33,6 +33,7 @@ import {
   createPostgresTenantStore,
   createSql,
   createPostgresOtpStore,
+  createPostgresMemberSessionStore,
 } from '@splash360/db';
 import { Hono } from 'hono';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
@@ -221,6 +222,7 @@ function build() {
     tokenSecret,
     // Aperçu : fidélité de test, connexion par e-mail (ADR 0009).
     loyalty: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
+    memberSessions: createPostgresMemberSessionStore(sql),
     // Connexion de démonstration sans code : seulement si demandée explicitement, hors production
     // (désactivée par défaut, audit du 25/11).
     loyaltyDemoLogin: env('LOYALTY_DEMO_LOGIN') === '1' && appEnv !== 'production',
