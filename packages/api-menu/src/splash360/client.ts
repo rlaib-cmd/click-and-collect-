@@ -34,6 +34,8 @@ export interface Splash360Credentials {
    */
   readonly menuClientId?: string;
   readonly menuClientSecret?: string;
+  /** URL du jeton pour ces identifiants de carte (défaut : celle des identifiants principaux). */
+  readonly menuTokenUrl?: string;
   readonly ordersClientSecret?: string;
   /** Serveur de l'export des ventes (défaut https://api2.splash360.fr). */
   readonly ordersBaseUrl?: string;
@@ -269,13 +271,17 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
     reset(): void;
   }
 
-  function tokenSource(clientId: string, clientSecret: string): TokenSource {
+  function tokenSource(
+    clientId: string,
+    clientSecret: string,
+    url: string = tokenUrl,
+  ): TokenSource {
     let token: { value: string; expiresAt: number } | null = null;
     let pending: Promise<string> | null = null;
 
     async function fetchToken(): Promise<string> {
       const basic = btoa(`${clientId}:${clientSecret}`);
-      const res = await call(clientId, tokenUrl, {
+      const res = await call(clientId, url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -324,7 +330,24 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
   const menuClientId = options.menuClientId?.trim();
   const menuClientSecret = options.menuClientSecret?.trim();
   const menuToken =
-    menuClientId && menuClientSecret ? tokenSource(menuClientId, menuClientSecret) : mainToken;
+    menuClientId && menuClientSecret
+      ? tokenSource(menuClientId, menuClientSecret, options.menuTokenUrl?.trim() || tokenUrl)
+      : mainToken;
+  /**
+   * Lecture de la carte : identifiants dédiés s'ils sont posés ; si Splash360 les refuse
+   * (jeton 400/401), repli sur les identifiants principaux pour que la carte reste servie.
+   */
+  async function menuCall(path: string): Promise<unknown> {
+    if (menuToken === mainToken) return authorized(path, {}, mainToken);
+    try {
+      return await authorized(path, {}, menuToken);
+    } catch (error) {
+      const refused =
+        error instanceof Splash360Error && (error.status === 400 || error.status === 401);
+      if (!refused) throw error;
+      return authorized(path, {}, mainToken);
+    }
+  }
   const ordersBase = (options.ordersBaseUrl?.trim() || SPLASH360_DEFAULT_ORDERS_URL).replace(
     /\/+$/,
     '',
@@ -377,12 +400,12 @@ export function createSplash360Client(options: Splash360ClientOptions): Splash36
   }
 
   return {
-    getMenus: () => authorized(menuPath, {}, menuToken),
+    getMenus: () => menuCall(menuPath),
     getMenusAt: (path) => {
       if (!/^\/api\/export\/[a-z0-9/_-]+$/i.test(path)) {
         return Promise.reject(new Splash360Error('Chemin de carte refusé', null, false));
       }
-      return authorized(path, {}, menuToken);
+      return menuCall(path);
     },
 
     async submitCommande(commande) {
@@ -451,6 +474,7 @@ export function splash360CredentialsFrom(
   const ordersBaseUrl = optional('SPLASH360_ORDERS_API_URL');
   const menuClientId = optional('SPLASH360_MENU_CLIENT_ID');
   const menuClientSecret = optional('SPLASH360_MENU_CLIENT_SECRET');
+  const menuTokenUrl = optional('SPLASH360_MENU_TOKEN_URL');
   return {
     baseUrl: optional('SPLASH360_API_URL') ?? 'https://api.splash360.fr',
     clientId,
@@ -461,5 +485,6 @@ export function splash360CredentialsFrom(
     ...(ordersClientId && ordersClientSecret ? { ordersClientId, ordersClientSecret } : {}),
     ...(ordersBaseUrl ? { ordersBaseUrl } : {}),
     ...(menuClientId && menuClientSecret ? { menuClientId, menuClientSecret } : {}),
+    ...(menuTokenUrl ? { menuTokenUrl } : {}),
   };
 }
