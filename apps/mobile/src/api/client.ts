@@ -80,3 +80,27 @@ export function apiPatch<T extends z.ZodType>(
     fetchImpl,
   );
 }
+
+/**
+ * Appel authentifié quelconque (cartes enregistrées, lot 18). Pour une réponse vide (204),
+ * passer `z.null()` comme schéma.
+ */
+export function apiSend<T extends z.ZodType>(
+  method: 'POST' | 'DELETE',
+  path: string,
+  schema: T,
+  headers: Record<string, string>,
+  body?: unknown,
+  fetchImpl: typeof fetch = fetch,
+) {
+  return request(
+    path,
+    schema,
+    {
+      method,
+      headers: body === undefined ? headers : { 'Content-Type': 'application/json', ...headers },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    },
+    fetchImpl,
+  );
+}

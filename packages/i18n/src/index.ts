@@ -223,6 +223,37 @@ export const fr = {
     showQr: 'Afficher le QR code',
     follow: 'Suivre ma commande',
   },
+  /** Cartes bancaires enregistrées (lot 18, ADR 0023). */
+  cards: {
+    title: 'Mes cartes',
+    empty: 'Aucune carte enregistrée pour le moment.',
+    emptyHint: 'Enregistre ta carte pour payer tes prochaines commandes en un geste.',
+    loginNeeded: 'Connecte-toi au club pour enregistrer une carte et payer plus vite.',
+    add: 'Ajouter une carte',
+    save: 'Enregistrer la carte',
+    saving: 'Enregistrement…',
+    enterCard: 'Saisir ma carte',
+    cancel: 'Annuler',
+    added: 'Carte enregistrée.',
+    addFailed: 'La carte n’a pas pu être enregistrée. Vérifie les informations saisies.',
+    unavailable: 'L’enregistrement de carte est momentanément indisponible.',
+    consent:
+      'En enregistrant ta carte, tu autorises l’enseigne à la débiter pour tes prochaines commandes, seulement quand tu le demandes. Tu peux la supprimer à tout moment.',
+    expires: (month: number, year: number) =>
+      `Expire fin ${String(month).padStart(2, '0')}/${String(year).slice(-2)}`,
+    default: 'Par défaut',
+    makeDefault: 'Utiliser par défaut',
+    remove: 'Supprimer',
+    removeConfirm: (label: string) => `Supprimer la carte ${label} ?`,
+    error: 'Action impossible pour le moment. Réessaie.',
+    secure:
+      'Cartes conservées par Stripe : seuls la marque et les 4 derniers chiffres sont affichés.',
+    /** Paiement d'une commande. */
+    payWith: (label: string) => `Payer avec ${label}`,
+    paying: 'Paiement en cours…',
+    otherMethod: 'ou un autre moyen de paiement',
+    declined: 'Paiement refusé avec cette carte. Choisis une autre carte ou un autre moyen.',
+  },
   reorder: {
     title: 'Commander comme la dernière fois',
     action: 'Recommander',
@@ -263,9 +294,6 @@ export const fr = {
     reorder: 'Recommander',
     track: 'Suivre',
     orderLine: (n: number, date: string) => `Commande n° ${n} · ${date}`,
-    paymentsSoonTitle: 'Bientôt : tes cartes enregistrées',
-    paymentsSoon:
-      'Tu pourras enregistrer ta carte pour payer en un geste dès que le paiement en ligne sera activé dans ton restaurant. En attendant, tu paies sur place.',
     memberSince: 'Membre du club',
   },
   tabs: {

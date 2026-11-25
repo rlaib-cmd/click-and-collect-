@@ -19,6 +19,7 @@ import { formatTime } from '@/lib/dates';
 import { formatPrice } from '@/lib/format';
 import { findSavedOrder } from '@/orders/storage';
 import { PaymentForm } from '@/payments/PaymentForm';
+import { SavedCardPay } from '@/payments/SavedCardPay';
 import { titleStyle } from '@/components/brand';
 import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { useTenant } from '@/tenant/TenantProvider';
@@ -252,6 +253,7 @@ function PaymentSection({
           {messages.payment.failed}
         </Text>
       ) : null}
+      <SavedCardPay orderId={orderId} orderToken={token} onConfirmed={() => setConfirmed(true)} />
       <PaymentForm
         session={data}
         merchantName={merchantName}
