@@ -136,8 +136,17 @@ export function createPostgresPaymentStore(sql: Sql): PaymentStore {
         if (o.total_cents !== amountCents || o.currency.toLowerCase() !== currency.toLowerCase()) {
           return { ok: false as const, error: 'amount_mismatch' as const };
         }
-        // Un paiement réussi rattrape aussi une commande expirée entre-temps (le client a bien payé).
-        if (!['pending_payment', 'payment_failed', 'cancelled'].includes(o.status)) {
+        // Un paiement réussi rattrape une commande expirée entre-temps (le client a bien payé), mais
+        // jamais une commande annulée par l'équipe ou la caisse : elle ne redevient pas « payée »
+        // si Stripe renvoie l'avis plus tard (audit du 25/11).
+        let catchUp = ['pending_payment', 'payment_failed'].includes(o.status);
+        if (o.status === 'cancelled') {
+          const [last] = await tx<{ actor: string; reason: string | null }[]>`
+            select actor, detail->>'reason' as reason from public.order_events
+            where order_id = ${o.id} and status = 'cancelled' order by created_at desc limit 1`;
+          catchUp = last?.actor === 'system' && last.reason === 'payment_timeout';
+        }
+        if (!catchUp) {
           return { ok: true as const, orderId: o.id, tenantId: o.tenant_id, changed: false };
         }
         await tx`update public.orders set status = 'paid', paid_at = now() where id = ${o.id}`;

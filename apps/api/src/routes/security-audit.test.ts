@@ -73,3 +73,12 @@ describe('M1 : rattachement seulement pour une adresse confirmée', () => {
     expect(confirmed.status).toBe(200);
   });
 });
+
+describe('Divers', () => {
+  it('répond 400 à un X-Tenant-Id mal formé, sans erreur serveur', async () => {
+    const setup = testSetup();
+    const headers = { ...(await as('admin@splash360.test')), 'X-Tenant-Id': 'pas-un-uuid' };
+    const res = await setup.app.request('/v1/admin/me', { headers });
+    expect(res.status).toBe(400);
+  });
+});

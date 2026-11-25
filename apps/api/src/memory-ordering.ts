@@ -247,7 +247,11 @@ export function createMemoryOrderBackend(
       if (!o) return Promise.resolve({ ok: false, error: 'unknown_payment' });
       if (o.totals.totalCents !== amount || currency.toLowerCase() !== 'eur')
         return Promise.resolve({ ok: false, error: 'amount_mismatch' });
-      if (!['pending_payment', 'payment_failed', 'cancelled'].includes(o.status)) {
+      const lastCancel = [...o.events].reverse().find((e) => e.status === 'cancelled');
+      const catchUp =
+        ['pending_payment', 'payment_failed'].includes(o.status) ||
+        (o.status === 'cancelled' && lastCancel?.actor === 'system'); // expiration seulement
+      if (!catchUp) {
         return Promise.resolve({ ok: true, orderId: o.id, tenantId: o.tenantId, changed: false });
       }
       o.status = 'paid';

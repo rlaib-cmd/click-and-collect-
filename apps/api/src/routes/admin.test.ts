@@ -359,6 +359,19 @@ describe('clients, équipe et enseignes', () => {
     expect(setup.admin.audit.at(-1)?.action).toBe('customers.export');
   });
 
+  it('neutralise aussi une tabulation en tête de cellule (audit du 25/11)', async () => {
+    const setup = testSetup();
+    await paidOrder(setup);
+    const first = setup.backend.orders[0];
+    if (first) Object.assign(first, { customer: { ...first.customer, name: '\t=1+1' } });
+    const csv = await (
+      await setup.app.request('/v1/admin/customers/export', {
+        headers: await as('gerant@bella.test'),
+      })
+    ).text();
+    expect(csv).toContain(`'\t=1+1`);
+  });
+
   it('invite un équipier rattaché à un restaurant', async () => {
     const setup = testSetup();
     const headers = await as('gerant@bella.test');

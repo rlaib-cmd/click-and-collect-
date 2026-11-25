@@ -700,7 +700,8 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     const esc = (v: string | number | boolean | null) => {
       const s = v === null ? '' : String(v);
       // Neutralise les formules à l'ouverture dans un tableur.
-      const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
+      // Injection de formule : =, +, -, @, mais aussi tabulation et retour chariot en tête (audit).
+      const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
       return /[";\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
     };
     const csv = [

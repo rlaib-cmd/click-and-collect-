@@ -143,6 +143,19 @@ describe.skipIf(!url)('PaymentStore Postgres', () => {
       changed: true,
     });
   });
+
+  it('ne repasse pas à « payée » une commande annulée par l’équipe (avis Stripe tardif)', async () => {
+    const id = await newOrder('d');
+    await payments.attachPaymentIntent(BELLA, id, `pi_${run}_d`);
+    await sql`update public.orders set status = 'cancelled' where id = ${id}`;
+    await sql`insert into public.order_events (tenant_id, order_id, status, actor)
+              values (${BELLA}, ${id}, 'cancelled', 'admin:equipe')`;
+    expect(await payments.markPaid(`pi_${run}_d`, 1300, 'eur')).toMatchObject({
+      ok: true,
+      changed: false,
+    });
+    expect((await payments.getOrder(BELLA, id))?.status).toBe('cancelled');
+  });
 });
 
 describe.skipIf(!url)('OrderReader Postgres', () => {

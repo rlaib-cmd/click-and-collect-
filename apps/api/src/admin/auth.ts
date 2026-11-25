@@ -104,6 +104,12 @@ export function requireStaff(deps: {
       return apiError(c, 'forbidden', "Ce compte n'a pas accès au back-office");
 
     const wanted = c.req.header('X-Tenant-Id') ?? null;
+    // Identifiant d'enseigne mal formé : 400 au lieu d'une erreur SQL (audit du 25/11).
+    if (
+      wanted !== null &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(wanted)
+    )
+      return apiError(c, 'invalid_request', 'Enseigne invalide');
     const superAdmin = memberships.find((m) => m.role === 'super_admin');
     let staff: StaffUser;
     let tenantId: string | null;
