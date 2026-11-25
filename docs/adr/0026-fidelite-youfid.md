@@ -44,9 +44,16 @@ en clair.
   échec. Délai de 10 s par appel. Le statut est toujours lu dans le corps (`ok`, `ko`,
   `success`, `error`), quel que soit le statut HTTP.
 
+### Routes utilisées
+
+Consigne de Splash360 (26/11) : n'utiliser que les routes nécessaires. Le client
+(`youfid/client.ts`) n'implémente que les routes **1, 2, 3, 5, 6, 7, 10 et 12** ; un test vérifie
+qu'il n'en expose pas d'autre. La question de profil en attente, nécessaire à la route 12, est lue
+sur la route 3 (`profile_question`, recherche par QR code) et non plus sur la route 11.
+
 ### Données personnelles
 
-- Le PIN client (routes 3, 5, 14) est retiré à la lecture : les schémas ne le déclarent pas. Il
+- Le PIN client (routes 3 et 5) est retiré à la lecture : les schémas ne le déclarent pas. Il
   n'est ni stocké, ni journalisé, ni renvoyé. Notre produit n'utilise pas de code PIN (décision du
   25/11) ; la route 13 n'est pas implémentée.
 - Aucun corps de requête ou de réponse n'est journalisé ; journaux et registre ne contiennent que
@@ -123,8 +130,9 @@ en clair.
 
 ### Hors périmètre
 
-- Bons de réduction (routes 14 et 15) et consentement SMS (route 11) : fonctions du client
-  écrites et testées, non branchées dans le parcours (étape suivante : bon au paiement).
+- Bons de réduction (routes 14 et 15) et consentement SMS (route 11) : non implémentés. Splash360
+  a demandé (26/11) de n'utiliser que les routes nécessaires, certaines étant réservées au
+  marchand ; les fonctions du client écrites au lot 21 ont été retirées.
 - Remboursement d'une commande : pas de retrait de points possible chez YouFID.
 
 ## Conséquences

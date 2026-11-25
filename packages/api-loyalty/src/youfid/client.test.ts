@@ -149,18 +149,25 @@ describe('client YouFID', () => {
     await expect(client.merchantDetails()).rejects.toMatchObject({ kind: 'api', code: 'ERR0404' });
   });
 
-  it('accepte « success » pour les routes 12, 14 et 15', async () => {
+  it('accepte « success » pour la route 12', async () => {
     const { fake, client } = setup();
     const c = fake.addCustomer({ phone: '+33611111111' });
     await client.submitProfileResponse(String(c.usrId), { id: '7', type: 'NAME' }, 'Léa');
     expect(c.prenom).toBe('Léa');
-    const v = await client.checkVoucher('BIENVENUE');
-    expect(v).toMatchObject({ code: 'BIENVENUE', type: 'OPEN', percentage: false, value: 5 });
-    expect(JSON.stringify(v)).not.toContain(FAKE_PIN);
-    const burn = await client.burnVoucher('BIENVENUE', String(c.usrId), 2350);
-    expect(burn).toEqual({ useId: '77', useCount: 1 });
-    expect(fake.calls.at(-1)?.raw).toContain('"basket_total":23.5');
-    await expect(client.checkVoucher('EXPIRE')).rejects.toMatchObject({ code: 'voucher-expired' });
+  });
+
+  it('n’expose que les routes utilisées (1, 2, 3, 5, 6, 7, 10, 12)', () => {
+    const { client } = setup();
+    expect(Object.keys(client).sort()).toEqual([
+      'findCustomer',
+      'listUsers',
+      'merchantDetails',
+      'registerByPhone',
+      'scan',
+      'session',
+      'submitProfileResponse',
+      'transformToPresent',
+    ]);
   });
 
   it('retire le PIN client des réponses (routes 3 et 5)', async () => {
@@ -202,7 +209,7 @@ describe('client YouFID', () => {
     expect(again).toMatchObject({ existing: true, usrId: created.usrId, qrCode: created.qrCode });
   });
 
-  it('cadeaux (route 2) triés du moins cher, recherche (route 7), consentement (route 11)', async () => {
+  it('cadeaux (route 2) triés du moins cher, recherche (route 7), question de profil (route 3)', async () => {
     const { fake, client } = setup();
     const details = await client.merchantDetails();
     expect(details.products.map((p) => [p.id, p.cost])).toEqual([
@@ -222,9 +229,11 @@ describe('client YouFID', () => {
         qrCode: c.qrCode,
       },
     ]);
-    const optin = await client.smsOptin(String(c.usrId), true);
-    expect(optin.smsOptin).toBe(true);
-    expect(optin.profileQuestion).toEqual({ id: '8', type: 'EMAIL' });
+    const found = await client.findCustomer({ qrCode: c.qrCode });
+    expect(found?.profileQuestion).toBeNull();
+    const fresh = fake.addCustomer({ phone: '+33655555556', email: null });
+    const pending = await client.findCustomer({ qrCode: fresh.qrCode });
+    expect(pending?.profileQuestion).toEqual({ id: '8', type: 'EMAIL' });
     const t = await client.transformToPresent(String(c.usrId), []);
     expect(t.totalPoints).toBe(0);
   });

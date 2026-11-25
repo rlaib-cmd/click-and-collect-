@@ -48,6 +48,7 @@ sous-domaine (`chickenstreet`), posé en recette par le propriétaire ; URL de l
 - Réponses de Splash360 (questions Y3 à Y18 de `questions-en-attente.md`), en particulier
   l'idempotence de la route 5, la limite de passages par jour, le format du téléphone et un
   compte marchand de test.
-- Bons de réduction au paiement (routes 14 et 15) et consentement SMS (route 11) : fonctions
-  prêtes, parcours à construire.
+- Bons de réduction au paiement (routes 14 et 15) et consentement SMS (route 11) : retirés du
+  client le 26/11 (Splash360 : n'utiliser que les routes nécessaires ; routes utilisées 1, 2, 3, 5,
+  6, 7, 10, 12).
 - Remboursement d'une commande : pas de retrait de points possible chez YouFID.

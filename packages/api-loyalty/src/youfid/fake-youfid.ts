@@ -4,7 +4,8 @@ import { createHmac } from 'node:crypto';
  * Faux serveur YouFID pour les tests (fetch injecté). Il applique les règles de la documentation :
  * signature HMAC-SHA256 sur corps + fid_client_id + nonce + timestamp, nonce à usage unique,
  * horodatage à ±300 s, fid_client_id = merchant_id du corps, ERR0401 en HTTP 200, statuts
- * « success » des routes 12, 14 et 15, PIN client renvoyé en clair par les routes 3, 5 et 14.
+ * « success » de la route 12, PIN client renvoyé en clair par les routes 3 et 5. Seules les routes
+ * utilisées par l'application sont simulées (1, 2, 3, 5, 6, 7, 10, 12).
  */
 export interface FakeCustomer {
   usrId: number;
@@ -89,7 +90,12 @@ export function createFakeYoufid(options: { now: () => number }) {
       is_pin_active: true,
       pin_code: c.pin,
       sms_optin: null,
-      profile_question: { id: 7, type: 'NAME', name: 'name', label: 'Prénom', rank: 1 },
+      // Prochaine question de profil en attente (route 3), comme la tablette.
+      profile_question: !c.prenom
+        ? { id: 7, type: 'NAME', name: 'name', label: 'Prénom', rank: 1 }
+        : !c.email
+          ? { id: 8, type: 'EMAIL', name: 'email', label: 'E-mail', rank: 2 }
+          : null,
       total_points: c.points,
       gifts: [],
     };
@@ -215,19 +221,6 @@ export function createFakeYoufid(options: { now: () => number }) {
         profile_question: { id: 7, type: 'NAME', name: 'name', label: 'Prénom', rank: 1 },
       });
     },
-    customerGetOrUpdateSmsOptin(b) {
-      const c = byId(b.user_id);
-      if (!c) return err('User not found');
-      return ok({
-        usr_id: c.usrId,
-        merchant_id: FAKE_MERCHANT_ID,
-        qr_code: c.qrCode,
-        phone: c.phone,
-        sms_optin: typeof b.sms_optin === 'boolean' ? b.sms_optin : null,
-        message: typeof b.sms_optin === 'boolean' ? 'Update Success' : 'Read Success',
-        profile_question: { id: 8, type: 'EMAIL', name: 'email', label: 'E-mail', rank: 2 },
-      });
-    },
     customerSubmitResponse(b) {
       const c = byId(b.user_id);
       if (!c) return { json: { status: 'error', message: 'User not found' } };
@@ -237,47 +230,6 @@ export function createFakeYoufid(options: { now: () => number }) {
       if (q.type === 'EMAIL') c.email = String(b.response);
       return { json: { status: 'success', message: 'OK' } };
     },
-    checkCustomerVoucher(b) {
-      if (b.voucher === 'EXPIRE') {
-        return { json: { status: 'error', code: 'voucher-expired', message: 'Expired' } };
-      }
-      return {
-        json: {
-          status: 'success',
-          data: {
-            voucher: {
-              id: 5,
-              code: b.voucher,
-              voucher_type: 'OPEN',
-              percentage: false,
-              value: '5.00',
-              basket_minimum: '20.00',
-              activation_date: '2026-11-01',
-              expiry_date: '2026-12-31',
-              use_count: 0,
-              total_max_use: 10,
-              customer_max_use: 1,
-              products: [],
-            },
-            user: { usr_id: 101, pin_code: FAKE_PIN, phone: '0600000000' },
-          },
-        },
-      };
-    },
-    burnCustomerVoucher: (b) => ({
-      json: {
-        status: 'success',
-        data: {
-          id: 77,
-          voucher_id: 5,
-          marchand_id: FAKE_MERCHANT_ID,
-          mobileuser_id: b.user_id,
-          created_at: '2026-11-25 12:00:00',
-          use_count: 1,
-          basket_amount: b.basket_total,
-        },
-      },
-    }),
   };
 
   const fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {

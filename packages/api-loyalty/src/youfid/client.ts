@@ -9,10 +9,13 @@ import { decodeSessionKey, youfidAuthorization } from './signature';
  * est toujours lue par son champ `status` (« ok »/« success » ou « error »/« ko »), quel que
  * soit le statut HTTP.
  *
- * Données sensibles : les routes 3, 5 et 14 renvoient le code PIN du client en clair. Les
- * schémas ci-dessous ne gardent que les champs déclarés : le PIN (et la fiche `data.user` de la
- * route 14) est retiré à la lecture et n'existe dans aucun objet renvoyé. Aucun corps de requête
- * ou de réponse n'est journalisé. La route 13 (code PIN) n'est pas implémentée (faille signalée).
+ * Routes utilisées, et elles seules (consigne de Splash360 : certaines routes sont réservées au
+ * marchand) : 1, 2, 3, 5, 6, 7, 10 et 12. Les routes 11 (consentement SMS), 13 (code PIN),
+ * 14 et 15 (bons) ne sont pas implémentées.
+ *
+ * Données sensibles : les routes 3 et 5 renvoient le code PIN du client en clair. Les schémas
+ * ci-dessous ne gardent que les champs déclarés : le PIN est retiré à la lecture et n'existe dans
+ * aucun objet renvoyé. Aucun corps de requête ou de réponse n'est journalisé.
  */
 export const YOUFID_DEFAULT_BASE_URL = 'https://api-loyalty.splash360.fr/dev/service/';
 
@@ -80,15 +83,6 @@ const int = z
       .string()
       .trim()
       .regex(/^-?\d+$/),
-  ])
-  .transform((v) => Number(v));
-const num = z
-  .union([
-    z.number(),
-    z
-      .string()
-      .trim()
-      .regex(/^-?\d+(?:\.\d+)?$/),
   ])
   .transform((v) => Number(v));
 const id = z.union([z.number(), z.string().min(1)]).transform((v) => String(v));
@@ -197,43 +191,6 @@ const registerResponse = z.object({
   profile_question: profileQuestion,
 });
 
-const smsOptinResponse = z.object({
-  usr_id: id.nullish(),
-  sms_optin: optin,
-  message: text,
-  profile_question: profileQuestion,
-});
-
-const voucherCheckResponse = z.object({
-  data: z.object({
-    voucher: z.object({
-      id,
-      code: z.string(),
-      voucher_type: z.string(),
-      percentage: flag,
-      value: num,
-      basket_minimum: num.nullish(),
-      activation_date: text,
-      expiry_date: text,
-      use_count: int.nullish(),
-      total_max_use: int.nullish(),
-      customer_max_use: int.nullish(),
-      products: z.array(z.unknown()).nullish().catch(null),
-    }),
-    // `data.user` (fiche client avec PIN) n'est volontairement pas lu.
-  }),
-});
-
-const voucherBurnResponse = z.object({
-  data: z.object({
-    id,
-    voucher_id: id,
-    use_count: int.nullish(),
-    basket_amount: num.nullish(),
-    created_at: text,
-  }),
-});
-
 // ——— Types publics, sans PIN ———
 
 export interface YoufidSession {
@@ -298,18 +255,6 @@ export interface YoufidListedUser {
   readonly qrCode: string;
 }
 
-export interface YoufidVoucher {
-  readonly id: string;
-  readonly code: string;
-  readonly type: string;
-  readonly percentage: boolean;
-  /** Pourcentage si `percentage`, montant en euros sinon (tel que renvoyé par l'API). */
-  readonly value: number;
-  readonly basketMinimum: number | null;
-  readonly activationDate: string | null;
-  readonly expiryDate: string | null;
-}
-
 export type ProfileQuestionType = 'NAME' | 'EMAIL' | 'BIRTH';
 
 export interface YoufidClient {
@@ -340,28 +285,12 @@ export interface YoufidClient {
   listUsers(search: string, extendsSearch?: boolean): Promise<readonly YoufidListedUser[]>;
   /** Route 10 : client retrouvé par téléphone (E.164), ou créé avec un QR code et 0 point. */
   registerByPhone(phoneE164: string): Promise<YoufidRegistration>;
-  /** Route 11 : lit (sans `optin`) ou enregistre le consentement SMS. */
-  smsOptin(
-    usrId: string,
-    optin?: boolean,
-  ): Promise<{
-    readonly smsOptin: boolean | null;
-    readonly profileQuestion: YoufidProfileQuestion | null;
-  }>;
   /** Route 12 : réponse à une question de profil (répond « success »). */
   submitProfileResponse(
     usrId: string,
     question: { readonly id: string; readonly type: ProfileQuestionType },
     response: string,
   ): Promise<void>;
-  /** Route 14 : vérifie un bon (sans l'utiliser). */
-  checkVoucher(code: string, phoneE164?: string): Promise<YoufidVoucher>;
-  /** Route 15 : utilise un bon (la route 14 doit avoir répondu « success » juste avant). */
-  burnVoucher(
-    code: string,
-    usrId: string,
-    basketCents: number,
-  ): Promise<{ readonly useId: string; readonly useCount: number | null }>;
 }
 
 /** Centimes (entiers) → euros décimaux exacts (1234 → 12.34), sans calcul à virgule. */
@@ -671,17 +600,6 @@ export function createYoufidClient(options: YoufidClientOptions): YoufidClient {
       };
     },
 
-    async smsOptin(usrId, value) {
-      const route = 'customerGetOrUpdateSmsOptin';
-      const { json } = await call(route, (s) => ({
-        merchant_id: s.merchantId,
-        user_id: numericId(usrId),
-        ...(value !== undefined ? { sms_optin: value } : {}),
-      }));
-      const r = read(smsOptinResponse, json, route);
-      return { smsOptin: r.sms_optin, profileQuestion: question(r.profile_question) };
-    },
-
     async submitProfileResponse(usrId, q, response) {
       await call(
         'customerSubmitResponse',
@@ -693,46 +611,6 @@ export function createYoufidClient(options: YoufidClientOptions): YoufidClient {
         }),
         ['success'],
       );
-    },
-
-    async checkVoucher(code, phoneE164) {
-      const route = 'checkCustomerVoucher';
-      const { json } = await call(
-        route,
-        (s) => ({
-          merchant_id: s.merchantId,
-          voucher: code,
-          ...(phoneE164 ? { phone: youfidPhone(phoneE164, phoneFormat) } : {}),
-        }),
-        ['success'],
-      );
-      const v = read(voucherCheckResponse, json, route).data.voucher;
-      return {
-        id: v.id,
-        code: v.code,
-        type: v.voucher_type,
-        percentage: v.percentage,
-        value: v.value,
-        basketMinimum: v.basket_minimum ?? null,
-        activationDate: v.activation_date,
-        expiryDate: v.expiry_date,
-      };
-    },
-
-    async burnVoucher(code, usrId, basketCents) {
-      const route = 'burnCustomerVoucher';
-      const { json } = await call(
-        route,
-        (s) => ({
-          merchant_id: s.merchantId,
-          voucher: code,
-          user_id: numericId(usrId),
-          basket_total: centsToEuros(basketCents),
-        }),
-        ['success'],
-      );
-      const d = read(voucherBurnResponse, json, route).data;
-      return { useId: d.id, useCount: d.use_count ?? null };
     },
   };
 }

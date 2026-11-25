@@ -171,11 +171,13 @@ describe('fournisseur YouFID', () => {
         (c.body.question as { id: number }).id,
         c.body.response,
       ]);
+    // Question en attente lue sur la route 3 (prénom encore vide chez YouFID) ; jamais la route 11.
     expect(types).toEqual([
-      ['NAME', 0, 'Inès'],
-      ['EMAIL', 8, 'ines@example.fr'],
+      ['NAME', 7, 'Inès'],
+      ['EMAIL', 0, 'ines@example.fr'],
       ['BIRTH', 0, '1990-04-12'],
     ]);
+    expect(fake.calls.some((c) => c.route === 'customerGetOrUpdateSmsOptin')).toBe(false);
     expect(await loyalty.updateProfile(tenant, '12345', { name: 'X' })).toEqual({
       ok: false,
       error: 'unknown_member',

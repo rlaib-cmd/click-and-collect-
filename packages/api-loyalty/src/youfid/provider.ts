@@ -330,9 +330,10 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
       if (email) answers.push(['EMAIL', email]);
       if (input.birthDate) answers.push(['BIRTH', input.birthDate]);
       if (answers.length > 0) {
+        // La route 3 renvoie la question de profil en attente (sans passer par la route 11).
         const pending = await client
-          .smsOptin(link.usrId)
-          .then((r) => r.profileQuestion)
+          .findCustomer({ qrCode: link.qrCode })
+          .then((c) => c?.profileQuestion ?? null)
           .catch(() => null);
         await submitProfile(link.usrId, pending, answers);
       }

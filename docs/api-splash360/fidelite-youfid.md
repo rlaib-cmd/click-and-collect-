@@ -470,15 +470,19 @@ l'API fidélité.
 | `findByPhone` | Lien local, puis route 3 par QR code | La route 10 crée le client : elle n'est appelée qu'à l'inscription, après acceptation des conditions |
 | `findByEmail` | Route 3 (`email`) | Le lien local est créé ou mis à jour |
 | `getMember` | Lien local (`usr_id` → `qr_code`), puis route 3 | L'identifiant de membre est le `usr_id` YouFID (texte) ; la carte VIP montre le `qr_code` |
-| `updateProfile` | Route 11 (lecture, pour la question en attente) puis route 12 (`NAME`, `EMAIL`, `BIRTH`) | Un appel par champ. YouFID n'efface rien : l'effacement d'un champ reste local. E-mail et date de naissance copiés localement (la route 3 ne les renvoie pas). `GENDER` inutilisé |
+| `updateProfile` | Route 3 (par QR code, pour la question en attente `profile_question`) puis route 12 (`NAME`, `EMAIL`, `BIRTH`) | Un appel par champ. YouFID n'efface rien : l'effacement d'un champ reste local. E-mail et date de naissance copiés localement (la route 3 ne les renvoie pas). `GENDER` inutilisé |
 | `settleOrder` | Route 6 (cadeau) puis route 5 avec `amount` | Exactement une fois grâce au registre local `loyalty_operations` (voir ADR 0026) |
 | `adjustPoints` | Route 5 avec `forced_amount` | Positif seulement ; retrait refusé (« non pris en charge par YouFID ») |
 | `history` | Registre local | Opérations faites par l'application seulement (`historyScope: "app"`) |
 | `listMembers` | Liens locaux (sans recherche), route 7 (nom, prénom, e-mail), liens locaux (téléphone) | La route 7 ne cherche pas par téléphone et ne donne pas le solde : route 3 pour chaque résultat (20 au plus) |
 | `deleteMember` | — | Pas de route : seul le lien local est effacé ; l'effacement chez YouFID se demande à Splash360 |
 
-Routes 11, 14 et 15 : fonctions du client écrites et testées, non branchées sur l'application
-(bons de réduction au paiement : étape suivante). Routes 4, 8 et 9 : non utilisées. Route 13 :
+### Routes utilisées
+
+Consigne de Splash360 (26/11) : n'utiliser que les routes dont l'application a besoin, certaines
+étant réservées au marchand. **Routes utilisées : 1, 2, 3, 5, 6, 7, 10 et 12** ; le client n'en
+implémente aucune autre (un test le vérifie). Routes 4, 8, 9, 11, 14 et 15 : non utilisées et non
+implémentées (les fonctions des routes 11, 14 et 15 écrites au lot 21 ont été retirées). Route 13 :
 volontairement non implémentée (faille signalée, et pas de code PIN dans notre produit).
 
 ### Points d'attention
@@ -488,8 +492,8 @@ volontairement non implémentée (faille signalée, et pas de code PIN dans notr
   l'opération passe « à vérifier » au back-office.
 - **PIN client en clair** (routes 3, 5, 14) : les réponses sont lues par des schémas qui ne
   déclarent pas ces champs ; ils n'existent dans aucun objet renvoyé, ne sont ni stockés ni
-  journalisés. La fiche `data.user` de la route 14 n'est pas lue.
+  journalisés. La route 14 n'est pas appelée.
 - **`maximum_scans_reached`** : le gain n'est pas crédité ; traité comme un échec visible
   (registre « refusée », message au back-office), jamais ignoré.
-- **Statuts** : `ok` / `ko` (route 3 : client absent) / `success` (routes 12, 14, 15) /
+- **Statuts** : `ok` / `ko` (route 3 : client absent) / `success` (route 12 ; 14 et 15 non utilisées) /
   `error`, lus dans le corps quel que soit le statut HTTP.
