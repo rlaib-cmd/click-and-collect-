@@ -148,4 +148,82 @@ describe.skipIf(!url)('AmbassadorStore Postgres (lots 15 et 17)', () => {
     expect(events[4]?.detail).toEqual({ points: 50 });
     expect(await store.events(BELLA, [id])).toEqual([]);
   });
+  it('enregistre un ticket photographié « à vérifier » et ne le crédite pas avant le rapprochement', async () => {
+    const photo = { date: '2026-11-24', number: '6', totalCents: 1230 };
+    const create = (suffix: string) =>
+      store.createEntry(
+        {
+          tenantId: BILLS,
+          memberId: 'membre-test',
+          ticketRef: `T${run}${suffix}`,
+          instagramHandle: 'client.test',
+          bonusPoints: 50,
+          ticketPhoto: photo,
+        },
+        [{ type: 'ticket_read', actor: 'IA', detail: { orderNumber: '6' } }],
+      );
+    const a = await create('P1');
+    const b = await create('P2');
+    const c = await create('P3');
+    if (!a.ok || !b.ok || !c.ok) throw new Error('participations non créées');
+    expect(a.entry).toMatchObject({
+      ticketCheck: 'pending',
+      ticketDate: '2026-11-24',
+      ticketNumber: '6',
+      ticketTotalCents: 1230,
+    });
+    const pending = await store.pendingTicketChecks(500);
+    expect(pending.some((e) => e.id === a.entry.id)).toBe(true);
+
+    // Mention et délais échus : le contrôle passe, jamais le crédit tant que le ticket est à vérifier.
+    const at = new Date();
+    const later = new Date(at.getTime() + 25 * 3600_000);
+    await store.markMention(BILLS, a.entry.id, {
+      at,
+      by: 'equipe@test',
+      checkDueAt: new Date(at.getTime() + 20 * 3600_000),
+      creditDueAt: new Date(at.getTime() + 24 * 3600_000),
+    });
+    await store.recordCheck(BILLS, a.entry.id, { at: later, result: 'online', actor: 'système' });
+    expect((await store.dueEntries(later, 500)).some((e) => e.id === a.entry.id)).toBe(false);
+
+    const event = { type: 'ticket_checked' as const, actor: 'système', detail: { result: 'x' } };
+    const [v1, v2] = await Promise.all([
+      store.recordTicketCheck(BILLS, a.entry.id, { at, result: 'verified', events: [event] }),
+      store.recordTicketCheck(BILLS, a.entry.id, { at, result: 'verified', events: [event] }),
+    ]);
+    // Deux rapprochements simultanés : un seul passe.
+    expect([v1, v2].filter(Boolean)).toHaveLength(1);
+    expect((await store.dueEntries(later, 500)).some((e) => e.id === a.entry.id)).toBe(true);
+
+    const unpaid = await store.recordTicketCheck(BILLS, b.entry.id, {
+      at,
+      result: 'unpaid',
+      events: [event, { type: 'rejected', actor: 'système', detail: { reason: 'annulée' } }],
+    });
+    expect(unpaid).toMatchObject({ ticketCheck: 'unpaid', status: 'rejected' });
+    expect(
+      await store.recordTicketCheck(BELLA, c.entry.id, { at, result: 'verified', events: [] }),
+    ).toBeNull();
+
+    expect(await store.flagTicketReview(BILLS, c.entry.id, at, event)).toBe(true);
+    expect(await store.flagTicketReview(BILLS, c.entry.id, at, event)).toBe(false);
+    const notFound = await store.recordTicketCheck(BILLS, c.entry.id, {
+      at,
+      result: 'not_found',
+      events: [event],
+    });
+    expect(notFound).toMatchObject({
+      ticketCheck: 'not_found',
+      needsReview: true,
+      status: 'pending',
+    });
+    expect((await store.events(BILLS, [c.entry.id])).map((e) => e.type)).toEqual([
+      'ticket_read',
+      'ticket_checked',
+      'ticket_checked',
+    ]);
+    const left = await store.pendingTicketChecks(500);
+    expect(left.some((e) => [a.entry.id, b.entry.id, c.entry.id].includes(e.id))).toBe(false);
+  });
 });

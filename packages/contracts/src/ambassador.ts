@@ -236,6 +236,9 @@ export const ambassadorEventTypeSchema = z.enum([
   'credited',
   'credit_failed',
   'rejected',
+  /* Lot 20 (ADR 0025) : lecture du ticket photographié, puis rapprochement avec les ventes. */
+  'ticket_read',
+  'ticket_checked',
 ]);
 export type AmbassadorEventType = z.infer<typeof ambassadorEventTypeSchema>;
 

@@ -21,6 +21,29 @@ export interface AmbassadorSettings {
 export type AmbassadorStatus = 'pending' | 'confirmed' | 'rejected';
 export type PhotoVerdict = 'accepted' | 'rejected' | 'doubtful';
 export type StoryCheckResult = 'online' | 'removed';
+/**
+ * Vérification du ticket (lot 20, ADR 0025) : `unverified` (QR ou numéro saisi, jamais vérifié),
+ * `pending` (ticket photographié, rapprochement en attente), `verified` (vente encaissée trouvée),
+ * `unpaid` (seule une vente annulée correspond), `not_found` (journée lue, aucune vente).
+ */
+export type TicketCheck = 'unverified' | 'pending' | 'verified' | 'unpaid' | 'not_found';
+/** Résultat définitif d'un rapprochement. */
+export type TicketCheckResult = Exclude<TicketCheck, 'unverified' | 'pending'>;
+/** États qui interdisent tout crédit automatique des points. */
+export const TICKET_CHECKS_BLOCKING_CREDIT: readonly TicketCheck[] = [
+  'pending',
+  'not_found',
+  'unpaid',
+];
+
+/** Données lues sur la photo du ticket (signées par le serveur). */
+export interface TicketPhotoData {
+  /** Journée du ticket (AAAA-MM-JJ). */
+  readonly date: string;
+  /** Numéro de commande normalisé. */
+  readonly number: string;
+  readonly totalCents: number;
+}
 
 export interface AmbassadorEntry {
   readonly id: string;
@@ -43,6 +66,11 @@ export interface AmbassadorEntry {
   readonly photoVerdict: PhotoVerdict | null;
   readonly photoReason: string | null;
   readonly needsReview: boolean;
+  readonly ticketCheck: TicketCheck;
+  /** Ticket photographié (lot 20) ; null pour un ticket scanné ou saisi. */
+  readonly ticketDate: string | null;
+  readonly ticketNumber: string | null;
+  readonly ticketTotalCents: number | null;
 }
 
 export interface NewAmbassadorEntry {
@@ -55,6 +83,8 @@ export interface NewAmbassadorEntry {
   readonly photoVerdict?: PhotoVerdict | null;
   readonly photoReason?: string | null;
   readonly needsReview?: boolean;
+  /** Ticket photographié : la participation attend le rapprochement avec les ventes. */
+  readonly ticketPhoto?: TicketPhotoData | null;
 }
 
 export type AmbassadorEventType =
@@ -64,7 +94,9 @@ export type AmbassadorEventType =
   | 'story_checked'
   | 'credited'
   | 'credit_failed'
-  | 'rejected';
+  | 'rejected'
+  | 'ticket_read'
+  | 'ticket_checked';
 
 export type AmbassadorEventDetail = Readonly<Record<string, string | number | boolean | null>>;
 
@@ -148,8 +180,37 @@ export interface AmbassadorStore {
     at: Date,
     event?: AmbassadorEventInput,
   ): Promise<AmbassadorEntry | null>;
-  /** Participations en attente dont le contrôle ou le crédit est échu, toutes enseignes. */
+  /**
+   * Participations en attente dont le contrôle ou le crédit est échu, toutes enseignes. Le crédit
+   * n'est jamais échu tant que le ticket est à vérifier, introuvable ou impayé (lot 20).
+   */
   dueEntries(now: Date, limit: number): Promise<readonly DueAmbassadorEntry[]>;
+  /** Tickets photographiés à rapprocher des ventes (toutes enseignes, les plus anciens d'abord). */
+  pendingTicketChecks(limit: number): Promise<readonly AmbassadorEntry[]>;
+  /**
+   * Résultat du rapprochement, une seule fois (ticket encore « pending », participation en
+   * attente) ; null sinon. `not_found` met la participation « à vérifier » ; `unpaid` la refuse
+   * dans la même transaction. Les événements sont journalisés dans la même transaction.
+   */
+  recordTicketCheck(
+    tenantId: string,
+    entryId: string,
+    check: {
+      readonly at: Date;
+      readonly result: TicketCheckResult;
+      readonly events: readonly AmbassadorEventInput[];
+    },
+  ): Promise<AmbassadorEntry | null>;
+  /**
+   * Ticket impossible à vérifier (ventes Splash360 non branchées) : la participation passe
+   * « à vérifier » par l'équipe, une seule fois ; l'événement n'est journalisé qu'à ce moment.
+   */
+  flagTicketReview(
+    tenantId: string,
+    entryId: string,
+    at: Date,
+    event: AmbassadorEventInput,
+  ): Promise<boolean>;
 }
 
 interface Row {
@@ -172,7 +233,15 @@ interface Row {
   photo_verdict: PhotoVerdict | null;
   photo_reason: string | null;
   needs_review: boolean;
+  ticket_check: TicketCheck;
+  ticket_date: Date | string | null;
+  ticket_number: string | null;
+  ticket_total_cents: number | null;
 }
+
+/** Colonne `date` : chaîne AAAA-MM-JJ (postgres.js la lit en Date à minuit UTC). */
+const dateText = (v: Date | string | null): string | null =>
+  v === null ? null : typeof v === 'string' ? v.slice(0, 10) : v.toISOString().slice(0, 10);
 
 const toEntry = (r: Row): AmbassadorEntry => ({
   id: r.id,
@@ -194,6 +263,10 @@ const toEntry = (r: Row): AmbassadorEntry => ({
   photoVerdict: r.photo_verdict,
   photoReason: r.photo_reason,
   needsReview: r.needs_review,
+  ticketCheck: r.ticket_check,
+  ticketDate: dateText(r.ticket_date),
+  ticketNumber: r.ticket_number,
+  ticketTotalCents: r.ticket_total_cents,
 });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -266,10 +339,13 @@ export function createPostgresAmbassadorStore(sql: Sql): AmbassadorStore {
       return sql.begin(async (tx) => {
         const rows = await tx<Row[]>`
           insert into public.ambassador_entries (tenant_id, member_id, ticket_ref, ticket_qr,
-            instagram_handle, bonus_points, photo_verdict, photo_reason, needs_review)
+            instagram_handle, bonus_points, photo_verdict, photo_reason, needs_review,
+            ticket_check, ticket_date, ticket_number, ticket_total_cents)
           values (${e.tenantId}, ${e.memberId}, ${e.ticketRef}, ${e.ticketQr ?? null},
             ${e.instagramHandle}, ${e.bonusPoints}, ${e.photoVerdict ?? null},
-            ${e.photoReason ?? null}, ${e.needsReview ?? false})
+            ${e.photoReason ?? null}, ${e.needsReview ?? false},
+            ${e.ticketPhoto ? 'pending' : 'unverified'}, ${e.ticketPhoto?.date ?? null},
+            ${e.ticketPhoto?.number ?? null}, ${e.ticketPhoto?.totalCents ?? null})
           on conflict (tenant_id, ticket_ref) do nothing
           returning *`;
         const r = rows[0];
@@ -387,9 +463,49 @@ export function createPostgresAmbassadorStore(sql: Sql): AmbassadorStore {
         select e.*, t.splash360_id from public.ambassador_entries e
         join public.tenants t on t.id = e.tenant_id
         where e.status = 'pending' and e.mention_received_at is not null
-          and ((e.checked_at is null and e.check_due_at <= ${now}) or e.credit_due_at <= ${now})
+          and ((e.checked_at is null and e.check_due_at <= ${now})
+            or (e.credit_due_at <= ${now} and e.ticket_check not in ${sql(TICKET_CHECKS_BLOCKING_CREDIT)}))
         order by e.check_due_at limit ${limit}`;
       return rows.map((r) => ({ ...toEntry(r), splash360Id: r.splash360_id }));
+    },
+
+    async pendingTicketChecks(limit) {
+      const rows = await sql<Row[]>`select * from public.ambassador_entries
+        where status = 'pending' and ticket_check = 'pending'
+        order by ticket_date, created_at limit ${limit}`;
+      return rows.map(toEntry);
+    },
+
+    async recordTicketCheck(tenantId, entryId, check) {
+      if (!UUID.test(entryId)) return null;
+      const reject = check.result === 'unpaid';
+      return sql.begin(async (tx) => {
+        const rows = await tx<Row[]>`update public.ambassador_entries
+          set ticket_check = ${check.result},
+            needs_review = needs_review or ${check.result === 'not_found'},
+            status = case when ${reject} then 'rejected' else status end,
+            decided_at = case when ${reject} then ${check.at}::timestamptz else decided_at end
+          where tenant_id = ${tenantId} and id = ${entryId} and status = 'pending'
+            and ticket_check = 'pending'
+          returning *`;
+        const r = rows[0];
+        if (!r) return null;
+        for (const ev of check.events) await insertEvent(tx, tenantId, entryId, ev, check.at);
+        return toEntry(r);
+      });
+    },
+
+    async flagTicketReview(tenantId, entryId, at, event) {
+      if (!UUID.test(entryId)) return false;
+      return sql.begin(async (tx) => {
+        const rows = await tx`update public.ambassador_entries set needs_review = true
+          where tenant_id = ${tenantId} and id = ${entryId} and status = 'pending'
+            and ticket_check = 'pending' and not needs_review
+          returning id`;
+        if (rows.length === 0) return false;
+        await insertEvent(tx, tenantId, entryId, event, at);
+        return true;
+      });
     },
   };
 }
@@ -481,6 +597,10 @@ export function createMemoryAmbassadorStore(
         photoVerdict: e.photoVerdict ?? null,
         photoReason: e.photoReason ?? null,
         needsReview: e.needsReview ?? false,
+        ticketCheck: e.ticketPhoto ? 'pending' : 'unverified',
+        ticketDate: e.ticketPhoto?.date ?? null,
+        ticketNumber: e.ticketPhoto?.number ?? null,
+        ticketTotalCents: e.ticketPhoto?.totalCents ?? null,
       };
       entries.push(entry);
       for (const ev of events) log(e.tenantId, entry.id, ev, entry.createdAt);
@@ -566,12 +686,51 @@ export function createMemoryAmbassadorStore(
               e.status === 'pending' &&
               e.mentionReceivedAt !== null &&
               ((e.checkedAt === null && (e.checkDueAt?.getTime() ?? Infinity) <= t) ||
-                (e.creditDueAt?.getTime() ?? Infinity) <= t),
+                ((e.creditDueAt?.getTime() ?? Infinity) <= t &&
+                  !TICKET_CHECKS_BLOCKING_CREDIT.includes(e.ticketCheck))),
           )
           .sort((a, b) => (a.checkDueAt?.getTime() ?? 0) - (b.checkDueAt?.getTime() ?? 0))
           .slice(0, limit)
           .map((e) => ({ ...e, splash360Id: options.splash360Ids?.[e.tenantId] ?? '' })),
       );
+    },
+    pendingTicketChecks: (limit) =>
+      Promise.resolve(
+        entries
+          .filter((e) => e.status === 'pending' && e.ticketCheck === 'pending')
+          .sort(
+            (a, b) =>
+              (a.ticketDate ?? '').localeCompare(b.ticketDate ?? '') ||
+              a.createdAt.getTime() - b.createdAt.getTime(),
+          )
+          .slice(0, limit),
+      ),
+    recordTicketCheck(tenantId, entryId, check) {
+      const reject = check.result === 'unpaid';
+      const next = update(
+        tenantId,
+        entryId,
+        (e) => e.status === 'pending' && e.ticketCheck === 'pending',
+        {},
+      );
+      if (!next) return Promise.resolve(null);
+      const decided = update(tenantId, entryId, () => true, {
+        ticketCheck: check.result,
+        needsReview: next.needsReview || check.result === 'not_found',
+        ...(reject ? { status: 'rejected' as const, decidedAt: check.at } : {}),
+      });
+      for (const ev of check.events) log(tenantId, entryId, ev, check.at);
+      return Promise.resolve(decided);
+    },
+    flagTicketReview(tenantId, entryId, at, event) {
+      const next = update(
+        tenantId,
+        entryId,
+        (e) => e.status === 'pending' && e.ticketCheck === 'pending' && !e.needsReview,
+        { needsReview: true },
+      );
+      if (next) log(tenantId, entryId, event, at);
+      return Promise.resolve(next !== null);
     },
   };
 }

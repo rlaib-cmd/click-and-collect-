@@ -587,6 +587,8 @@ export const adminFr = {
       credited: 'Points crédités',
       credit_failed: 'Crédit en échec',
       rejected: 'Refusée',
+      ticket_read: 'Ticket lu sur la photo',
+      ticket_checked: 'Ticket vérifié auprès de la caisse',
     },
     by: (actor: string) => `par ${actor}`,
     actorLabel: {
