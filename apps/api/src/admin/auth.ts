@@ -60,6 +60,15 @@ export function requireStaff(deps: {
   // Comptes du back-office gardés 30 s par copie du serveur : un onglet qui recharge en boucle
   // ne relit pas la base à chaque requête pour savoir qui il est.
   const cache = new Map<string, { at: number; value: StaffUser[] }>();
+  const tenants = new Map<string, { at: number; value: TenantWithTheme | null }>();
+  const cachedTenant = async (id: string) => {
+    const hit = tenants.get(id);
+    if (hit && Date.now() - hit.at < 30_000) return hit.value;
+    const value = await deps.tenants.findById(id);
+    if (tenants.size > 1000) tenants.clear();
+    tenants.set(id, { at: Date.now(), value });
+    return value;
+  };
   return async (c, next) => {
     const token = /^Bearer (.+)$/.exec(c.req.header('Authorization') ?? '')?.[1];
     const user = token ? await deps.verifier.verify(token) : null;
@@ -90,7 +99,7 @@ export function requireStaff(deps: {
       staff = m;
       tenantId = m.tenantId;
     }
-    const tenant = tenantId ? await deps.tenants.findById(tenantId) : null;
+    const tenant = tenantId ? await cachedTenant(tenantId) : null;
     if (tenantId && !tenant) return apiError(c, 'not_found', 'Enseigne inconnue');
     c.set('admin', { staff, tenant });
     await next();
@@ -111,4 +120,33 @@ export function allow(c: Context<AdminEnv>, permission: Permission, needsTenant 
 /** Un équipier ne voit que son restaurant. */
 export function restaurantScope(ctx: AdminContext): string | undefined {
   return isRestaurantScoped(ctx.staff.role) ? (ctx.staff.restaurantId ?? undefined) : undefined;
+}
+
+/**
+ * Lectures identiques du back-office servies depuis la mémoire pendant `ttlMs` (par utilisateur,
+ * enseigne et URL) : un onglet qui recharge en boucle ne touche plus la base. Toute écriture
+ * (POST, PUT, PATCH, DELETE) vide le cache de l'instance, la relecture suivante est fraîche.
+ */
+export function shortReadCache(ttlMs = 2000): MiddlewareHandler<AdminEnv> {
+  const entries = new Map<string, { at: number; status: number; body: string; type: string }>();
+  return async (c, next) => {
+    if (c.req.method !== 'GET') {
+      entries.clear();
+      await next();
+      return;
+    }
+    const { staff, tenant } = c.get('admin');
+    const key = `${staff.id}\n${tenant?.id ?? ''}\n${c.req.url}`;
+    const now = Date.now();
+    const hit = entries.get(key);
+    if (hit && now - hit.at < ttlMs) {
+      return c.body(hit.body, hit.status as 200, { 'Content-Type': hit.type });
+    }
+    await next();
+    const type = c.res.headers.get('Content-Type') ?? '';
+    if (c.res.status === 200 && type.includes('application/json')) {
+      if (entries.size > 2000) entries.clear();
+      entries.set(key, { at: now, status: 200, body: await c.res.clone().text(), type });
+    }
+  };
 }

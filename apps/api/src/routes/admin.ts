@@ -43,6 +43,7 @@ import { z } from 'zod';
 import {
   allow,
   requireStaff,
+  shortReadCache,
   restaurantScope,
   type AdminEnv,
   type TokenVerifier,
@@ -105,6 +106,7 @@ async function body<T extends z.ZodType>(c: C, schema: T): Promise<z.infer<T> | 
 export function adminRoutes(deps: AdminRoutesDeps) {
   const app = new Hono<AdminEnv>();
   app.use('*', requireStaff(deps));
+  app.use('*', shortReadCache());
 
   const ctx = (c: C) => c.get('admin');
   const tenantId = (c: C) => ctx(c).tenant?.id ?? '';
