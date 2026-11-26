@@ -34,6 +34,11 @@ export const loyaltyProgramSchema = z.discriminatedUnion('enabled', [
     demo: z.boolean(),
     /** Connexion par code reçu par SMS ou e-mail (lot 10, ADR 0012). */
     otp: z.boolean(),
+    /**
+     * Effacement du compte chez le partenaire de fidélité sur demande, sous 30 jours (YouFID,
+     * ADR 0028) : l'application l'annonce avant et après « Supprimer mon compte ».
+     */
+    partnerErasure: z.boolean().default(false),
   }),
 ]);
 

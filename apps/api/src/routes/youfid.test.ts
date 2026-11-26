@@ -258,6 +258,39 @@ describe('fidélité YouFID dans l’application (lot 21)', () => {
     expect(s.fake.calls.some((c) => c.body.amount !== undefined)).toBe(false);
     expect(s.backend.orders[0]?.loyaltySettled).toBe(true);
   });
+
+  it('supprimer mon compte : lien local effacé, effacement chez YouFID demandé et journalisé (ADR 0028)', async () => {
+    const s = setup();
+    const program = loyaltyProgramSchema.parse(
+      await (await s.app.request(`${base}/loyalty/program`)).json(),
+    );
+    expect(program).toMatchObject({ enabled: true, partnerErasure: true });
+    const session = await signUp(s);
+    const usrId = session.memberToken.split('.')[1] ?? '';
+    const auth = { Authorization: `Bearer ${session.memberToken}` };
+    const res = await s.app.request(`${base}/loyalty/me`, { method: 'DELETE', headers: auth });
+    expect(res.status).toBe(204);
+    expect((await s.app.request(`${base}/loyalty/me`, { headers: auth })).status).toBe(401);
+    expect(await s.store.getLink(BELLA_ID, usrId)).toBeNull();
+    expect(s.admin.audit.map((a) => [a.action, a.actorEmail, a.target])).toEqual(
+      expect.arrayContaining([
+        ['loyalty.member.delete', 'client', usrId],
+        ['loyalty.erasure_requested', 'client', usrId],
+      ]),
+    );
+    expect(s.admin.audit.find((a) => a.action === 'loyalty.erasure_requested')?.detail).toEqual({
+      partner: 'youfid',
+      dueWithinDays: 30,
+    });
+    // Visible au journal du back-office.
+    const journal = (await (await admin(s, '/audit')).json()) as { entries: { action: string }[] };
+    expect(journal.entries.map((e) => e.action)).toContain('loyalty.erasure_requested');
+    // Deuxième demande : rien de plus.
+    expect(
+      (await s.app.request(`${base}/loyalty/me`, { method: 'DELETE', headers: auth })).status,
+    ).toBe(204);
+    expect(s.admin.audit.filter((a) => a.action === 'loyalty.erasure_requested')).toHaveLength(1);
+  });
 });
 
 describe('fidélité YouFID au back-office (lot 21)', () => {

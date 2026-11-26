@@ -1,4 +1,10 @@
-import type { MemberSessionStore } from '@splash360/db';
+import type {
+  AdminStore,
+  AmbassadorStore,
+  MemberSessionStore,
+  ProximityStore,
+  StripeCustomerStore,
+} from '@splash360/db';
 import {
   LoyaltyUnsupportedError,
   type LoyaltyMember,
@@ -22,7 +28,9 @@ import type { OrderingStore, TenantWithTheme } from '@splash360/db';
 import type { Context, Hono } from 'hono';
 import { apiError } from '../errors';
 import { consumeOtp, startOtp, verifyOtp, type OtpDeps } from '../loyalty/otp';
-import { authenticateMember, memberToken, memberView } from '../loyalty/service';
+import { CLIENT_ACTOR, eraseLoyaltyMember } from '../loyalty/erasure';
+import { authenticateMember, memberToken, memberView, readMemberToken } from '../loyalty/service';
+import type { CardGateway } from '../payments/cards';
 
 /** Nom affiché d'un membre qui n'a pas (encore) donné son prénom. */
 const DEFAULT_MEMBER_NAME = 'Membre';
@@ -37,6 +45,15 @@ export interface LoyaltyRoutesDeps {
   readonly otp?: OtpDeps | undefined;
   /** Version de session des membres (audit M4). */
   readonly memberSessions?: MemberSessionStore | undefined;
+  /**
+   * « Supprimer mon compte » (ADR 0028) : même effacement qu'au back-office, journalisé
+   * (`admin.audit`), avec les données Ambassadeur, « à proximité » et les cartes enregistrées.
+   */
+  readonly admin?: Pick<AdminStore, 'audit'> | undefined;
+  readonly ambassador?: AmbassadorStore | undefined;
+  readonly proximity?: ProximityStore | undefined;
+  readonly cardGateway?: CardGateway | undefined;
+  readonly stripeCustomers?: StripeCustomerStore | undefined;
 }
 
 /** Commandes en cours avec cadeau : leurs points sont réservés (ADR 0013). */
@@ -151,6 +168,7 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
           })),
           demo: deps.loyaltyDemoLogin === true,
           otp: deps.otp !== undefined,
+          partnerErasure: ctx.program.source === 'youfid',
         }
       : { enabled: false };
     c.header('Cache-Control', 'public, max-age=60');
@@ -291,6 +309,39 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
         : apiError(c, 'unauthorized', 'Session fidélité invalide');
     c.header('Cache-Control', 'no-store');
     return c.json(await view(ctx, result.member));
+  });
+
+  /**
+   * « Supprimer mon compte » (ADR 0028, App Store 5.1.1(v)) : effacement par le membre lui-même,
+   * comme au back-office, puis toutes ses sessions révoquées. Idempotent : un jeton authentique
+   * d'un compte déjà effacé reçoit aussi 204.
+   */
+  app.delete('/:subdomain/loyalty/me', async (c) => {
+    const tenantId = c.get('tenant').id;
+    const token = bearerMember(c);
+    const memberId = await authenticateMember(deps, tenantId, token);
+    const ctx = await context(c);
+    c.header('Cache-Control', 'no-store');
+    if (!memberId) {
+      const read = readMemberToken(deps.tokenSecret, tenantId, token, deps.now?.() ?? new Date());
+      if (read && ctx && !(await ctx.provider.getMember(ctx.tenant, read.memberId)))
+        return c.body(null, 204);
+      return apiError(c, 'unauthorized', 'Session fidélité invalide');
+    }
+    if (!ctx) return apiError(c, 'not_found', 'Pas de club fidélité');
+    const audit = deps.admin;
+    await eraseLoyaltyMember(
+      {
+        ...deps,
+        loyalty: ctx.provider,
+        audit: (e) => audit?.audit(e) ?? Promise.resolve(),
+      },
+      ctx.tenant,
+      ctx.program,
+      memberId,
+      CLIENT_ACTOR,
+    );
+    return c.body(null, 204);
   });
 
   /** Historique « Mes commandes » (lot 11) : uniquement les commandes du membre connecté. */

@@ -228,6 +228,8 @@ export function createApp(input: AppDeps) {
   ]) {
     app.on('POST', path, strict);
   }
+  // « Supprimer mon compte » (ADR 0028) : même plafond que la connexion au club.
+  app.on('DELETE', '/v1/tenants/:s/loyalty/me', strict);
   // Analyse de photo (appel payant à l'IA) : plafond propre, plus bas.
   // Lecture du ticket photographié (lot 20) : même plafond, compté à part.
   for (const path of [
@@ -345,6 +347,9 @@ export function createApp(input: AppDeps) {
       ambassador: deps.ambassador,
       loyaltyLedger: deps.loyaltyLedger,
       proximity: deps.proximity,
+      memberSessions: deps.memberSessions,
+      cardGateway: deps.cardGateway,
+      stripeCustomers: deps.stripeCustomers,
       youfid: deps.youfid ?? null,
       adminUrl: deps.adminUrl ?? 'http://localhost:3000',
       inviter: deps.inviter ?? null,

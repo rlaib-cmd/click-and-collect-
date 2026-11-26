@@ -39,6 +39,8 @@ import { DEFAULT_THEME, themeChanges } from '@splash360/theme';
 import type {
   AmbassadorStore,
   AdminStore,
+  MemberSessionStore,
+  StripeCustomerStore,
   PromoAdminStore,
   OperationsStore,
   OrderReader,
@@ -68,6 +70,8 @@ import {
 } from '../loyalty/ambassador';
 import { toMenuDto } from '../menu-dto';
 import { notifyStatus, type NotifyDeps } from '../notifications/service';
+import { eraseLoyaltyMember } from '../loyalty/erasure';
+import type { CardGateway } from '../payments/cards';
 import type { PaymentGateway } from '../payments/gateway';
 import { refundOrder } from '../payments/service';
 import {
@@ -104,6 +108,10 @@ export interface AdminRoutesDeps extends NotifyDeps {
     | undefined;
   /** Notifications à proximité (lot 22, ADR 0027) ; absent = page indisponible. */
   readonly proximity?: ProximityStore | undefined;
+  /** Effacement d'un membre (ADR 0028) : sessions révoquées, cartes enregistrées détachées. */
+  readonly memberSessions?: MemberSessionStore | undefined;
+  readonly cardGateway?: CardGateway | undefined;
+  readonly stripeCustomers?: StripeCustomerStore | undefined;
   /** Comptes YouFID du serveur (lot 21) ; null : aucun compte configuré. */
   readonly youfid?: Pick<YoufidRegistry, 'has' | 'probe'> | null | undefined;
   /** URL publique du back-office (retours de l'inscription Stripe). */
@@ -999,7 +1007,8 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     const tenant = ctx(c).tenant;
     if (!deps.loyalty || !tenant) return null;
     const ref = { id: tenant.id, splash360Id: tenant.splash360Id };
-    return (await deps.loyalty.getProgram(ref)) ? { provider: deps.loyalty, ref } : null;
+    const program = await deps.loyalty.getProgram(ref);
+    return program ? { provider: deps.loyalty, ref, program } : null;
   }
 
   // ——— Ambassadeur (lots 15 et 17, ADR 0019 et 0022) ———
@@ -1294,11 +1303,16 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     if (denied) return denied;
     const cl = await club(c);
     if (!cl) return apiError(c, 'not_found', 'Pas de club fidélité');
-    if (!(await cl.provider.deleteMember(cl.ref, c.req.param('id'))))
-      return apiError(c, 'not_found', 'Membre inconnu');
-    // Appareils et événements « à proximité » du membre effacés avec lui (lot 22).
-    await deps.proximity?.forgetMember(tenantId(c), c.req.param('id'));
-    await audit(c, 'loyalty.member.delete', c.req.param('id'));
+    // Même effacement que « Supprimer mon compte » dans l'application (ADR 0028).
+    const { staff } = ctx(c);
+    const erasure = await eraseLoyaltyMember(
+      { ...deps, loyalty: cl.provider, audit: (e) => deps.admin.audit(e) },
+      cl.ref,
+      cl.program,
+      c.req.param('id'),
+      staff,
+    );
+    if (!erasure.erased) return apiError(c, 'not_found', 'Membre inconnu');
     return c.body(null, 204);
   });
 
