@@ -391,6 +391,7 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
       // Gain d'abord, puis cadeau : YouFID ignorait un crédit envoyé juste après un échange
       // (constaté en recette le 26/11). Points de la commande : calculés par notre règle (points par euro de l'enseigne) et
       // envoyés en crédit forcé, prioritaire chez YouFID : le gain annoncé est le gain crédité.
+      let earnError: Exclude<OperationOutcome, { ok: true }>['error'] | null = null;
       if (s.earnPoints > 0) {
         const r = await runOperation(
           tenant,
@@ -412,8 +413,9 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
             return res.wonPoints;
           },
         );
-        if (!r.ok) return { ok: false, error: r.error };
+        if (!r.ok) earnError = r.error;
       }
+      // Le cadeau est déduit même si le gain a échoué : le client l'a reçu dans sa commande.
       const reward = s.reward;
       if (reward) {
         const r = await runOperation(
@@ -440,6 +442,7 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
         );
         if (!r.ok) return { ok: false, error: r.error };
       }
+      if (earnError) return { ok: false, error: earnError };
       return { ok: true };
     },
 

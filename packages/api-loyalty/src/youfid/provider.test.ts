@@ -214,7 +214,7 @@ describe('fournisseur YouFID', () => {
     ]);
   });
 
-  it('gain envoyé avant le cadeau ; un crédit à 0 point est signalé, puis repris sans doublon', async () => {
+  it('gain avant le cadeau ; gain à 0 point signalé, cadeau quand même déduit, puis gain repris une fois', async () => {
     const { loyalty, fake, store } = setup();
     const { member } = await loyalty.join(tenant, {
       name: 'Membre',
@@ -222,25 +222,25 @@ describe('fournisseur YouFID', () => {
       phone: '+33657575757',
     });
     await loyalty.adjustPoints(tenant, member.id, 250, 'Geste commercial');
-    // YouFID ignore un crédit envoyé juste après un échange : le gain doit partir avant.
     fake.state.zeroCreditAfterTransform = true;
+    // Le crédit suivant est ignoré par YouFID (0 point) : ici, le gain de la commande.
+    fake.state.lastWasTransform = true;
     const s = order(member.id, 'o-z', { reward: true });
-    expect(await loyalty.settleOrder(tenant, s)).toEqual({ ok: true });
+    expect(await loyalty.settleOrder(tenant, s)).toEqual({ ok: false, error: 'provider_error' });
     const routes = fake.calls
       .map((c) => c.route)
       .filter((r) => r !== 'testmarchandCheckScanUserIfExistsV2');
     expect(routes.slice(-2)).toEqual(['marchandCheckScanUser', 'transformToPresent']);
-    expect((await loyalty.getMember(tenant, member.id))?.points).toBe(100 + 250 + 125 - 300);
-    // Crédit à 0 point (ex. YouFID l'ignore) : opération à vérifier, aucun succès affiché.
-    fake.state.lastWasTransform = true;
-    const s2 = order(member.id, 'o-z2');
-    expect(await loyalty.settleOrder(tenant, s2)).toEqual({ ok: false, error: 'provider_error' });
+    // Le cadeau reçu dans la commande est bien déduit, même sans gain.
+    expect((await loyalty.getMember(tenant, member.id))?.points).toBe(100 + 250 - 300);
     expect((await store.operationsToReview(tenant.id, 20)).map((o) => o.error)).toContain(
       'not_credited',
     );
-    // Nouveau règlement (webhook rejoué) : repris, crédité une seule fois.
-    expect(await loyalty.settleOrder(tenant, s2)).toEqual({ ok: true });
-    expect((await loyalty.getMember(tenant, member.id))?.points).toBe(100 + 250 + 125 - 300 + 125);
+    // Règlement rejoué (webhook) : gain repris une seule fois, cadeau pas déduit deux fois.
+    fake.state.zeroCreditAfterTransform = false;
+    expect(await loyalty.settleOrder(tenant, s)).toEqual({ ok: true });
+    expect((await loyalty.getMember(tenant, member.id))?.points).toBe(100 + 250 - 300 + 125);
+    expect(fake.calls.filter((c) => c.route === 'transformToPresent')).toHaveLength(1);
   });
 
   it('deux règlements simultanés : un seul crédit', async () => {
