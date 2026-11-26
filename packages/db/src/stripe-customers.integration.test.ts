@@ -26,4 +26,14 @@ describe.skipIf(!url)('StripeCustomerStore Postgres (lot 18)', () => {
     // Même identifiant de membre dans une autre enseigne : rien de partagé.
     expect(await store.find(GREEN, member)).toBeNull();
   });
+
+  it('effacement du membre : le lien vers son client Stripe disparaît, dans son enseigne seulement', async () => {
+    const member = `m-${run}-b`;
+    await store.save(BELLA, member, `cus_${run}C`);
+    await store.save(GREEN, member, `cus_${run}D`);
+    await store.forget(BELLA, member);
+    expect(await store.find(BELLA, member)).toBeNull();
+    expect(await store.find(GREEN, member)).toBe(`cus_${run}D`);
+    await store.forget(BELLA, member);
+  });
 });

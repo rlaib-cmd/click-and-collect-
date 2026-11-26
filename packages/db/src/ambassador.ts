@@ -219,6 +219,21 @@ export interface AmbassadorStore {
     at: Date,
     event: AmbassadorEventInput,
   ): Promise<boolean>;
+  /**
+   * Effacement du compte du membre (ADR 0028) : compte Instagram mémorisé et participations en
+   * attente supprimés ; participations décidées gardées anonymisées (membre et compte Instagram
+   * remplacés par `ERASED_MEMBER`, compte Instagram retiré de l'historique) pour la règle « un
+   * ticket, une story » et la trace des points crédités.
+   */
+  forgetMember(tenantId: string, memberId: string): Promise<AmbassadorErasure>;
+}
+
+/** Marque d'un membre effacé (identifiant et compte Instagram), valide pour les deux colonnes. */
+export const ERASED_MEMBER = '_efface_';
+
+export interface AmbassadorErasure {
+  readonly deletedEntries: number;
+  readonly anonymisedEntries: number;
 }
 
 interface Row {
@@ -362,6 +377,25 @@ export function createPostgresAmbassadorStore(sql: Sql): AmbassadorStore {
         if (!r) return { ok: false, error: 'ticket_already_used' } as const;
         for (const ev of events) await insertEvent(tx, e.tenantId, r.id, ev, r.created_at);
         return { ok: true, entry: toEntry(r) } as const;
+      });
+    },
+
+    async forgetMember(tenantId, memberId) {
+      return sql.begin(async (tx) => {
+        const deleted = await tx`delete from public.ambassador_entries
+          where tenant_id = ${tenantId} and member_id = ${memberId} and status = 'pending'
+          returning id`;
+        const kept = await tx<{ id: string }[]>`update public.ambassador_entries
+          set member_id = ${ERASED_MEMBER}, instagram_handle = ${ERASED_MEMBER}
+          where tenant_id = ${tenantId} and member_id = ${memberId}
+          returning id`;
+        if (kept.length > 0) {
+          await tx`update public.ambassador_events set detail = detail - 'instagram'
+            where tenant_id = ${tenantId} and entry_id in ${tx(kept.map((k) => k.id))}`;
+        }
+        await tx`delete from public.ambassador_profiles
+          where tenant_id = ${tenantId} and member_id = ${memberId}`;
+        return { deletedEntries: deleted.length, anonymisedEntries: kept.length };
       });
     },
 
@@ -728,6 +762,30 @@ export function createMemoryAmbassadorStore(
       });
       for (const ev of check.events) log(tenantId, entryId, ev, check.at);
       return Promise.resolve(decided);
+    },
+    forgetMember(tenantId, memberId) {
+      profiles.delete(`${tenantId}/${memberId}`);
+      let deletedEntries = 0;
+      let anonymisedEntries = 0;
+      for (let i = entries.length - 1; i >= 0; i--) {
+        const e = entries[i];
+        if (!e || e.tenantId !== tenantId || e.memberId !== memberId) continue;
+        if (e.status === 'pending') {
+          entries.splice(i, 1);
+          for (let j = history.length - 1; j >= 0; j--)
+            if (history[j]?.entryId === e.id) history.splice(j, 1);
+          deletedEntries += 1;
+        } else {
+          entries[i] = { ...e, memberId: ERASED_MEMBER, instagramHandle: ERASED_MEMBER };
+          history.forEach((h, j) => {
+            if (h.entryId !== e.id || !('instagram' in h.detail)) return;
+            const { instagram: _instagram, ...detail } = h.detail;
+            history[j] = { ...h, detail };
+          });
+          anonymisedEntries += 1;
+        }
+      }
+      return Promise.resolve({ deletedEntries, anonymisedEntries });
     },
     flagTicketReview(tenantId, entryId, at, event) {
       const next = update(

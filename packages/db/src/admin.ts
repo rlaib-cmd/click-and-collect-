@@ -20,9 +20,15 @@ export interface TeamMember extends StaffUser {
   readonly pending: boolean;
 }
 
+/** Auteur d'une action journalisée : membre de l'équipe, ou client (`id` null, ADR 0028). */
+export interface AuditActor {
+  readonly id: string | null;
+  readonly email: string;
+}
+
 export interface AuditEntry {
   readonly tenantId: string | null;
-  readonly actor: StaffUser;
+  readonly actor: AuditActor;
   readonly action: string;
   readonly target?: string | null;
   readonly detail?: Record<string, unknown> | null;

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { createPostgresAmbassadorStore } from './ambassador';
+import { createPostgresAmbassadorStore, ERASED_MEMBER } from './ambassador';
 import { createSql } from './client';
 
 /** Nécessite DATABASE_URL sur une base migrée et chargée avec supabase/seed.sql. */
@@ -13,7 +13,7 @@ describe.skipIf(!url)('AmbassadorStore Postgres (lots 15 et 17)', () => {
   const run = `${Date.now()}`.slice(-8);
   afterAll(async () => {
     await sql`delete from public.ambassador_entries where ticket_ref like ${`T${run}%`}`;
-    await sql`delete from public.ambassador_profiles where member_id = ${`membre-${run}`}`;
+    await sql`delete from public.ambassador_profiles where member_id like ${`membre-${run}%`}`;
     await sql.end();
   });
 
@@ -250,5 +250,50 @@ describe.skipIf(!url)('AmbassadorStore Postgres (lots 15 et 17)', () => {
     ]);
     const left = await store.pendingTicketChecks(500);
     expect(left.some((e) => [a.entry.id, b.entry.id, c.entry.id].includes(e.id))).toBe(false);
+  });
+
+  it('efface le membre : profil et participations en attente supprimés, décidées anonymisées', async () => {
+    const member = `membre-${run}-efface`;
+    await store.saveProfile(BILLS, member, 'compte.a.effacer');
+    const entry = (ref: string) =>
+      store.createEntry(
+        {
+          tenantId: BILLS,
+          memberId: member,
+          ticketRef: `T${run}${ref}`,
+          instagramHandle: 'compte.a.effacer',
+          bonusPoints: 50,
+        },
+        [{ type: 'created', actor: 'client', detail: { instagram: 'compte.a.effacer' } }],
+      );
+    const pending = await entry('EA');
+    const decided = await entry('EB');
+    if (!pending.ok || !decided.ok) throw new Error('participations non créées');
+    await store.decide(BILLS, decided.entry.id, 'confirmed', new Date());
+    // Autre enseigne : rien n'est touché.
+    await store.saveProfile(BELLA, member, 'compte.a.effacer');
+
+    expect(await store.forgetMember(BILLS, member)).toEqual({
+      deletedEntries: 1,
+      anonymisedEntries: 1,
+    });
+    expect(await store.getProfile(BILLS, member)).toBeNull();
+    expect(await store.getProfile(BELLA, member)).toBe('compte.a.effacer');
+    expect(await store.memberEntries(BILLS, member)).toEqual([]);
+    expect(await store.getEntry(BILLS, pending.entry.id)).toBeNull();
+    expect(await store.getEntry(BILLS, decided.entry.id)).toMatchObject({
+      memberId: ERASED_MEMBER,
+      instagramHandle: ERASED_MEMBER,
+      status: 'confirmed',
+      ticketRef: `T${run}EB`,
+    });
+    const [created] = await store.events(BILLS, [decided.entry.id]);
+    expect(created?.detail).toEqual({});
+    // Deuxième passage : plus rien à effacer.
+    expect(await store.forgetMember(BILLS, member)).toEqual({
+      deletedEntries: 0,
+      anonymisedEntries: 0,
+    });
+    await sql`delete from public.ambassador_profiles where tenant_id = ${BELLA} and member_id = ${member}`;
   });
 });

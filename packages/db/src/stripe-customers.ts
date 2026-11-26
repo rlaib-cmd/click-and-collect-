@@ -8,6 +8,8 @@ export interface StripeCustomerStore {
   find(tenantId: string, memberId: string): Promise<string | null>;
   /** Enregistre le client ; en cas de course, renvoie celui déjà enregistré. */
   save(tenantId: string, memberId: string, stripeCustomerId: string): Promise<string>;
+  /** Effacement du compte du membre (ADR 0028) : lien vers le client Stripe supprimé. */
+  forget(tenantId: string, memberId: string): Promise<void>;
 }
 
 export function createPostgresStripeCustomerStore(sql: Sql): StripeCustomerStore {
@@ -28,6 +30,10 @@ export function createPostgresStripeCustomerStore(sql: Sql): StripeCustomerStore
         where tenant_id = ${tenantId} and member_id = ${memberId}`;
       return r?.stripe_customer_id ?? stripeCustomerId;
     },
+    async forget(tenantId, memberId) {
+      await sql`delete from public.stripe_customers
+                where tenant_id = ${tenantId} and member_id = ${memberId}`;
+    },
   };
 }
 
@@ -39,6 +45,10 @@ export function createMemoryStripeCustomerStore(): StripeCustomerStore {
       const key = `${tenantId}:${memberId}`;
       if (!ids.has(key)) ids.set(key, stripeCustomerId);
       return Promise.resolve(ids.get(key) ?? stripeCustomerId);
+    },
+    forget(tenantId, memberId) {
+      ids.delete(`${tenantId}:${memberId}`);
+      return Promise.resolve();
     },
   };
 }
