@@ -1,6 +1,9 @@
 import { adminFr } from './admin';
 
 /** Textes de l'interface, en français. Aucune chaîne visible n'est écrite en dur dans les écrans. */
+/** « point » au singulier pour 0 et 1, « points » au-delà (usage français). */
+const pts = (n: number) => (Math.abs(n) > 1 ? 'points' : 'point');
+
 export const fr = {
   app: {
     name: 'Splash360 Commande',
@@ -430,19 +433,19 @@ export const fr = {
     pickup: 'À emporter',
     delivery: 'Livraison',
     points: (n: number) => `${n} pts`,
-    pointsLong: (n: number) => `${n} points`,
+    pointsLong: (n: number) => `${n} ${pts(n)}`,
     nextReward: (missing: number, name: string) => `Plus que ${missing} pts pour : ${name}`,
     allRewards: 'Toutes les récompenses sont à toi.',
     welcomePoints: (n: number) => `${n} points de bienvenue`,
     welcomeHint: 'Ta première récompense commence ici.',
     join: 'Rejoindre le club',
     rewardsTitle: 'À la carte du club',
-    rewardCost: (n: number) => `${n} points`,
+    rewardCost: (n: number) => `${n} ${pts(n)}`,
     available: 'disponible',
     availableBadge: 'DISPONIBLE · À UTILISER AU PANIER',
     cashierTip: 'Le bon réflexe en caisse.',
     cashierHint: 'Montre ta carte avant de payer : tes points arrivent avec le ticket.',
-    earnHint: (n: number) => `${n} points par euro dépensé, en caisse comme en ligne.`,
+    earnHint: (n: number) => `${n} ${pts(n)} par euro dépensé, en caisse comme en ligne.`,
     showCard: 'Afficher ma carte',
     cardTitle: 'Ma carte de membre',
     vip: 'Membre VIP',
@@ -478,14 +481,14 @@ export const fr = {
     rewardApplied: 'Offert',
     reserved: (n: number) => `dont ${n} pts réservés pour ta commande en cours`,
     myLoyalty: 'Ma fidélité',
-    perEuro: (n: number) => `1 € dépensé = ${n} points`,
+    perEuro: (n: number) => `1 € dépensé = ${n} ${pts(n)}`,
     unlockPrefix: (missing: number) => `Plus que ${missing} points pour débloquer`,
     allUnlocked: 'Tous tes cadeaux sont débloqués !',
     keepShopping: 'Continuer mes achats',
     chooseGift: 'Choisir mon cadeau',
     seeCard: 'Voir ma carte',
-    tierTitle: (n: number) => `${n} points`,
-    missingPoints: (n: number) => `${n} points manquants`,
+    tierTitle: (n: number) => `${n} ${pts(n)}`,
+    missingPoints: (n: number) => `${n} ${pts(n)} ${n > 1 ? 'manquants' : 'manquant'}`,
     choose: 'Choisir',
     giftOffered: 'Offert',
     giftBanner: 'Cadeau fidélité : ce produit t’est offert avec tes points.',
