@@ -9,7 +9,7 @@ l'enseigne sur sa marque. La configuration de l'application est dans `apps/mobil
 | Nom affiché | Chicken Street |
 | Paquet Android / identifiant iOS | `fr.splash360.commande.chickenstreet` |
 | Profil EAS | `chickenstreet-production` (API de production) |
-| Version | 1.1.0 |
+| Version | 1.1.1 |
 | Catégorie | Cuisine et boissons (Google Play) ; Cuisine et boissons (App Store) |
 | Contact, site, politique de confidentialité | **à fournir par l'enseigne** (e-mail de contact, site web, URL publique de la politique de confidentialité) |
 
