@@ -568,6 +568,16 @@ export function adminRoutes(deps: AdminRoutesDeps) {
         totalCents: l.totalCents,
         options: l.options.map((o) => o.name),
         note: l.note,
+        discounts: (l.discounts ?? []).map((x) => ({
+          name: x.name,
+          units: x.units,
+          cents: x.unitDiscountCents * x.units,
+        })),
+      })),
+      adjustments: (d.catalogAdjustments ?? []).map((a) => ({
+        name: a.name,
+        kind: a.kind,
+        cents: a.cents,
       })),
       history: d.events.map((e) => ({ ...e })),
     };

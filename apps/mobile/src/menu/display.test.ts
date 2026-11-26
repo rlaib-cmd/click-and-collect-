@@ -20,6 +20,7 @@ const menu: MenuDto = {
           available: true,
           allergens: [],
           featured: false,
+          promo: null,
           optionGroups: [
             {
               id: 'g',

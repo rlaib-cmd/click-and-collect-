@@ -228,6 +228,12 @@ export default function CheckoutScreen() {
                     style={{ color: palette.textMuted }}
                   >{`\n${l.options.map((o) => o.name).join(', ')}`}</Text>
                 ) : null}
+                {l.discounts.map((d, j) => (
+                  <Text
+                    key={j}
+                    style={{ color: palette.loyalty, fontWeight: '700' }}
+                  >{`\n${messages.promo.catalogLine(d.name, d.units)} · − ${formatPrice(d.cents)}`}</Text>
+                ))}
               </Text>
               <View style={styles.price}>
                 <Text style={{ color: palette.text }}>
@@ -271,6 +277,17 @@ export default function CheckoutScreen() {
               value={`− ${formatPrice(q.totals.discountCents)}`}
             />
           ) : null}
+          {q.adjustments.map((a, i) => (
+            <Row
+              key={`promo-${i}`}
+              label={
+                a.kind === 'fee'
+                  ? messages.promo.catalogFee(a.name)
+                  : messages.promo.catalogDiscount(a.name)
+              }
+              value={a.kind === 'fee' ? formatPrice(a.cents) : `− ${formatPrice(a.cents)}`}
+            />
+          ))}
           {q.totals.promoDiscountCents > 0 && q.promoCode ? (
             <Row
               label={messages.promo.line(q.promoCode)}

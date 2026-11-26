@@ -286,6 +286,16 @@ export const fr = {
     none: 'Aucun code enregistré pour le moment.',
     invalidFormat: 'Code mal saisi : lettres, chiffres ou tirets, 3 caractères minimum.',
     use: 'Utiliser',
+    /** Promotions de catalogue de la caisse (lot 24) : badge, remises et frais calculés au devis. */
+    badge: 'Promo',
+    badgeLabel: (name: string) => `Promo : ${name}`,
+    catalogLine: (name: string, units: number) =>
+      `${name} · ${units} article${units > 1 ? 's' : ''} remisé${units > 1 ? 's' : ''}`,
+    catalogDiscount: (name: string) => `Promo « ${name} »`,
+    catalogFee: (name: string) => name,
+    catalogTotal: 'Promotions',
+    catalogFees: 'Frais',
+    inCart: 'Promotion en cours : la remise est calculée au récapitulatif.',
   },
   account: {
     title: 'Mon compte',

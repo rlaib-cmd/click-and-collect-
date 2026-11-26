@@ -306,6 +306,16 @@ export const adminFr = {
       pos_cancelled: 'Annulée en caisse',
     } as Record<string, string>,
     total: 'Total',
+    subtotal: 'Sous-total',
+    deliveryFee: 'Livraison',
+    serviceFee: 'Frais de service',
+    loyaltyGift: 'Cadeau fidélité',
+    promoCode: 'Code promo',
+    /** Promotion de catalogue de la caisse sur des articles d'une ligne (lot 24). */
+    lineDiscount: (name: string, units: number) =>
+      `Promo « ${name} » : ${units} article${units > 1 ? 's' : ''} remisé${units > 1 ? 's' : ''}`,
+    catalogDiscount: (name: string) => `Promo « ${name} »`,
+    catalogFee: (name: string) => `Frais « ${name} »`,
   },
   dashboard: {
     from: 'Du',

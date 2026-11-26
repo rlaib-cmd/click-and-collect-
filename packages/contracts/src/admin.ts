@@ -132,8 +132,16 @@ export const adminOrderDetailSchema = z.object({
       totalCents: cents,
       options: z.array(z.string()),
       note: z.string().nullable(),
+      /** Promotions de catalogue de la caisse sur la ligne (lot 24). */
+      discounts: z
+        .array(z.object({ name: z.string(), units: z.number().int(), cents }))
+        .default([]),
     }),
   ),
+  /** Remise et frais des promotions de catalogue sur toute la commande (lot 24). */
+  adjustments: z
+    .array(z.object({ name: z.string(), kind: z.enum(['discount', 'fee']), cents }))
+    .default([]),
   history: z.array(
     z.object({
       status: z.string(),

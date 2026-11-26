@@ -12,6 +12,7 @@ const product = (id: string, featured: boolean, available = true): ProductDto =>
   allergens: [],
   optionGroups: [],
   featured,
+  promo: null,
 });
 
 const menu: MenuDto = {

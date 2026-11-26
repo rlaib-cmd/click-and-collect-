@@ -9,7 +9,8 @@ import { useTenant } from '@/tenant/TenantProvider';
 
 /**
  * Carte produit façon borne : photo en haut sur fond blanc, nom, description courte, prix.
- * `footer` remplace le prix (cadeaux : « Choisir », points manquants).
+ * `footer` remplace le prix (cadeaux : « Choisir », points manquants). Badge « Promo » : produit
+ * concerné par une promotion de catalogue de la caisse (lot 24).
  */
 export function ProductCard({
   product,
@@ -20,7 +21,8 @@ export function ProductCard({
   overlay,
   accessibilityLabel,
 }: {
-  product: Pick<ProductDto, 'name' | 'description' | 'priceCents' | 'imageUrl' | 'available'>;
+  product: Pick<ProductDto, 'name' | 'description' | 'priceCents' | 'imageUrl' | 'available'> &
+    Partial<Pick<ProductDto, 'promo'>>;
   onPress?: () => void;
   width?: number;
   dimmed?: boolean;
@@ -63,6 +65,16 @@ export function ProductCard({
           </Text>
         )}
         {overlay ? <View style={styles.overlay}>{overlay}</View> : null}
+        {product.promo && !unavailable ? (
+          <View
+            style={[styles.promo, { backgroundColor: palette.primary }]}
+            accessibilityLabel={messages.promo.badgeLabel(product.promo)}
+          >
+            <Text style={[styles.promoText, { color: palette.onPrimary }]}>
+              {messages.promo.badge}
+            </Text>
+          </View>
+        ) : null}
       </View>
       <View style={styles.body}>
         <Text style={[styles.name, titleStyle(style), { color: palette.text }]} numberOfLines={2}>
@@ -98,6 +110,15 @@ const styles = StyleSheet.create({
   },
   photoBox: { height: 130, alignItems: 'center', justifyContent: 'center', padding: 8 },
   photo: { width: '100%', height: '100%' },
+  promo: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  promoText: { fontSize: 12, fontWeight: '800' },
   initial: { fontSize: 48, fontWeight: '900' },
   overlay: {
     position: 'absolute',

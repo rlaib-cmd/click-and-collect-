@@ -143,6 +143,22 @@ export default function OrderScreen() {
               </Text>
             </View>
           ) : null}
+          {order.totals.catalogDiscountCents > 0 ? (
+            <View style={styles.line}>
+              <Text style={{ color: palette.text, flex: 1 }}>{messages.promo.catalogTotal}</Text>
+              <Text style={{ color: palette.text }}>
+                {`− ${formatPrice(order.totals.catalogDiscountCents)}`}
+              </Text>
+            </View>
+          ) : null}
+          {order.totals.catalogFeeCents > 0 ? (
+            <View style={styles.line}>
+              <Text style={{ color: palette.text, flex: 1 }}>{messages.promo.catalogFees}</Text>
+              <Text style={{ color: palette.text }}>
+                {formatPrice(order.totals.catalogFeeCents)}
+              </Text>
+            </View>
+          ) : null}
           {order.totals.promoDiscountCents > 0 ? (
             <View style={styles.line}>
               <Text style={{ color: palette.text, flex: 1 }}>{messages.promo.title}</Text>

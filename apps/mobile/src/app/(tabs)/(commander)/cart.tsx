@@ -65,6 +65,11 @@ export default function CartScreen() {
               {line.note ? (
                 <Text style={{ color: palette.textMuted, fontStyle: 'italic' }}>{line.note}</Text>
               ) : null}
+              {product?.promo ? (
+                <Text style={{ color: palette.loyalty, fontWeight: '700' }}>
+                  {messages.promo.badgeLabel(product.promo)}
+                </Text>
+              ) : null}
               <View style={styles.qtyRow}>
                 <Qty
                   label="−"
@@ -132,6 +137,9 @@ export default function CartScreen() {
             {formatPrice(subtotalCents)}
           </Text>
         </View>
+        {lines.some((l) => l.product?.promo) ? (
+          <Text style={{ color: palette.textMuted }}>{messages.promo.inCart}</Text>
+        ) : null}
         {missing > 0 ? (
           <Text style={[styles.minimum, { color: palette.accent }]} accessibilityRole="alert">
             {messages.checkout.belowMinimum(formatPrice(missing))}

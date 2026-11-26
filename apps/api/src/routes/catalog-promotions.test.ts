@@ -5,6 +5,7 @@ import {
 } from '@splash360/api-loyalty';
 import { createDemoMenuProvider, createMenuCache, type MenuProvider } from '@splash360/api-menu';
 import {
+  adminOrderDetailSchema,
   loyaltySessionSchema,
   menuSchema,
   placedOrderSchema,
@@ -13,7 +14,7 @@ import {
 } from '@splash360/contracts';
 import { cents, type CatalogRule } from '@splash360/core';
 import { describe, expect, it } from 'vitest';
-import { BELLA_ID, BELLA_RESTO, NOW, testSetup } from '../test-fixtures';
+import { BELLA_ID, BELLA_RESTO, NOW, sessionToken, testSetup } from '../test-fixtures';
 
 const json = { 'Content-Type': 'application/json' };
 const base = '/v1/tenants/bella';
@@ -166,6 +167,18 @@ describe('promotions de catalogue de la caisse (lot 24)', () => {
     expect(res.status).toBe(201);
     const placed = placedOrderSchema.parse(await res.json());
     expect(placed.totals.totalCents).toBe(3870);
+    // Back-office : remise affichée sous la ligne.
+    const admin = adminOrderDetailSchema.parse(
+      await (
+        await s.app.request(`/v1/admin/orders/${placed.orderId}`, {
+          headers: { Authorization: `Bearer ${await sessionToken('gerant@bella.test')}` },
+        })
+      ).json(),
+    );
+    expect(admin.lines[1]?.discounts).toEqual([
+      { name: '3 achetées = 1 offerte', units: 1, cents: 1050 },
+    ]);
+    expect(admin.totals.catalogDiscountCents).toBe(1050);
     const detail = await s.backend.reader.getOrderDetail(BELLA_ID, placed.orderId);
     expect(detail?.lines[1]?.discounts).toEqual([
       {

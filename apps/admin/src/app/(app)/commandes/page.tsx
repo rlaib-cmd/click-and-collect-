@@ -5,6 +5,7 @@ import {
   adminOrderSchema,
   alertsResponseSchema,
   type AdminOrder,
+  type AdminOrderDetail,
 } from '@splash360/contracts';
 import { can } from '@splash360/core';
 import { messages } from '@splash360/i18n';
@@ -291,8 +292,19 @@ function OrderDrawer({
                 {l.quantity} × {l.name}
                 {l.options.length ? <div className="muted">{l.options.join(', ')}</div> : null}
                 {l.note ? <div className="note">« {l.note} »</div> : null}
+                {l.discounts.map((d, j) => (
+                  <div key={j} className="muted">
+                    {t.lineDiscount(d.name, d.units)} : − {euros(d.cents)}
+                  </div>
+                ))}
               </td>
               <td className="num">{euros(l.totalCents)}</td>
+            </tr>
+          ))}
+          {adjustmentRows(o).map((row, i) => (
+            <tr key={`adj-${i}`}>
+              <td className="muted">{row.label}</td>
+              <td className="num">{row.value}</td>
             </tr>
           ))}
           <tr>
@@ -332,4 +344,27 @@ function OrderDrawer({
       </ol>
     </aside>
   );
+}
+
+/**
+ * Détail du total : sous-total, frais, remises (cadeau, code promo, remise et frais des
+ * promotions de catalogue de la caisse, lot 24 ; les remises d'articles sont sous leur ligne).
+ * Seules les lignes non nulles sont affichées.
+ */
+function adjustmentRows(o: AdminOrderDetail): { label: string; value: string }[] {
+  const x = o.totals;
+  const minus = (cents: number) => `− ${euros(cents)}`;
+  const rows: { label: string; value: string; show: boolean }[] = [
+    { label: t.subtotal, value: euros(x.subtotalCents), show: true },
+    { label: t.deliveryFee, value: euros(x.deliveryFeeCents), show: x.deliveryFeeCents > 0 },
+    { label: t.serviceFee, value: euros(x.serviceFeeCents), show: x.serviceFeeCents > 0 },
+    { label: t.loyaltyGift, value: minus(x.discountCents), show: x.discountCents > 0 },
+    ...o.adjustments.map((a) => ({
+      label: a.kind === 'fee' ? t.catalogFee(a.name) : t.catalogDiscount(a.name),
+      value: a.kind === 'fee' ? euros(a.cents) : minus(a.cents),
+      show: true,
+    })),
+    { label: t.promoCode, value: minus(x.promoDiscountCents), show: x.promoDiscountCents > 0 },
+  ];
+  return rows.filter((r) => r.show).map(({ label, value }) => ({ label, value }));
 }
