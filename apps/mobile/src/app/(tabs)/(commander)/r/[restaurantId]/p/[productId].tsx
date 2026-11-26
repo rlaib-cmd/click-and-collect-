@@ -11,10 +11,13 @@ import { ErrorState, Loading, PrimaryButton, Screen } from '@/components/ui';
 import { formatPrice, formatSupplement } from '@/lib/format';
 import { findProduct } from '@/menu/display';
 import {
+  activeGroups,
   displayUnitPrice,
   emptySelection,
   missingGroups,
+  optionCount,
   selectedOptionIds,
+  stepOption,
   toggleOption,
   type Selection,
 } from '@/menu/selection';
@@ -23,9 +26,13 @@ import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { useTenant } from '@/tenant/TenantProvider';
 
 function groupHint(g: OptionGroupDto): string {
-  if (g.min === 1 && g.max === 1) return messages.product.chooseOne;
-  if (g.min > 0) return messages.product.chooseBetween(g.min, g.max);
-  return messages.product.upTo(g.max);
+  const base =
+    g.min === 1 && g.max === 1
+      ? messages.product.chooseOne
+      : g.min > 0
+        ? messages.product.chooseBetween(g.min, g.max)
+        : messages.product.upTo(g.max);
+  return g.maxPerOption > 1 ? `${base} · ${messages.product.perOptionHint(g.maxPerOption)}` : base;
 }
 
 export default function ProductScreen() {
@@ -121,10 +128,16 @@ export default function ProductScreen() {
           </Text>
         ) : null}
 
-        {product.optionGroups.map((group) => {
+        {activeGroups(product, current).map((group) => {
           const chosen = current[group.id] ?? [];
+          // Même option plusieurs fois (`max_par_produit` Splash360) : un compteur par option.
+          const stepper = group.maxPerOption > 1;
           return (
-            <View key={group.id} style={styles.group} accessibilityRole="radiogroup">
+            <View
+              key={group.id}
+              style={[styles.group, group.parentOptionId ? styles.nested : null]}
+              accessibilityRole={stepper ? undefined : 'radiogroup'}
+            >
               <View style={styles.groupHead}>
                 <Text style={[styles.groupTitle, { color: palette.text }]}>{group.name}</Text>
                 <Text
@@ -141,6 +154,47 @@ export default function ProductScreen() {
               </View>
               <Text style={{ color: palette.textMuted }}>{groupHint(group)}</Text>
               {group.options.map((option) => {
+                if (stepper) {
+                  const n = optionCount(current, group, option.id);
+                  return (
+                    <View
+                      key={option.id}
+                      style={[
+                        styles.option,
+                        { borderColor: palette.border, opacity: option.available ? 1 : 0.45 },
+                      ]}
+                      accessibilityLabel={messages.product.optionQuantity(option.name, n)}
+                    >
+                      <Text style={[styles.optionName, { color: palette.text }]}>
+                        {option.name}
+                      </Text>
+                      <Text style={{ color: palette.textMuted }}>
+                        {option.available
+                          ? (formatSupplement(option.priceCents) ?? '')
+                          : messages.menu.unavailable}
+                      </Text>
+                      {option.available ? (
+                        <>
+                          <StepButton
+                            label="−"
+                            a11y={messages.product.decreaseOption(option.name)}
+                            onPress={() =>
+                              setSelection(stepOption(current, group, option.id, -1, product))
+                            }
+                          />
+                          <Text style={[styles.qty, { color: palette.text }]}>{n}</Text>
+                          <StepButton
+                            label="+"
+                            a11y={messages.product.increaseOption(option.name)}
+                            onPress={() =>
+                              setSelection(stepOption(current, group, option.id, 1, product))
+                            }
+                          />
+                        </>
+                      ) : null}
+                    </View>
+                  );
+                }
                 const checked = chosen.includes(option.id);
                 const single = group.max === 1;
                 return (
@@ -149,7 +203,7 @@ export default function ProductScreen() {
                     accessibilityRole={single ? 'radio' : 'checkbox'}
                     accessibilityState={{ checked, disabled: !option.available }}
                     disabled={!option.available}
-                    onPress={() => setSelection(toggleOption(current, group, option.id))}
+                    onPress={() => setSelection(toggleOption(current, group, option.id, product))}
                     style={[
                       styles.option,
                       { borderColor: palette.border, opacity: option.available ? 1 : 0.45 },
@@ -269,6 +323,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '700', marginTop: 8 },
   base: { fontSize: 18, fontWeight: '600' },
   group: { marginTop: 20, gap: 6 },
+  /** Étape imbriquée d'une formule : en retrait sous l'option qui l'ouvre. */
+  nested: { marginTop: 8, paddingLeft: 16 },
   groupHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   groupTitle: { fontSize: 18, fontWeight: '700' },
   badge: {

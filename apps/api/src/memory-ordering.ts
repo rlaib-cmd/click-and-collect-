@@ -8,6 +8,7 @@ import {
   type SlotLoad,
 } from '@splash360/core';
 import {
+  OPENING_LEASE_MS,
   SLOT_HOLDING_STATUSES,
   type CreateOrderResult,
   type NewOrder,
@@ -439,6 +440,19 @@ export function createMemoryOrderBackend(
           })),
       );
     },
+    listPosToCancel(tenantId, restaurantId) {
+      return Promise.resolve(
+        orders
+          .filter(
+            (o) =>
+              o.tenantId === tenantId &&
+              o.status === 'cancelled' &&
+              (!restaurantId || o.restaurantId === restaurantId) &&
+              (o.pos ? o.pos.paymentSentAt === null : o.posOpeningAt !== undefined),
+          )
+          .map((o) => ({ orderId: o.id, number: o.number, cancelledAt: o.createdAt })),
+      );
+    },
     retryDispatch(tenantId, orderId, restaurantId) {
       const d = dispatches.get(orderId);
       const o = orders.find((x) => x.id === orderId);
@@ -452,6 +466,7 @@ export function createMemoryOrderBackend(
       )
         return Promise.resolve(false);
       Object.assign(d, { status: 'pending', attempts: 0, nextAt: 0 });
+      if (!o.pos) delete o.posOpeningAt;
       return Promise.resolve(true);
     },
     changeStatus(tenantId, orderId, to: OperationalStatus, actor) {
@@ -490,11 +505,16 @@ export function createMemoryOrderBackend(
     },
     reserveOpening(tenantId, orderId, at) {
       const o = find(tenantId, orderId);
-      if (!o || o.pos) return Promise.resolve(false);
-      if (o.posOpeningAt && at.getTime() - o.posOpeningAt.getTime() < 30_000)
-        return Promise.resolve(false);
+      if (!o || o.pos) return Promise.resolve('in_progress' as const);
+      if (o.posOpeningAt) {
+        return Promise.resolve(
+          at.getTime() - o.posOpeningAt.getTime() >= OPENING_LEASE_MS
+            ? ('abandoned' as const)
+            : ('in_progress' as const),
+        );
+      }
       o.posOpeningAt = at;
-      return Promise.resolve(true);
+      return Promise.resolve('reserved' as const);
     },
     openTicket(tenantId, orderId, ticketId, at) {
       const o = find(tenantId, orderId);

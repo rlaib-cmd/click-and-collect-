@@ -1,14 +1,16 @@
-import type { Menu, MenuProduct } from './menu';
+import { maxPerOption, type Menu, type MenuProduct } from './menu';
 import { addCents, cents, multiplyCents, type Cents } from './money';
 
 /** Ce que l'application envoie : uniquement des identifiants et des quantités. */
 export interface CartLineInput {
   readonly productId: string;
   readonly quantity: number;
+  /** Une option choisie deux fois (`maxPerOption` > 1) apparaît deux fois. */
   readonly optionIds: readonly string[];
   readonly note?: string | undefined;
 }
 
+/** Une unité d'option : une option choisie deux fois donne deux `PricedOption` identiques. */
 export interface PricedOption {
   readonly optionId: string;
   readonly groupId: string;
@@ -79,14 +81,11 @@ function priceLine(
   if (note && note.length > MAX_NOTE_LENGTH)
     errors.push({ code: 'note_too_long', line, productId });
 
-  const seen = new Set<string>();
+  // Une option peut revenir plusieurs fois (même option choisie deux fois, `maxPerOption`) :
+  // chaque occurrence est une unité, prix compris.
+  const counts = new Map<string, number>();
   const chosen: PricedOption[] = [];
   for (const optionId of input.optionIds) {
-    if (seen.has(optionId)) {
-      errors.push({ code: 'duplicate_option', line, productId, optionId });
-      continue;
-    }
-    seen.add(optionId);
     const group = product.optionGroups.find((g) => g.options.some((o) => o.id === optionId));
     const option = group?.options.find((o) => o.id === optionId);
     if (!group || !option) {
@@ -97,14 +96,28 @@ function priceLine(
       errors.push({ code: 'option_unavailable', line, productId, groupId: group.id, optionId });
       continue;
     }
+    const n = (counts.get(optionId) ?? 0) + 1;
+    counts.set(optionId, n);
+    // Une option qui ouvre une étape imbriquée ne se prend qu'une fois (ses choix s'y rattachent).
+    const opensStep = product.optionGroups.some((g) => g.parentOptionId === optionId);
+    if (n > (opensStep ? 1 : maxPerOption(group))) {
+      errors.push({ code: 'duplicate_option', line, productId, groupId: group.id, optionId });
+      continue;
+    }
     chosen.push({ optionId, groupId: group.id, name: option.name, priceCents: option.priceCents });
   }
 
   for (const group of product.optionGroups) {
-    const count = chosen.filter((o) => o.groupId === group.id).length;
-    if (count < group.min)
+    const inGroup = chosen.filter((o) => o.groupId === group.id);
+    // Étape imbriquée : ne compte que si son option parente est choisie.
+    if (group.parentOptionId && !counts.has(group.parentOptionId)) {
+      for (const o of inGroup)
+        errors.push({ code: 'unknown_option', line, productId, optionId: o.optionId });
+      continue;
+    }
+    if (inGroup.length < group.min)
       errors.push({ code: 'too_few_options', line, productId, groupId: group.id });
-    if (count > group.max)
+    if (inGroup.length > group.max)
       errors.push({ code: 'too_many_options', line, productId, groupId: group.id });
   }
 
@@ -130,6 +143,7 @@ function priceLine(
 /**
  * Calcule le panier à partir de la carte. Seule source des montants :
  * l'application ne transmet jamais de prix (règle non négociable n° 1).
+ * Pour des prix par mode, passer `menuForMode(menu, mode)`.
  */
 export function priceCart(menu: Menu, inputs: readonly CartLineInput[]): PriceCartResult {
   if (inputs.length === 0) return { ok: false, errors: [{ code: 'empty_cart' }] };

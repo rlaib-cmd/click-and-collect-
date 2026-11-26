@@ -38,6 +38,12 @@ export const fr = {
     chooseBetween: (min: number, max: number) =>
       min === max ? `Choisissez ${min} options` : `Choisissez de ${min} à ${max} options`,
     upTo: (max: number) => `Jusqu'à ${max} au choix`,
+    /** Même option choisie plusieurs fois (formules Splash360). */
+    optionTimes: (n: number, name: string) => `${n} × ${name}`,
+    perOptionHint: (n: number) => `Jusqu'à ${n} fois la même`,
+    decreaseOption: (name: string) => `Retirer : ${name}`,
+    increaseOption: (name: string) => `Ajouter : ${name}`,
+    optionQuantity: (name: string, n: number) => `${name} : ${n}`,
     instructions: 'Instructions particulières',
     instructionsPlaceholder: 'Ex. : bien cuite, sans oignon…',
     allergens: 'Allergènes',

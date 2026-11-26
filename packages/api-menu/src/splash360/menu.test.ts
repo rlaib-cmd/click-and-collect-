@@ -169,3 +169,99 @@ describe('carte v2 réelle Tasty Crousty (exemple Splash360, lot 19)', () => {
     expect(menu.categories.map((c) => c.id)).not.toContain('cat284-grp190');
   });
 });
+
+describe('prix par mode, même option deux fois et étapes imbriquées (réponses du 26/11)', () => {
+  const ttc = (...v: number[]) => v.map((t) => ({ ht: Math.round(t / 1.1), ttc: t, tva: 0 }));
+  const raw = {
+    categories: [{ categorie_id: 'cat1', nom: 'Carte' }],
+    groupes: [{ groupe_id: 'grp1', categorie: 'cat1', nom: 'Menus', weight: 1 }],
+    types: [
+      { type_id: 'typ2076', nom: 'Sauces' },
+      { type_id: 'typ2079', nom: 'Accompagnement' },
+      { type_id: 'typ2081', nom: 'Sel' },
+    ],
+    ingredients: [
+      {
+        ingredient_id: 'ing15412-typ2076',
+        type: 'typ2076',
+        nom: 'Algérienne',
+        supplement_c: 50,
+        supplementArray_c: ttc(50, 50, 50, 99, 99),
+      },
+      { ingredient_id: 'ing15413-typ2076', type: 'typ2076', nom: 'Ketchup', supplement_c: 0 },
+      {
+        ingredient_id: 'ing15278-typ2079',
+        type: 'typ2079',
+        nom: 'Frites',
+        supplement_c: 150,
+        // Tableau trop court : la livraison reprend `supplement_c`.
+        supplementArray_c: ttc(150, 160),
+      },
+      { ingredient_id: 'ing15300-typ2081', type: 'typ2081', nom: 'Salées', supplement_c: 0 },
+    ],
+    produits: [
+      {
+        produit_id: 'prd15156',
+        groupe: 'grp1',
+        nom: 'Menu',
+        prix_c: 600,
+        prixArray_c: ttc(600, 600, 690, 850, 810),
+      },
+      { produit_id: 'prd2', groupe: 'grp1', nom: 'Sans tableau', prix_c: 450 },
+    ],
+    steps: [
+      {
+        produit: 'prd15156',
+        regles: [
+          { type: 'typ2076', min: 1, max: 2, max_par_produit: 2, supplement_c: 0 },
+          { type: 'typ2079', min: 0, max: 1, max_par_produit: 1, supplement_c: 0 },
+        ],
+      },
+      {
+        produit: 'ing15278-typ2079',
+        regles: [{ type: 'typ2081', min: 1, max: 1, max_par_produit: 1, supplement_c: 0 }],
+      },
+    ],
+  };
+  const menu = toMenu(raw, 'r', 'https://api.splash360.fr');
+  const product = menu.products.find((p) => p.id === 'prd15156');
+
+  it('prixArray_c : à emporter = entrée 1, livraison = entrée 2 ; prix_c sinon', () => {
+    expect(product?.priceCents).toBe(600);
+    expect(product?.modePrices).toEqual({ pickup: 600, delivery: 690 });
+    expect(menu.products.find((p) => p.id === 'prd2')?.modePrices).toEqual({
+      pickup: 450,
+      delivery: 450,
+    });
+    const sauces = product?.optionGroups.find((g) => g.id === 'typ2076');
+    expect(sauces?.options[0]?.modePrices).toEqual({ pickup: 50, delivery: 50 });
+    const frites = product?.optionGroups.find((g) => g.id === 'typ2079')?.options[0];
+    expect(frites?.modePrices).toEqual({ pickup: 160, delivery: 150 });
+  });
+
+  it('max_par_produit : même option jusqu’à deux fois', () => {
+    const sauces = product?.optionGroups.find((g) => g.id === 'typ2076');
+    expect(sauces).toMatchObject({ min: 1, max: 2, maxPerOption: 2 });
+    expect(product?.optionGroups.find((g) => g.id === 'typ2079')?.maxPerOption).toBeUndefined();
+  });
+
+  it('étape imbriquée : groupe rattaché à l’option parente, identifiants préfixés', () => {
+    expect(product?.optionGroups.map((g) => [g.id, g.parentOptionId ?? null])).toEqual([
+      ['typ2076', null],
+      ['typ2079', null],
+      ['ing15278-typ2079>typ2081', 'ing15278-typ2079'],
+    ]);
+    const nested = product?.optionGroups[2];
+    expect(nested?.options.map((o) => o.id)).toEqual(['ing15278-typ2079>ing15300-typ2081']);
+    // Étape imbriquée obligatoire, mais seulement si « Frites » est choisi : produit disponible.
+    expect(product?.available).toBe(true);
+  });
+
+  it('carte réelle Tasty : prix de livraison lu dans prixArray_c', () => {
+    const tasty = toMenu(splash360MenuTastyFixture, 'tasty', BASE);
+    expect(tasty.products.find((p) => p.id === 'prd1733')?.modePrices).toEqual({
+      pickup: 900,
+      delivery: 1080,
+    });
+  });
+});

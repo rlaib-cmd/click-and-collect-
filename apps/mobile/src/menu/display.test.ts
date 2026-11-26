@@ -27,6 +27,8 @@ const menu: MenuDto = {
               required: true,
               min: 1,
               max: 1,
+              maxPerOption: 1,
+              parentOptionId: null,
               options: [{ id: 'grande', name: 'Grande', priceCents: 300, available: true }],
             },
           ],
@@ -45,5 +47,12 @@ describe('affichage du panier', () => {
     expect(lines[0]).toMatchObject({ optionNames: ['Grande'], totalCents: 2600 });
     expect(lines[1]?.product).toBeNull();
     expect(subtotalCents).toBe(2600);
+  });
+
+  it('option choisie deux fois : « 2 × » et prix compté deux fois', () => {
+    const { lines } = displayCart(menu, [
+      { key: 'a', productId: 'p', quantity: 1, optionIds: ['grande', 'grande'], note: null },
+    ]);
+    expect(lines[0]).toMatchObject({ optionNames: ['2 × Grande'], totalCents: 1600 });
   });
 });

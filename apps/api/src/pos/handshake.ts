@@ -34,6 +34,10 @@ export function posTiming(deps: { timing?: Partial<PosTiming> | undefined }): Po
   return { ...DEFAULT_POS_TIMING, ...deps.timing };
 }
 
+/** Journal d'un dépôt commencé sans ticket : jamais redéposé, vérification en caisse. */
+export const POS_UNCERTAIN_LOG =
+  'Dépôt en caisse incertain : jamais redéposé ; si la commande est en attente en caisse, l’annuler en caisse';
+
 export type OpenOutcome = { readonly ok: true } | { readonly ok: false; readonly error: string };
 
 /** Dépose la commande en caisse. En cas d'échec, la commande (non payée) est annulée. */
@@ -45,7 +49,15 @@ export async function openPosTicket(
   const now = deps.now ?? (() => new Date());
   if (await deps.tickets.getTicket(tenantId, orderId)) return { ok: true };
   // Une seule requête dépose la commande ; les autres attendent son ticket (pas de doublon).
-  if (!(await deps.tickets.reserveOpening(tenantId, orderId, now()))) return { ok: true };
+  // Un second `submitcommande` avec le même numéro crée une seconde commande en caisse
+  // (Splash360, 26/11) : un dépôt commencé n'est jamais refait automatiquement.
+  const reservation = await deps.tickets.reserveOpening(tenantId, orderId, now());
+  if (reservation === 'in_progress') return { ok: true };
+  if (reservation === 'abandoned') {
+    deps.log?.(POS_UNCERTAIN_LOG, { orderId });
+    await deps.tickets.cancelForPos(tenantId, orderId, 'pos_uncertain');
+    return { ok: false, error: 'pos_uncertain' };
+  }
   try {
     const order = await deps.orders.getOrderDetail(tenantId, orderId);
     const restaurant = order ? await deps.restaurants.findById(tenantId, order.restaurantId) : null;
@@ -55,7 +67,12 @@ export async function openPosTicket(
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    deps.log?.('Dépôt en caisse impossible : commande annulée', { orderId, error: message });
+    // La caisse a pu recevoir la commande (réponse perdue) : elle resterait « en attente »
+    // (standby), annulable seulement en caisse ; alerte au back-office (`posToCancel`).
+    deps.log?.('Dépôt en caisse impossible : commande annulée, à annuler en caisse si reçue', {
+      orderId,
+      error: message,
+    });
     await deps.tickets.cancelForPos(tenantId, orderId, 'pos_unavailable');
     return { ok: false, error: message };
   }

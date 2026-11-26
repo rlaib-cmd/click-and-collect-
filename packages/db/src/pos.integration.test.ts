@@ -3,6 +3,7 @@ import { cents } from '@splash360/core';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createSql } from './client';
 import { createPostgresOrderReader, createPostgresOrderingStore } from './ordering';
+import { createPostgresOperationsStore } from './operations';
 import { createPostgresPaymentStore } from './payments';
 import { createPostgresPosTicketStore } from './pos';
 import { createPostgresRestaurantStore } from './restaurants';
@@ -19,6 +20,7 @@ describe.skipIf(!url)('PosTicketStore Postgres (ADR 0018)', () => {
   const tickets = createPostgresPosTicketStore(sql);
   const reader = createPostgresOrderReader(sql);
   const restaurants = createPostgresRestaurantStore(sql);
+  const operations = createPostgresOperationsStore(sql);
   const run = `${Date.now()}`;
   afterAll(async () => {
     await sql`delete from public.orders where idempotency_key like ${`pos-${run}-%`}`;
@@ -77,12 +79,35 @@ describe.skipIf(!url)('PosTicketStore Postgres (ADR 0018)', () => {
   it('réserve le dépôt en caisse une seule fois (pas de ticket en double)', async () => {
     const id = await newOrder('reserve', false);
     const at = new Date();
-    expect(await tickets.reserveOpening(BELLA, id, at)).toBe(true);
-    expect(await tickets.reserveOpening(BELLA, id, new Date(at.getTime() + 1000))).toBe(false);
-    // Réservation expirée (dépôt interrompu) : on peut réessayer.
-    expect(await tickets.reserveOpening(BELLA, id, new Date(at.getTime() + 31_000))).toBe(true);
+    expect(await tickets.reserveOpening(BELLA, id, at)).toBe('reserved');
+    expect(await tickets.reserveOpening(BELLA, id, new Date(at.getTime() + 1000))).toBe(
+      'in_progress',
+    );
+    // Dépôt commencé sans ticket : jamais redéposé automatiquement (doublon en caisse).
+    expect(await tickets.reserveOpening(BELLA, id, new Date(at.getTime() + 31_000))).toBe(
+      'abandoned',
+    );
     await tickets.openTicket(BELLA, id, `T-${run}-reserve`, at);
-    expect(await tickets.reserveOpening(BELLA, id, new Date(at.getTime() + 90_000))).toBe(false);
+    expect(await tickets.reserveOpening(BELLA, id, new Date(at.getTime() + 90_000))).toBe(
+      'in_progress',
+    );
+  });
+
+  it('signale les commandes annulées ici mais peut-être « en attente » en caisse', async () => {
+    const at = new Date();
+    const standby = await newOrder('standby', false);
+    await tickets.reserveOpening(BELLA, standby, at);
+    await tickets.openTicket(BELLA, standby, `T-${run}-standby`, at);
+    expect(await tickets.cancelForPos(BELLA, standby, 'payment_timeout')).toBe(true);
+    const uncertain = await newOrder('uncertain', false);
+    await tickets.reserveOpening(BELLA, uncertain, at);
+    await tickets.cancelForPos(BELLA, uncertain, 'pos_uncertain');
+    const never = await newOrder('never', false);
+    await tickets.cancelForPos(BELLA, never, 'payment_timeout');
+    const ids = (await operations.listPosToCancel(BELLA)).map((o) => o.orderId);
+    expect(ids).toEqual(expect.arrayContaining([standby, uncertain]));
+    expect(ids).not.toContain(never);
+    expect(await operations.listPosToCancel(GREEN)).toEqual([]);
   });
 
   it('ne branche la caisse réelle que sur un seul restaurant à la fois', async () => {

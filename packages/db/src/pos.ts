@@ -19,13 +19,23 @@ export interface PosTicket {
   readonly error: string | null;
 }
 
+/**
+ * Réservation du dépôt en caisse :
+ * - reserved : ce dépôt peut appeler `submitcommande` (une seule fois par commande) ;
+ * - in_progress : ticket déjà enregistré, ou dépôt en cours depuis moins de `OPENING_LEASE_MS` ;
+ * - abandoned : un dépôt a commencé sans ticket enregistré (panne, réponse perdue) : la caisse a
+ *   pu recevoir la commande, elle n'est **jamais** redéposée automatiquement (un second
+ *   `submitcommande` avec le même numéro crée une seconde commande, Splash360 26/11).
+ */
+export type OpeningReservation = 'reserved' | 'in_progress' | 'abandoned';
+
+/** Durée au-delà de laquelle un dépôt commencé sans ticket est considéré abandonné. */
+export const OPENING_LEASE_MS = 30_000;
+
 export interface PosTicketStore {
   getTicket(tenantId: string, orderId: string): Promise<PosTicket | null>;
-  /**
-   * Réserve le dépôt en caisse avant d'appeler Splash360 : faux si la commande a déjà un ticket
-   * ou si un autre dépôt est en cours depuis moins de 30 s (pas de ticket en double).
-   */
-  reserveOpening(tenantId: string, orderId: string, at: Date): Promise<boolean>;
+  /** Réserve le dépôt en caisse avant d'appeler Splash360 (voir `OpeningReservation`). */
+  reserveOpening(tenantId: string, orderId: string, at: Date): Promise<OpeningReservation>;
   /** Enregistre le ticket déposé (phase waiting) ; faux si la commande en a déjà un. */
   openTicket(tenantId: string, orderId: string, ticketId: string, at: Date): Promise<boolean>;
   /** Change de phase et date l'étape atteinte. */
@@ -90,12 +100,20 @@ export function createPostgresPosTicketStore(sql: Sql): PosTicketStore {
     },
 
     async reserveOpening(tenantId, orderId, at) {
+      // Jamais de seconde réservation : un dépôt commencé ne se refait qu'à la main (back-office).
       const rows = await sql`
         update public.orders set pos_opening_at = ${at}
         where tenant_id = ${tenantId} and id = ${orderId} and pos_ticket_id is null
-          and (pos_opening_at is null or pos_opening_at < ${new Date(at.getTime() - 30_000)})
+          and pos_opening_at is null
         returning id`;
-      return rows.length > 0;
+      if (rows.length > 0) return 'reserved';
+      const [o] = await sql<{ pos_ticket_id: string | null; pos_opening_at: Date | null }[]>`
+        select pos_ticket_id, pos_opening_at from public.orders
+        where tenant_id = ${tenantId} and id = ${orderId}`;
+      if (!o || o.pos_ticket_id || !o.pos_opening_at) return 'in_progress';
+      return at.getTime() - o.pos_opening_at.getTime() >= OPENING_LEASE_MS
+        ? 'abandoned'
+        : 'in_progress';
     },
 
     async openTicket(tenantId, orderId, ticketId, at) {

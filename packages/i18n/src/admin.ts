@@ -267,8 +267,12 @@ export const adminFr = {
     pause: 'Mettre en pause la commande en ligne',
     resume: 'Reprendre la commande en ligne',
     paused: 'Commande en ligne en pause',
-    alert: (n: number) => `${n} commande(s) n’ont pas pu être envoyées à la caisse.`,
+    alert: (n: number) =>
+      `${n} commande(s) n’ont pas pu être envoyées à la caisse. Si l’envoi est incertain, vérifiez en caisse avant de renvoyer (un second envoi crée une seconde commande).`,
     retry: 'Renvoyer à la caisse',
+    /** Splash360 (26/11) : une commande « en attente » ne s'annule qu'en caisse. */
+    posToCancel: (numbers: readonly number[]) =>
+      `Commande(s) n° ${numbers.join(', ')} annulée(s) ici (paiement non terminé ou caisse indisponible) : si elle(s) apparai(ssen)t « en attente » dans la caisse, annulez-la(les) directement en caisse.`,
     toCollect: 'À encaisser sur place',
     /** Avancement en caisse Splash360 (ADR 0018). */
     pos: {

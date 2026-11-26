@@ -1,5 +1,6 @@
 import { MenuUnavailableError, type MenuCache } from '@splash360/api-menu';
 import {
+  menuModeSchema,
   subdomainSchema,
   tenantThemeSchema,
   type RestaurantDto,
@@ -12,6 +13,7 @@ import type {
   TenantStore,
   TenantWithTheme,
 } from '@splash360/db';
+import { menuForMode } from '@splash360/core';
 import { DEFAULT_THEME } from '@splash360/theme';
 import { Hono } from 'hono';
 import { isValidPreviewToken } from '../admin/theme-preview';
@@ -126,7 +128,14 @@ export function tenantRoutes(deps: TenantRoutesDeps) {
       const overrides = await deps.admin.listMenuOverrides(c.get('tenant').id, restaurant.id);
       c.header('Cache-Control', 'public, max-age=30');
       return c.json(
-        toMenuDto(cached.menu, restaurant.id, cached.fetchedAt, cached.stale, overrides),
+        toMenuDto(
+          // Prix du mode choisi par le client (réponse de Splash360 du 26/11 : prixArray_c).
+          menuForMode(cached.menu, menuModeSchema.parse(c.req.query('mode'))),
+          restaurant.id,
+          cached.fetchedAt,
+          cached.stale,
+          overrides,
+        ),
       );
     } catch (error) {
       if (error instanceof MenuUnavailableError) {

@@ -27,6 +27,10 @@ export const optionGroupSchema = z.object({
   required: z.boolean(),
   min: z.number().int().nonnegative(),
   max: z.number().int().positive(),
+  /** Nombre de fois qu'une même option peut être choisie (répétée dans `optionIds`). */
+  maxPerOption: z.number().int().positive().default(1),
+  /** Étape imbriquée : groupe proposé seulement si cette option (d'un autre groupe) est choisie. */
+  parentOptionId: z.string().nullable().default(null),
   options: z.array(menuOptionSchema),
 });
 
@@ -42,6 +46,9 @@ export const productSchema = z.object({
   /** Mis en avant par la marque sur l'accueil (jamais vrai pour un produit indisponible). */
   featured: z.boolean().default(false),
 });
+
+/** Mode de commande demandé pour la carte : prix du mode (`?mode=`), à emporter par défaut. */
+export const menuModeSchema = z.enum(['pickup', 'delivery']).catch('pickup');
 
 export const menuSchema = z.object({
   restaurantId: z.uuid(),

@@ -7,6 +7,7 @@ import { PosRejectedError } from './gateway';
 import {
   createSplash360PosGateway,
   euros,
+  isoWithOffset,
   splash360SalesSource,
   splitName,
   toSplash360Commande,
@@ -98,11 +99,108 @@ describe('toSplash360Commande', () => {
     ]);
   });
 
-  it('transmet remises et frais en modificateurs, frais avec leur taux de TVA', () => {
+  it('transmet remises et frais en modificateurs, frais au format exact de Splash360', () => {
     expect(commande.modificateurs).toEqual([
       { type: 'discount', valeur: '3.50€', nom: 'Cadeau fidélité' },
       { type: 'discount', valeur: '1.00€', nom: 'Code promo' },
-      { type: 'frais', valeur: '0.50€', taux: 0.2, nom: 'Frais de service' },
+      {
+        modificateur_id: 'frais_service',
+        type: 'frais',
+        valeur: '0.50€',
+        taux: 0.2,
+        item: null,
+        ingredient: null,
+        nom: 'Frais',
+        operation: 1,
+      },
+    ]);
+    const delivery = toSplash360Commande(
+      order({
+        totals: { ...order().totals, deliveryFeeCents: cents(100), serviceFeeCents: cents(0) },
+      }),
+      { feeVatRate: 0.2 },
+    );
+    expect(delivery.modificateurs.at(-1)).toEqual({
+      modificateur_id: 'frais_livraison',
+      type: 'frais',
+      valeur: '1.00€',
+      taux: 0.2,
+      item: null,
+      ingredient: null,
+      nom: 'Frais',
+      operation: 1,
+    });
+  });
+
+  it('heure choisie dans `scheduledAt` (heure de Paris, décalage compris) ; rien pour « dès que possible »', () => {
+    expect(commande.scheduledAt).toBe('2026-11-24T12:30:00.000+01:00');
+    const summer = toSplash360Commande(order({ requestedSlot: '2026-07-01T10:15:30.177Z' }), {
+      feeVatRate: 0.2,
+    });
+    expect(summer.scheduledAt).toBe('2026-07-01T12:15:30.177+02:00');
+    const asap = toSplash360Commande(order({ requestedSlot: null }), { feeVatRate: 0.2 });
+    expect(asap).not.toHaveProperty('scheduledAt');
+    expect(isoWithOffset('2026-11-26T13:22:22.177Z', 'Europe/Paris')).toBe(
+      '2026-11-26T14:22:22.177+01:00',
+    );
+    expect(isoWithOffset('2026-11-26T13:22:22.177Z', 'UTC')).toBe('2026-11-26T13:22:22.177+00:00');
+  });
+
+  it('ingrédients : identifiant complet, même option deux fois en `qte: 2`, étape imbriquée à plat', () => {
+    const formule = toSplash360Commande(
+      order({
+        lines: [
+          {
+            productId: 'prd15156',
+            name: 'Menu',
+            quantity: 1,
+            unitPriceCents: 600 + 50 + 50 + 150,
+            totalCents: 850,
+            note: null,
+            options: [
+              {
+                groupId: 'typ2076',
+                optionId: 'ing15412-typ2076',
+                name: 'Algérienne',
+                priceCents: 50,
+              },
+              {
+                groupId: 'typ2076',
+                optionId: 'ing15412-typ2076',
+                name: 'Algérienne',
+                priceCents: 50,
+              },
+              { groupId: 'typ2079', optionId: 'ing15278-typ2079', name: 'Frites', priceCents: 150 },
+              {
+                groupId: 'ing15278-typ2079>typ2081',
+                optionId: 'ing15278-typ2079>ing15300-typ2081',
+                name: 'Salées',
+                priceCents: 0,
+              },
+            ],
+          },
+        ],
+      }),
+      { feeVatRate: 0.2 },
+    );
+    expect(formule.items).toEqual([
+      {
+        itemid: 1,
+        produitid: 'prd15156',
+        quantite: 1,
+        price: 6,
+        ingredients: [
+          { ingredient: 'ing15412-typ2076', qte: 2, price: 0.5 },
+          { ingredient: 'ing15278-typ2079', qte: 1, price: 1.5 },
+          {
+            ingredient: 'ing15300-typ2081',
+            qte: 1,
+            price: 0,
+            ingid: 'ing15300-typ2081',
+            parentid: 'ing15278-typ2079',
+          },
+        ],
+      },
     ]);
   });
 

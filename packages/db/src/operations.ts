@@ -33,6 +33,17 @@ export interface FailedDispatch {
   readonly updatedAt: string;
 }
 
+/**
+ * Commande annulée de notre côté (paiement non terminé, caisse pas prête, dépôt incertain) alors
+ * que la caisse a pu la recevoir : elle y reste « en attente » (standby), et seule la caisse peut
+ * l'annuler (Splash360, 26/11). Alerte du back-office pendant 24 h.
+ */
+export interface PosOrderToCancel {
+  readonly orderId: string;
+  readonly number: number;
+  readonly cancelledAt: string;
+}
+
 /** Opérations après paiement : envoi à la caisse, statuts, jetons de notification. */
 export interface OperationsStore {
   /** Réserve les envois dus (bail de 2 min pour qu'une autre instance ne les prenne pas en même temps). */
@@ -42,9 +53,12 @@ export interface OperationsStore {
   markDispatchFailed(orderId: string, error: string, retryAt: Date | null): Promise<void>;
   /** `restaurantId` : envois d'un seul restaurant (équipier, audit du 25/11 M5). */
   listFailedDispatches(tenantId: string, restaurantId?: string): Promise<FailedDispatch[]>;
+  /** Commandes annulées ici mais peut-être « en attente » en caisse (24 dernières heures). */
+  listPosToCancel(tenantId: string, restaurantId?: string): Promise<PosOrderToCancel[]>;
   /**
    * Relance manuelle depuis le back-office. Jamais pour une commande annulée ou remboursée
-   * (elle serait préparée alors que le client est remboursé, audit M5).
+   * (elle serait préparée alors que le client est remboursé, audit M5). Libère un dépôt en caisse
+   * abandonné sans ticket : l'équipe a vérifié que la caisse ne l'a pas reçu.
    */
   retryDispatch(tenantId: string, orderId: string, restaurantId?: string): Promise<boolean>;
   /** Changement de statut contrôlé par la machine à états de `core`, tracé avec son auteur. */
@@ -116,14 +130,38 @@ export function createPostgresOperationsStore(sql: Sql): OperationsStore {
       }));
     },
 
+    async listPosToCancel(tenantId, restaurantId) {
+      const rows = await sql<{ id: string; number: number; updated_at: Date }[]>`
+        select o.id, o.number, o.updated_at from public.orders o
+        where o.tenant_id = ${tenantId} and o.status = 'cancelled'
+          and o.updated_at > now() - interval '24 hours'
+          and ((o.pos_ticket_id is not null and o.pos_payment_sent_at is null)
+               or (o.pos_ticket_id is null and o.pos_opening_at is not null))
+          ${restaurantId ? sql`and o.restaurant_id = ${restaurantId}` : sql``}
+        order by o.updated_at desc limit 50`;
+      return rows.map((r) => ({
+        orderId: r.id,
+        number: r.number,
+        cancelledAt: r.updated_at.toISOString(),
+      }));
+    },
+
     async retryDispatch(tenantId, orderId, restaurantId) {
-      const rows = await sql`
-        update public.pos_dispatches d set status = 'pending', next_attempt_at = now(), attempts = 0
-        from public.orders o
-        where d.tenant_id = ${tenantId} and d.order_id = ${orderId} and d.status = 'failed'
-          and o.id = d.order_id and o.status not in ('cancelled', 'refunded')
-          ${restaurantId ? sql`and o.restaurant_id = ${restaurantId}` : sql``}`;
-      return rows.count === 1;
+      return sql.begin(async (tx) => {
+        const rows = await tx`
+          update public.pos_dispatches d set status = 'pending', next_attempt_at = now(), attempts = 0
+          from public.orders o
+          where d.tenant_id = ${tenantId} and d.order_id = ${orderId} and d.status = 'failed'
+            and o.id = d.order_id and o.status not in ('cancelled', 'refunded')
+            ${restaurantId ? sql`and o.restaurant_id = ${restaurantId}` : sql``}`;
+        if (rows.count !== 1) return false;
+        // Relance décidée par l'équipe (après vérification en caisse) : un dépôt abandonné sans
+        // ticket peut être refait, une seule fois de plus.
+        await tx`
+          update public.orders set pos_opening_at = null
+          where tenant_id = ${tenantId} and id = ${orderId} and pos_ticket_id is null`;
+        return true;
+      });
     },
 
     async changeStatus(tenantId, orderId, to, actor) {

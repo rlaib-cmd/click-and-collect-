@@ -4,7 +4,7 @@
  * personnelle. Champs inutiles à la traduction retirés ; `prixArray_c` réduit aux prix TTC.
  * Contient : un produit à étapes (sauce obligatoire, suppléments 0 à 6, boisson, dessert dont un
  * inactif), sa copie dans le catalogue DELIVERY, un produit inactif et une étape imbriquée
- * (étape d'un ingrédient de formule, non traduite). Lot 19, ADR 0024.
+ * (étape d’un ingrédient de formule, d’un type absent de ce produit). Lot 19, ADR 0024.
  */
 export const splash360MenuTastyFixture = {
   reglescatalogue: [],

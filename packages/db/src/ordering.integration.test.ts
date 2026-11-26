@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { cents } from '@splash360/core';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createSql } from './client';
-import { createPostgresOrderingStore, type NewOrder } from './ordering';
+import { createPostgresOrderReader, createPostgresOrderingStore, type NewOrder } from './ordering';
 import { createPostgresPromoStore } from './promos';
 import { createPostgresRestaurantStore } from './restaurants';
 
@@ -15,6 +15,7 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
   const sql = createSql(url ?? '', { max: 10 });
   const store = createPostgresOrderingStore(sql);
   const restaurants = createPostgresRestaurantStore(sql);
+  const reader = createPostgresOrderReader(sql);
   const run = `${Date.now()}`;
   afterAll(async () => {
     await sql`delete from public.orders where idempotency_key like ${`test-${run}-%`}`;
@@ -100,6 +101,43 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
     await expect(
       sql`update public.orders set status = 'paid' where id = ${created.order.id}`,
     ).rejects.toThrow();
+  });
+
+  it('garde une option choisie deux fois et une option d’étape imbriquée (formule Splash360)', async () => {
+    const restaurantId = await bellaId();
+    const base = newOrder(restaurantId, 'formule', '2030-01-22T11:00:00.000Z', null);
+    const sauce = {
+      optionId: 'ing15412-typ2076',
+      groupId: 'typ2076',
+      name: 'Algérienne',
+      priceCents: cents(50),
+    };
+    const created = await store.createOrder({
+      ...base,
+      lines: [
+        {
+          ...base.lines[0]!,
+          options: [
+            sauce,
+            sauce,
+            {
+              optionId: 'ing15278-typ2079>ing15300-typ2081',
+              groupId: 'ing15278-typ2079>typ2081',
+              name: 'Salées',
+              priceCents: cents(0),
+            },
+          ],
+        },
+      ],
+    });
+    if (!created.ok) throw new Error('commande refusée');
+    const detail = await reader.getOrderDetail(BELLA, created.order.id);
+    const ids = detail?.lines[0]?.options.map((o) => o.optionId) ?? [];
+    expect([...ids].sort()).toEqual([
+      'ing15278-typ2079>ing15300-typ2081',
+      'ing15412-typ2076',
+      'ing15412-typ2076',
+    ]);
   });
 
   it('lit les réglages de commande du restaurant', async () => {

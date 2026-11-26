@@ -15,6 +15,7 @@ import {
   computeTotals,
   findDeliveryZone,
   fromLocal,
+  menuForMode,
   priceCart,
   slotsForDate,
   type DeliveryZone,
@@ -174,8 +175,9 @@ export async function quote(
         ),
       }
     : full;
+  // Prix du mode choisi : à emporter ou livraison (prixArray_c, réponse de Splash360 du 26/11).
   const priced = priceCart(
-    menu,
+    menuForMode(menu, request.mode),
     request.lines.map((l) => ({
       productId: l.productId,
       quantity: l.quantity,

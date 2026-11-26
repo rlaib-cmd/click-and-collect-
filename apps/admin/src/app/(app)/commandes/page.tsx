@@ -3,7 +3,7 @@
 import {
   adminOrderDetailSchema,
   adminOrderSchema,
-  alertSchema,
+  alertsResponseSchema,
   type AdminOrder,
 } from '@splash360/contracts';
 import { can } from '@splash360/core';
@@ -53,7 +53,7 @@ const time = (iso: string) =>
 
 // Schémas stables (audit du 25/11, F01) : jamais recréés pendant le rendu.
 const ordersListSchema = z.object({ orders: z.array(adminOrderSchema) });
-const alertsSchema = z.object({ alerts: z.array(alertSchema) });
+const alertsSchema = alertsResponseSchema;
 const ORDERS_REFRESH_MS = 15_000;
 const ALERTS_REFRESH_MS = 30_000;
 const DETAIL_REFRESH_MS = 10_000;
@@ -107,6 +107,11 @@ export default function OrdersPage() {
           {t.paused}
         </p>
       ) : null}
+      {alerts.data && alerts.data.posToCancel.length > 0 ? (
+        <div className="banner warning" role="alert">
+          {t.posToCancel(alerts.data.posToCancel.map((a) => a.number))}
+        </div>
+      ) : null}
       {alerts.data && alerts.data.alerts.length > 0 ? (
         <div className="banner warning" role="alert">
           {t.alert(alerts.data.alerts.length)}{' '}
@@ -115,6 +120,7 @@ export default function OrdersPage() {
               key={a.orderId}
               type="button"
               className="link"
+              title={a.lastError ?? undefined}
               onClick={() =>
                 void api(auth, `/orders/${a.orderId}/dispatch-retry`, z.undefined(), {
                   method: 'POST',

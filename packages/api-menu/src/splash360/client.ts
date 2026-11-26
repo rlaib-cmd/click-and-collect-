@@ -109,7 +109,40 @@ export interface Splash360CommandeItem {
   readonly produitid: string;
   readonly quantite: number;
   readonly price: number;
-  readonly ingredients: readonly { ingredient: string; qte: number; price: number }[];
+  readonly ingredients: readonly Splash360CommandeIngredient[];
+}
+
+/**
+ * Ingrédient d'une ligne (réponses de Splash360 du 26/11) : identifiant complet
+ * (« ing15407-typ2075 ») ; une option choisie deux fois part une fois avec `qte: 2` ; une option
+ * d'étape imbriquée (formule) part à plat avec `ingid` et `parentid` (ingrédient parent).
+ */
+export interface Splash360CommandeIngredient {
+  readonly ingredient: string;
+  readonly qte: number;
+  /** Prix unitaire en euros. */
+  readonly price: number;
+  readonly ingid?: string;
+  readonly parentid?: string;
+}
+
+/** Modificateur « frais » au format exact donné par Splash360 le 26/11. */
+export interface Splash360FeeModificateur {
+  readonly modificateur_id: string;
+  readonly type: 'frais';
+  /** Euros à deux décimales suivis de « € » : « 1.00€ ». */
+  readonly valeur: string;
+  readonly taux: number;
+  readonly item: null;
+  readonly ingredient: null;
+  readonly nom: string;
+  readonly operation: 1;
+}
+
+export interface Splash360DiscountModificateur {
+  readonly type: 'discount';
+  readonly valeur: string;
+  readonly nom: string;
 }
 
 export interface Splash360Commande {
@@ -118,6 +151,11 @@ export interface Splash360Commande {
   readonly status: 'standby';
   readonly total: number;
   readonly orderNumber: string;
+  /**
+   * Heure de retrait ou de livraison choisie par le client, ISO 8601 avec le décalage de Paris
+   * (« 2026-11-26T14:22:22.177+01:00 ») ; absente pour « dès que possible » (réponse du 26/11).
+   */
+  readonly scheduledAt?: string;
   readonly items: readonly Splash360CommandeItem[];
   readonly comments: readonly (readonly { id: number; itemid?: number; text: string }[])[];
   readonly client: {
@@ -132,13 +170,7 @@ export interface Splash360Commande {
     readonly commentaire?: string;
     readonly mode: string;
   };
-  readonly modificateurs: readonly {
-    type: 'discount' | 'frais';
-    valeur: string;
-    nom: string;
-    taux?: number;
-    item?: number;
-  }[];
+  readonly modificateurs: readonly (Splash360DiscountModificateur | Splash360FeeModificateur)[];
   readonly paymentType?: 'carte' | 'especes' | 'cheque' | 'ticket' | 'desk';
 }
 

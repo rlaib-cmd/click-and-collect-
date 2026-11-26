@@ -1,8 +1,10 @@
 import {
   cents,
+  nestedOptionId,
   type Menu,
   type MenuCategory,
   type MenuProduct,
+  type ModePrices,
   type OptionGroup,
 } from '@splash360/core';
 import { z } from 'zod';
@@ -22,15 +24,33 @@ import type { Splash360Client } from './client';
  * - photo : `image.location`, rendue absolue par rapport à l'URL de l'API ;
  * - libellé affiché : `legende` (texte client, avec ses pictos), sinon `nom` (libellé du ticket de
  *   caisse : « ###   S   ### » pour « Sauce Sucrée » dans la carte réelle Tasty Crousty) ;
- * - options et formules : étapes v2 (`steps`/`regles`, `buildOptionGroups`, lot 19, ADR 0024).
+ * - options et formules : étapes v2 (`steps`/`regles`, `buildOptionGroups`, lot 19, ADR 0024) ;
+ * - prix par mode (réponses de Splash360 du 26/11) : `prixArray_c` et `supplementArray_c` sont
+ *   dans l'ordre [sur place, à emporter, livraison, Uber, Deliveroo] ; à emporter = entrée 1,
+ *   livraison = entrée 2 (`ttc`), sinon `prix_c` / `supplement_c` ;
+ * - `max_par_produit` : nombre de fois qu'une même option peut être choisie ;
+ * - étapes imbriquées (`steps[].produit` = « ing…-typ… ») : groupes rattachés à l'option parente.
  *
- * Non traduit tant que Splash360 ne l'a pas documenté (questions-en-attente.md) :
- * `composition`/`compo`, `prixArray_c` (prix par mode), `groupes_alt`, `max_par_produit` > 1,
- * étapes imbriquées (étape d'un ingrédient choisi dans une formule) et `reglescatalogue`.
+ * Non traduit (questions-en-attente.md) : `composition`/`compo`, `groupes_alt`, `gifts` et
+ * `reglescatalogue` (promotions de la caisse, forme insuffisante pour les appliquer en ligne).
  */
 const id = z.union([z.string(), z.number()]).transform(String);
 const flag = z.union([z.number(), z.boolean(), z.string()]).optional();
 const image = z.object({ location: z.string().optional() }).loose().nullish();
+/** Prix par mode (`prixArray_c`, `supplementArray_c`) : une entrée illisible est ignorée. */
+const modeArray = z
+  .array(
+    z
+      .union([
+        z.object({ ttc: z.coerce.number().nullish() }).loose(),
+        // Forme réduite (prix TTC seul), celle de l'extrait de carte des tests.
+        z.number().transform((ttc) => ({ ttc })),
+      ])
+      .nullish()
+      .catch(null),
+  )
+  .nullish()
+  .catch(null);
 
 const schema = z
   .object({
@@ -61,6 +81,7 @@ const schema = z
             legende: z.string().nullish(),
             prix: z.union([z.string(), z.number()]).nullish(),
             prix_c: z.coerce.number().nullish(),
+            prixArray_c: modeArray,
             active: flag,
             visible: flag,
             weight: z.coerce.number().optional(),
@@ -81,6 +102,7 @@ const schema = z
             legende: z.string().nullish(),
             supplement_c: z.coerce.number().nullish(),
             supplement: z.union([z.string(), z.number()]).nullish(),
+            supplementArray_c: modeArray,
             active: flag,
             visible: flag,
             weight: z.coerce.number().optional(),
@@ -100,6 +122,12 @@ const schema = z
                     type: id,
                     min: z.coerce.number().int().nonnegative().optional(),
                     max: z.coerce.number().int().nonnegative().optional(),
+                    max_par_produit: z.coerce
+                      .number()
+                      .int()
+                      .nonnegative()
+                      .optional()
+                      .catch(undefined),
                     supplement_c: z.coerce.number().nullish(),
                   })
                   .loose(),
@@ -127,6 +155,27 @@ function priceCents(prixC: number | null | undefined, prix: string | number | nu
   const n = typeof prix === 'number' ? prix : Number(prix.replace(',', '.').trim());
   if (!Number.isFinite(n) || n < 0) return null;
   return Math.round(n * 100);
+}
+
+/** Ordre de `prixArray_c` (réponse de Splash360 du 26/11). */
+export const SPLASH360_MODE_INDEX = { surplace: 0, pickup: 1, delivery: 2, uber: 3, deliveroo: 4 };
+
+type ModeArray = z.infer<typeof modeArray>;
+
+function modeCents(array: ModeArray, index: number): number | null {
+  const v = array?.[index]?.ttc;
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : null;
+}
+
+/**
+ * Prix à emporter et en livraison ; une entrée absente (tableau absent ou trop court) reprend le
+ * prix de base. `extra` (supplément de la règle) s'ajoute aux deux.
+ */
+export function modePrices(array: ModeArray, base: number, extra = 0): ModePrices {
+  return {
+    pickup: cents((modeCents(array, SPLASH360_MODE_INDEX.pickup) ?? base) + extra),
+    delivery: cents((modeCents(array, SPLASH360_MODE_INDEX.delivery) ?? base) + extra),
+  };
 }
 
 function imageUrl(location: string | undefined, baseUrl: string): string | null {
@@ -180,8 +229,14 @@ export function toMenu(raw: unknown, restaurantId: string, baseUrl: string): Men
           name: p.legende?.trim() || p.nom?.trim() || p.produit_id,
           description,
           priceCents: cents(price),
+          modePrices: modePrices(p.prixArray_c, price),
           imageUrl: imageUrl(p.image?.location, baseUrl),
-          available: truthy(p.active, true) && optionGroupsOf(p.produit_id).every(satisfiable),
+          // Une étape imbriquée n'est exigée que si son option parente est choisie.
+          available:
+            truthy(p.active, true) &&
+            optionGroupsOf(p.produit_id)
+              .filter((g) => !g.parentOptionId)
+              .every(satisfiable),
           allergens: [],
           optionGroups: optionGroupsOf(p.produit_id),
         },
@@ -207,12 +262,16 @@ function satisfiable(g: OptionGroup): boolean {
 }
 
 /**
- * Étapes Splash360 → groupes d'options (consignes Splash360 du 25/11, ADR 0024) :
+ * Étapes Splash360 → groupes d'options (consignes Splash360 du 25/11 et du 26/11, ADR 0024) :
  * chaque règle d'une étape vise une personnalisation (`types`) ; ses options sont les ingrédients
- * de ce type, dans l'ordre des règles ; min/max viennent de la règle. Prix d'une option : son
- * supplément en centimes, plus celui de la règle (nul partout dans la carte réelle du 25/11).
- * Une même option ne se choisit qu'une fois (les quantités `max_par_produit` > 1 ne sont pas encore
- * proposées : questions-en-attente). Identifiant d'option : `ingredient_id` complet, tel que reçu.
+ * de ce type, dans l'ordre des règles ; min/max viennent de la règle, `max_par_produit` donne le
+ * nombre de fois qu'une même option peut être choisie. Prix d'une option : son supplément (par
+ * mode), plus celui de la règle (nul partout dans les cartes réelles). Identifiant d'option :
+ * `ingredient_id` complet, tel que reçu.
+ *
+ * Étape imbriquée (`steps[].produit` = identifiant d'ingrédient) : ses groupes suivent le groupe
+ * de l'option parente, avec `parentOptionId` et des identifiants préfixés (`nestedOptionId`), pour
+ * que la caisse reçoive `parentid`. Un seul niveau : l'étape d'une option déjà imbriquée est ignorée.
  */
 function buildOptionGroups(
   types: Parsed['types'],
@@ -227,28 +286,49 @@ function buildOptionGroups(
     if (!list.some((x) => x.ingredient_id === i.ingredient_id)) list.push(i);
     byType.set(i.type, list);
   }
-  const byProduct = new Map(steps.map((st) => [st.produit, st]));
-  return (productId) => {
-    const step = byProduct.get(productId);
+  const byOwner = new Map(steps.map((st) => [st.produit, st]));
+
+  function groupsOf(ownerId: string, parentOptionId: string | null): OptionGroup[] {
+    const step = byOwner.get(ownerId);
     if (!step) return [];
+    const prefix = (id: string) => (parentOptionId ? nestedOptionId(parentOptionId, id) : id);
     return step.regles.flatMap((r) => {
+      const extra = Math.max(0, r.supplement_c ?? 0);
       const options = (byType.get(r.type) ?? [])
         .map((i, index) => ({ i, index }))
         .sort((a, b) => (a.i.weight ?? 0) - (b.i.weight ?? 0) || a.index - b.index)
-        .map(({ i }) => ({
-          id: i.ingredient_id,
-          name: i.legende?.trim() || i.nom?.trim() || i.ingredient_id,
-          priceCents: cents(
-            (priceCents(i.supplement_c, i.supplement) ?? 0) + Math.max(0, r.supplement_c ?? 0),
-          ),
-          available: truthy(i.active, true),
-        }));
+        .map(({ i }) => {
+          const base = priceCents(i.supplement_c, i.supplement) ?? 0;
+          return {
+            id: prefix(i.ingredient_id),
+            name: i.legende?.trim() || i.nom?.trim() || i.ingredient_id,
+            priceCents: cents(base + extra),
+            modePrices: modePrices(i.supplementArray_c, base, extra),
+            available: truthy(i.active, true),
+          };
+        });
       if (options.length === 0) return [];
-      const min = Math.min(r.min ?? 0, options.length);
-      const max = Math.max(min, Math.min(r.max ?? options.length, options.length));
-      return [{ id: r.type, name: typeName.get(r.type) ?? 'Choix', min, max, options }];
+      const min = Math.min(r.min ?? 0, options.length * Math.max(1, r.max_par_produit ?? 1));
+      const max = Math.max(min, r.max ?? options.length);
+      const perOption = Math.max(1, Math.min(r.max_par_produit ?? 1, max));
+      const group: OptionGroup = {
+        id: prefix(r.type),
+        name: typeName.get(r.type) ?? 'Choix',
+        min,
+        max: Math.min(max, options.length * perOption),
+        ...(perOption > 1 ? { maxPerOption: perOption } : {}),
+        ...(parentOptionId ? { parentOptionId } : {}),
+        options,
+      };
+      if (parentOptionId) return [group];
+      // Étapes imbriquées des options de ce groupe, juste après lui.
+      const nested = (byType.get(r.type) ?? []).flatMap((i) =>
+        groupsOf(i.ingredient_id, i.ingredient_id),
+      );
+      return [group, ...nested];
     });
-  };
+  }
+  return (productId) => groupsOf(productId, null);
 }
 
 /** Carte réelle : une lecture de l'API par rafraîchissement du cache (`createMenuCache`). */

@@ -1,5 +1,5 @@
 import type { MenuDto } from '@splash360/contracts';
-import type { Menu } from '@splash360/core';
+import { maxPerOption, type Menu } from '@splash360/core';
 
 export interface MenuOverride {
   readonly kind: 'category' | 'product';
@@ -11,7 +11,8 @@ export interface MenuOverride {
 
 /**
  * Carte interne → contrat : réglages locaux appliqués (masquer, ordonner),
- * catégories vides retirées. La carte reste celle de Splash360.
+ * catégories vides retirées. La carte reste celle de Splash360. Passer la carte au prix du mode
+ * choisi (`menuForMode`).
  */
 export function toMenuDto(
   menu: Menu,
@@ -52,7 +53,15 @@ export function toMenuDto(
             required: g.min > 0,
             min: g.min,
             max: g.max,
-            options: g.options.map((o) => ({ ...o })),
+            maxPerOption: maxPerOption(g),
+            parentOptionId: g.parentOptionId ?? null,
+            // Prix déjà ceux du mode demandé (`menuForMode`) : pas de tableau par mode envoyé.
+            options: g.options.map((o) => ({
+              id: o.id,
+              name: o.name,
+              priceCents: o.priceCents,
+              available: o.available,
+            })),
           })),
         })),
     }))

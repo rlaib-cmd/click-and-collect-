@@ -2,6 +2,7 @@ import type { LoyaltyProvider, YoufidRegistry, YoufidStore } from '@splash360/ap
 import { MenuUnavailableError, type MenuCache } from '@splash360/api-menu';
 import {
   canAssignRole,
+  menuForMode,
   normalizePromoCode,
   roleNeedsRestaurant,
   validatePromoDefinition,
@@ -574,8 +575,11 @@ export function adminRoutes(deps: AdminRoutesDeps) {
   app.get('/alerts', async (c) => {
     const denied = allow(c, 'orders');
     if (denied) return denied;
+    const scope = restaurantScope(ctx(c));
     return c.json({
-      alerts: await deps.operations.listFailedDispatches(tenantId(c), restaurantScope(ctx(c))),
+      alerts: await deps.operations.listFailedDispatches(tenantId(c), scope),
+      // Annulées ici, peut-être « en attente » en caisse : seule la caisse peut les annuler.
+      posToCancel: await deps.operations.listPosToCancel(tenantId(c), scope),
     });
   });
 
@@ -749,7 +753,13 @@ export function adminRoutes(deps: AdminRoutesDeps) {
       });
       const overrides = await deps.admin.listMenuOverrides(tenantId(c), restaurant.id);
       // Aperçu complet (rien de masqué) ; les réglages sont renvoyés à part.
-      const full = toMenuDto(cached.menu, restaurant.id, cached.fetchedAt, cached.stale);
+      // Prix à emporter (le prix de livraison s'applique à la commande en livraison).
+      const full = toMenuDto(
+        menuForMode(cached.menu, 'pickup'),
+        restaurant.id,
+        cached.fetchedAt,
+        cached.stale,
+      );
       const body: AdminMenu = {
         ...full,
         overrides,

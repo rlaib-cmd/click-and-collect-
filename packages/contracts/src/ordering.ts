@@ -62,7 +62,8 @@ export const requestedTimeSchema = z.discriminatedUnion('kind', [
 export const cartLineSchema = z.object({
   productId: z.string().min(1).max(100),
   quantity: z.number().int(),
-  optionIds: z.array(z.string().min(1).max(100)).max(30),
+  /** Une option choisie deux fois apparaît deux fois (même option, `maxPerOption`). */
+  optionIds: z.array(z.string().min(1).max(100)).max(60),
   note: z.string().max(500).nullable().optional(),
 });
 

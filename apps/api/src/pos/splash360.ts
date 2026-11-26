@@ -6,7 +6,10 @@ import {
   toMenu,
   type Splash360Client,
   type Splash360Commande,
+  type Splash360CommandeIngredient,
+  type Splash360FeeModificateur,
 } from '@splash360/api-menu';
+import { splitOptionId } from '@splash360/core';
 import type { OrderDetail, Restaurant } from '@splash360/db';
 import type { Splash360Probe } from '../routes/admin';
 import type { SalesSource } from '../loyalty/ticket-check';
@@ -14,8 +17,8 @@ import { PosRejectedError, type PosGateway } from './gateway';
 
 export interface Splash360PosOptions {
   /**
-   * Taux de TVA des frais (livraison, service), exigé par Splash360 pour les modificateurs « frais ».
-   * Défaut 0,2 comme l'exemple de la documentation ; à confirmer avec Splash360 (questions-en-attente).
+   * Taux de TVA des frais (livraison, service), exigé par Splash360 pour les modificateurs
+   * « frais » : 0,2 (20 %), confirmé par Splash360 le 26/11.
    */
   readonly feeVatRate: number;
   /** Nom de l'application qui dépose la commande (`provider`). */
@@ -38,6 +41,72 @@ export function splitName(full: string): { prenom: string; nom: string } {
   if (words.length === 0) return { prenom: 'Client', nom: 'Client' };
   if (words.length === 1) return { prenom: words[0] ?? '', nom: words[0] ?? '' };
   return { prenom: words.slice(0, -1).join(' '), nom: words.at(-1) ?? '' };
+}
+
+/**
+ * Date ISO 8601 à l'heure locale du fuseau, millisecondes et décalage compris :
+ * « 2026-11-26T14:22:22.177+01:00 » pour Paris (format donné par Splash360 le 26/11).
+ */
+export function isoWithOffset(iso: string, timeZone: string): string {
+  const date = new Date(iso);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+      timeZoneName: 'longOffset',
+    })
+      .formatToParts(date)
+      .map((p) => [p.type, p.value]),
+  );
+  // « GMT+01:00 » ; « GMT » seul pour un décalage nul.
+  const offset = (parts.timeZoneName ?? 'GMT').replace('GMT', '') || '+00:00';
+  const ms = String(date.getUTCMilliseconds()).padStart(3, '0');
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.${ms}${offset}`;
+}
+
+/**
+ * Options d'une ligne → ingrédients `submitcommande` (réponses du 26/11) : identifiant complet,
+ * une option répétée part une fois avec sa quantité (`qte`) et son prix unitaire ; une option
+ * d'étape imbriquée (« parent>option ») part à plat avec `ingid` et `parentid`.
+ */
+export function toIngredients(
+  options: readonly { readonly optionId: string; readonly priceCents: number }[],
+): Splash360CommandeIngredient[] {
+  const out: { id: string; qte: number; priceCents: number }[] = [];
+  for (const o of options) {
+    const same = out.find((x) => x.id === o.optionId && x.priceCents === o.priceCents);
+    if (same) same.qte += 1;
+    else out.push({ id: o.optionId, qte: 1, priceCents: o.priceCents });
+  }
+  return out.map(({ id, qte, priceCents }) => {
+    const { parentId, optionId } = splitOptionId(id);
+    return {
+      ingredient: optionId,
+      qte,
+      price: euros(priceCents),
+      ...(parentId ? { ingid: optionId, parentid: splitOptionId(parentId).optionId } : {}),
+    };
+  });
+}
+
+/** Frais au format exact de Splash360 (26/11) : `valeur` « 1.00€ », TVA dans `taux`. */
+function fee(id: string, amountCents: number, taux: number): Splash360FeeModificateur {
+  return {
+    modificateur_id: id,
+    type: 'frais',
+    valeur: eurosLabel(amountCents),
+    taux,
+    item: null,
+    ingredient: null,
+    nom: 'Frais',
+    operation: 1,
+  };
 }
 
 function hour(iso: string, timeZone: string): string {
@@ -63,15 +132,12 @@ export function toSplash360Commande(
       produitid: line.productId,
       quantite: line.quantity,
       price: euros(line.unitPriceCents - optionsCents),
-      ingredients: line.options.map((o) => ({
-        ingredient: o.optionId,
-        qte: 1,
-        price: euros(o.priceCents),
-      })),
+      ingredients: toIngredients(line.options),
     };
   });
 
-  // Pas de champ pour l'heure de retrait dans l'API : elle part en commentaire (question n° 16).
+  // Heure choisie : `scheduledAt` (réponse du 26/11), répétée en commentaire pour l'équipe.
+  // « Dès que possible » : pas de `scheduledAt`, l'heure estimée reste en commentaire seulement.
   const when = order.requestedSlot
     ? `${order.mode === 'delivery' ? 'Livraison' : 'Retrait'} prévu à ${hour(order.requestedSlot, timeZone)}`
     : `Dès que possible (estimé ${hour(order.estimatedAt, timeZone)})`;
@@ -91,25 +157,9 @@ export function toSplash360Commande(
       ? [{ type: 'discount' as const, valeur: eurosLabel(t.promoDiscountCents), nom: 'Code promo' }]
       : []),
     ...(t.deliveryFeeCents > 0
-      ? [
-          {
-            type: 'frais' as const,
-            valeur: eurosLabel(t.deliveryFeeCents),
-            taux: options.feeVatRate,
-            nom: 'Frais de livraison',
-          },
-        ]
+      ? [fee('frais_livraison', t.deliveryFeeCents, options.feeVatRate)]
       : []),
-    ...(t.serviceFeeCents > 0
-      ? [
-          {
-            type: 'frais' as const,
-            valeur: eurosLabel(t.serviceFeeCents),
-            taux: options.feeVatRate,
-            nom: 'Frais de service',
-          },
-        ]
-      : []),
+    ...(t.serviceFeeCents > 0 ? [fee('frais_service', t.serviceFeeCents, options.feeVatRate)] : []),
   ];
 
   const address = order.deliveryAddress;
@@ -119,6 +169,7 @@ export function toSplash360Commande(
     status: 'standby',
     total: euros(t.totalCents),
     orderNumber: String(order.number),
+    ...(order.requestedSlot ? { scheduledAt: isoWithOffset(order.requestedSlot, timeZone) } : {}),
     items,
     comments: [comments],
     client: {

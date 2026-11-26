@@ -25,6 +25,7 @@ import {
   memberOrdersSchema,
 } from '@splash360/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCart } from '@/cart/CartProvider';
 import { useTenant } from '@/tenant/TenantProvider';
 import { getPushToken } from '@/notifications/register';
 import { API_URL, apiGet, apiPost, ApiRequestError } from './client';
@@ -39,12 +40,16 @@ export function useRestaurants() {
   });
 }
 
+/** Carte au prix du mode choisi (à emporter ou livraison : prix par mode Splash360). */
 export function useMenu(restaurantId: string) {
   const { config } = useTenant();
+  const { cart } = useCart();
   const sub = config.tenant.subdomain;
+  const mode = cart.setup.mode;
   return useQuery({
-    queryKey: ['menu', sub, restaurantId],
-    queryFn: () => apiGet(`/v1/tenants/${sub}/restaurants/${restaurantId}/menu`, menuSchema),
+    queryKey: ['menu', sub, restaurantId, mode],
+    queryFn: () =>
+      apiGet(`/v1/tenants/${sub}/restaurants/${restaurantId}/menu?mode=${mode}`, menuSchema),
     staleTime: 60_000,
     enabled: restaurantId.length > 0,
   });

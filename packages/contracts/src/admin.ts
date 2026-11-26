@@ -310,6 +310,18 @@ export const alertSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
+/** Commande annulée ici, peut-être « en attente » en caisse : à annuler en caisse (26/11). */
+export const posToCancelSchema = z.object({
+  orderId: z.uuid(),
+  number: z.number().int(),
+  cancelledAt: z.iso.datetime(),
+});
+
+export const alertsResponseSchema = z.object({
+  alerts: z.array(alertSchema),
+  posToCancel: z.array(posToCancelSchema).default([]),
+});
+
 export type Me = z.infer<typeof meSchema>;
 export type AdminRestaurant = z.infer<typeof adminRestaurantSchema>;
 export type AdminOrder = z.infer<typeof adminOrderSchema>;

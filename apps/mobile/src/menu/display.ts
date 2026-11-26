@@ -1,4 +1,5 @@
 import type { MenuDto, ProductDto } from '@splash360/contracts';
+import { messages } from '@splash360/i18n';
 import type { CartLine } from '@/cart/cart';
 
 export function findProduct(menu: MenuDto, productId: string): ProductDto | null {
@@ -27,14 +28,20 @@ export function displayCart(
   const out = lines.map((line) => {
     const product = findProduct(menu, line.productId);
     if (!product) return { line, product: null, optionNames: [], totalCents: 0 };
-    const options = product.optionGroups
-      .flatMap((g) => g.options)
-      .filter((o) => line.optionIds.includes(o.id));
-    const unit = product.priceCents + options.reduce((s, o) => s + o.priceCents, 0);
+    const options = product.optionGroups.flatMap((g) => g.options);
+    // Une option choisie deux fois apparaît deux fois dans `optionIds` : « 2 × Algérienne ».
+    const counts = new Map<string, number>();
+    for (const id of line.optionIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+    const chosen = options.filter((o) => counts.has(o.id));
+    const unit =
+      product.priceCents + chosen.reduce((s, o) => s + o.priceCents * (counts.get(o.id) ?? 0), 0);
     return {
       line,
       product,
-      optionNames: options.map((o) => o.name),
+      optionNames: chosen.map((o) => {
+        const n = counts.get(o.id) ?? 1;
+        return n > 1 ? messages.product.optionTimes(n, o.name) : o.name;
+      }),
       totalCents: unit * line.quantity,
     };
   });

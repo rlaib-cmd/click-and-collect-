@@ -11,7 +11,11 @@ import type {
 import type { PaymentGateway } from '../payments/gateway';
 import { refundOrder } from '../payments/service';
 import { PosRejectedError, type PosGateway } from './gateway';
-import { posTiming, type PosTiming } from './handshake';
+import { POS_UNCERTAIN_LOG, posTiming, type PosTiming } from './handshake';
+
+/** Alerte du back-office : dépôt incertain, à vérifier en caisse avant toute relance. */
+export const POS_UNCERTAIN_ERROR =
+  'Dépôt en caisse incertain : vérifiez en caisse que la commande n’y est pas avant de la renvoyer';
 
 export interface DispatchDeps {
   readonly operations: OperationsStore;
@@ -118,11 +122,24 @@ async function advance(
   let ticket: PosTicket | null = await deps.tickets.getTicket(tenantId, orderId);
 
   // Sur place (ou commande antérieure au lot 14) : la commande n'a pas encore de ticket.
+  // Dépôt réservé une seule fois : un second `submitcommande` avec le même numéro créerait une
+  // seconde commande en caisse (Splash360, 26/11). Un dépôt commencé sans ticket enregistré
+  // (réponse perdue, panne) n'est jamais refait automatiquement : alerte au back-office.
   if (!ticket) {
-    const { ticketId } = await deps.pos.openTicket(order, restaurant);
-    await deps.tickets.openTicket(tenantId, orderId, ticketId, now());
-    ticket = await deps.tickets.getTicket(tenantId, orderId);
-    if (!ticket) throw new PosRejectedError('Ticket de caisse non enregistré', true);
+    const reservation = await deps.tickets.reserveOpening(tenantId, orderId, now());
+    if (reservation === 'abandoned') {
+      deps.log?.(POS_UNCERTAIN_LOG, { orderId });
+      throw new PosRejectedError(POS_UNCERTAIN_ERROR, false);
+    }
+    if (reservation === 'in_progress') {
+      ticket = await deps.tickets.getTicket(tenantId, orderId);
+      if (!ticket) return 'waiting';
+    } else {
+      const { ticketId } = await deps.pos.openTicket(order, restaurant);
+      await deps.tickets.openTicket(tenantId, orderId, ticketId, now());
+      ticket = await deps.tickets.getTicket(tenantId, orderId);
+      if (!ticket) throw new PosRejectedError('Ticket de caisse non enregistré', false);
+    }
   }
   if (ticket.phase === 'failed') throw new PosGaveUpError(ticket.error ?? 'Refusée par la caisse');
 

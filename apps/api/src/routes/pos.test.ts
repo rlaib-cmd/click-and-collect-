@@ -210,3 +210,85 @@ describe('nouveaux essais vers la caisse', () => {
     });
   });
 });
+
+/**
+ * Un second `submitcommande` avec le même numéro crée une seconde commande en caisse
+ * (Splash360, 26/11) : jamais de nouveau dépôt automatique d'une commande déjà envoyée.
+ */
+describe('pas de double dépôt en caisse', () => {
+  function countingPos(fail: (call: number) => boolean) {
+    const demo = createDemoPosGateway({ now: () => NOW, readyAfterMs: 0, confirmAfterMs: 0 });
+    let opens = 0;
+    const gateway: PosGateway = {
+      async openTicket(order, restaurant) {
+        opens += 1;
+        // La caisse reçoit la commande, puis la réponse se perd.
+        const ticket = await demo.openTicket(order, restaurant);
+        if (fail(opens)) throw new PosRejectedError('Délai dépassé', true);
+        return ticket;
+      },
+      ticketStatus: (ticket) => demo.ticketStatus(ticket),
+      submitPayment: (ticket, payment) => demo.submitPayment(ticket, payment),
+    };
+    return { gateway, opens: () => opens };
+  }
+
+  it('avant paiement : réponse perdue → commande annulée, jamais redéposée, même rejouée', async () => {
+    const pos = countingPos(() => true);
+    const setup = testSetup({ pos: pos.gateway });
+    const res = await setup.app.request('/v1/tenants/bella/orders', {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify(request),
+    });
+    const order = placedOrderSchema.parse(await res.json());
+    const auth = { Authorization: `Bearer ${order.accessToken}` };
+    for (let i = 0; i < 3; i += 1) {
+      await setup.app.request(`/v1/tenants/bella/orders/${order.orderId}/payment`, {
+        method: 'POST',
+        headers: auth,
+      });
+    }
+    expect(pos.opens()).toBe(1);
+    expect(setup.backend.orders[0]?.status).toBe('cancelled');
+    // Alerte du back-office : à annuler en caisse si elle y est « en attente ».
+    expect(await setup.deps.operations.listPosToCancel(BELLA_ID)).toMatchObject([
+      { orderId: order.orderId, number: 1001 },
+    ]);
+  });
+
+  it('après paiement : dépôt incertain jamais refait par les nouveaux essais, relance manuelle seulement', async () => {
+    let t = NOW.getTime();
+    const pos = countingPos((call) => call === 2);
+    const { setup } = await paidOrder(testSetup({ pos: pos.gateway, now: () => new Date(t) }));
+    expect(pos.opens()).toBe(1);
+    // Commande sans ticket enregistré (sur place, ou antérieure au lot 14) : l'envoi la dépose.
+    const o = setup.backend.orders[0];
+    if (o) {
+      delete o.pos;
+      delete o.posOpeningAt;
+    }
+    const dispatch = [...setup.backend.dispatches.values()][0];
+    if (dispatch) Object.assign(dispatch, { status: 'pending', attempts: 0, nextAt: 0 });
+    await setup.app.runDispatches();
+    expect(pos.opens()).toBe(2);
+    expect(dispatch?.status).toBe('pending');
+    // Nouveaux essais (et rejeux) : le dépôt commencé n'est jamais refait.
+    for (let i = 0; i < 3; i += 1) {
+      t += 61_000;
+      if (dispatch) dispatch.nextAt = 0;
+      await setup.app.runDispatches();
+    }
+    expect(pos.opens()).toBe(2);
+    expect(dispatch?.status).toBe('failed');
+    const failed = await setup.deps.operations.listFailedDispatches(BELLA_ID);
+    expect(failed[0]?.lastError).toContain('vérifiez en caisse');
+    // L'équipe a vérifié la caisse et relance : un seul nouveau dépôt.
+    expect(await setup.deps.operations.retryDispatch(BELLA_ID, failed[0]?.orderId ?? '')).toBe(
+      true,
+    );
+    await setup.app.runDispatches();
+    await setup.app.runDispatches();
+    expect(pos.opens()).toBe(3);
+  });
+});
