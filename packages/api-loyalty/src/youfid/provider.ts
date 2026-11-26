@@ -71,6 +71,15 @@ type OperationOutcome =
         | 'provider_error';
     };
 
+/**
+ * Nom d'un palier YouFID pour l'application : le coût saisi en fin de nom chez YouFID
+ * (« Une boisson offerte (30 pts) ») est retiré, l'application l'affiche déjà.
+ */
+export function rewardLabel(name: string): string {
+  const label = name.replace(/\s*\(\s*\d+\s*(?:pts?|points?)\s*\)\s*$/i, '').trim();
+  return label || name.trim();
+}
+
 export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): LoyaltyProvider {
   const { client, store } = options;
   const log = options.log ?? (() => undefined);
@@ -249,7 +258,12 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
         welcomePoints: settings.welcomePoints,
         rewards: m.products
           .filter((p) => p.cost > 0)
-          .map((p) => ({ id: p.id, name: p.name, costPoints: p.cost, productIds: [] })),
+          .map((p) => ({
+            id: p.id,
+            name: rewardLabel(p.name),
+            costPoints: p.cost,
+            productIds: [],
+          })),
         source: 'youfid',
       };
     },

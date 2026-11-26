@@ -5,7 +5,7 @@ import { createDemoLoyaltyProvider, createMemoryDemoLoyaltyStore } from '../demo
 import { createYoufidClient } from './client';
 import { parseYoufidAccounts, youfidDeviceId } from './config';
 import { createFakeYoufid, FAKE_PIN } from './fake-youfid';
-import { createYoufidLoyaltyProvider, STALE_OPERATION_MS } from './provider';
+import { createYoufidLoyaltyProvider, rewardLabel, STALE_OPERATION_MS } from './provider';
 import { createMemoryYoufidStore } from './store';
 
 const NOW = Date.parse('2026-11-25T12:00:00Z');
@@ -473,5 +473,14 @@ describe('aiguillage par enseigne et configuration', () => {
     expect(youfidDeviceId(undefined, 'recette')).toBe('splash360-commande-recette');
     expect(youfidDeviceId(' borne-1 ', 'production')).toBe('borne-1');
     expect(youfidDeviceId('x'.repeat(150), 'production')).toHaveLength(100);
+  });
+});
+
+describe('nom des paliers YouFID', () => {
+  it('retire le coût saisi en fin de nom, déjà affiché par l’application', () => {
+    expect(rewardLabel('Une boisson offerte (30 pts)')).toBe('Une boisson offerte');
+    expect(rewardLabel('Un menu offert (100 points)')).toBe('Un menu offert');
+    expect(rewardLabel('Frites offertes')).toBe('Frites offertes');
+    expect(rewardLabel('(30 pts)')).toBe('(30 pts)');
   });
 });
