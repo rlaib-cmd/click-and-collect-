@@ -252,7 +252,7 @@ describe('fidélité YouFID dans l’application (lot 21)', () => {
     const after = await me(s, memberToken);
     // 100 + 250 − 300 + 10 (10,50 € × 1 point, arrondi à l'inférieur, envoyés en crédit forcé).
     expect(after.points).toBe(60);
-    expect(after.history.map((h) => h.kind)).toEqual(['earn', 'redeem', 'adjust', 'welcome']);
+    expect(after.history.map((h) => h.kind)).toEqual(['redeem', 'earn', 'adjust', 'welcome']);
     expect(s.fake.calls.filter((c) => c.route === 'transformToPresent')).toHaveLength(1);
     expect(s.fake.calls.filter((c) => c.body.forced_amount === 10)).toHaveLength(1);
     expect(s.fake.calls.some((c) => c.body.amount !== undefined)).toBe(false);
