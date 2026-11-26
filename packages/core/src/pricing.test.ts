@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { menuForMode, nestedOptionId, splitOptionId, type Menu } from './menu';
+import {
+  MAX_NESTING_DEPTH,
+  menuForMode,
+  nestedOptionId,
+  nestingDepth,
+  splitOptionId,
+  type Menu,
+} from './menu';
 import { cents } from './money';
 import { priceCart } from './pricing';
 
@@ -280,5 +287,103 @@ describe('calcul du panier', () => {
         optionId: 'ing15407-typ2075',
       });
     });
+  });
+});
+
+describe('étapes imbriquées sur trois niveaux (lot 24)', () => {
+  const a = 'ing1-typA';
+  const ab = nestedOptionId(a, 'ing2-typB');
+  const abc = nestedOptionId(ab, 'ing3-typC');
+  const abcd = nestedOptionId(abc, 'ing4-typD');
+  const option = (id: string, price = 0) => ({
+    id,
+    name: id,
+    priceCents: cents(price),
+    available: true,
+  });
+  const deep: Menu = {
+    restaurantId: 'r1',
+    categories: [{ id: 'menus', name: 'Menus', position: 1 }],
+    products: [
+      {
+        id: 'prd1',
+        categoryId: 'menus',
+        name: 'Menu',
+        description: null,
+        priceCents: cents(1000),
+        imageUrl: null,
+        available: true,
+        allergens: [],
+        optionGroups: [
+          { id: 'typA', name: 'A', min: 0, max: 1, options: [option(a, 100)] },
+          {
+            id: nestedOptionId(a, 'typB'),
+            name: 'B',
+            min: 1,
+            max: 1,
+            parentOptionId: a,
+            options: [option(ab, 200)],
+          },
+          {
+            id: nestedOptionId(ab, 'typC'),
+            name: 'C',
+            min: 1,
+            max: 1,
+            parentOptionId: ab,
+            options: [option(abc, 300)],
+          },
+          {
+            id: nestedOptionId(abc, 'typD'),
+            name: 'D',
+            min: 1,
+            max: 1,
+            parentOptionId: abc,
+            options: [option(abcd, 400)],
+          },
+        ],
+      },
+    ],
+  };
+  const price = (optionIds: string[]) =>
+    priceCart(deep, [{ productId: 'prd1', quantity: 1, optionIds }]);
+
+  it('profondeur 3 : chaque niveau exigé seulement si son parent est choisi, prix cumulés', () => {
+    expect(price([])).toMatchObject({ ok: true, subtotalCents: 1000 });
+    expect(price([a])).toMatchObject({
+      ok: false,
+      errors: [{ code: 'too_few_options', groupId: nestedOptionId(a, 'typB') }],
+    });
+    // Profondeur 2 : manque le niveau 3.
+    expect(price([a, ab])).toMatchObject({
+      ok: false,
+      errors: [{ code: 'too_few_options', groupId: nestedOptionId(ab, 'typC') }],
+    });
+    expect(price([a, ab, abc])).toMatchObject({
+      ok: false,
+      errors: [{ code: 'too_few_options', groupId: nestedOptionId(abc, 'typD') }],
+    });
+    expect(price([a, ab, abc, abcd])).toMatchObject({ ok: true, subtotalCents: 2000 });
+  });
+
+  it('un choix dont un ancêtre manque est refusé, à chaque niveau', () => {
+    // Niveau 2 sans le niveau 1 : refusé, et l'étape du niveau 2 n'est pas exigée.
+    expect(price([a, abc])).toMatchObject({
+      ok: false,
+      errors: [
+        { code: 'too_few_options', groupId: nestedOptionId(a, 'typB') },
+        { code: 'unknown_option', optionId: abc },
+      ],
+    });
+    const orphan = price([abcd]);
+    expect(orphan.ok).toBe(false);
+    if (orphan.ok) return;
+    expect(orphan.errors.map((e) => e.code)).toEqual(['unknown_option']);
+  });
+
+  it('profondeur et parent direct retrouvés depuis l’identifiant', () => {
+    expect(MAX_NESTING_DEPTH).toBe(3);
+    expect(deep.products[0]?.optionGroups.map(nestingDepth)).toEqual([0, 1, 2, 3]);
+    expect(splitOptionId(abcd)).toEqual({ parentId: abc, optionId: 'ing4-typD' });
+    expect(splitOptionId(splitOptionId(abcd).parentId ?? '').optionId).toBe('ing3-typC');
   });
 });

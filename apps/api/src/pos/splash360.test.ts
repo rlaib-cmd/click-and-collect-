@@ -10,6 +10,7 @@ import {
   isoWithOffset,
   splash360SalesSource,
   splitName,
+  toIngredients,
   toSplash360Commande,
 } from './splash360';
 
@@ -301,6 +302,24 @@ describe('toSplash360Commande', () => {
       '2026-11-26T14:22:22.177+01:00',
     );
     expect(isoWithOffset('2026-11-26T13:22:22.177Z', 'UTC')).toBe('2026-11-26T13:22:22.177+00:00');
+  });
+
+  it('étapes imbriquées sur trois niveaux : à plat, `parentid` = ingrédient parent direct', () => {
+    expect(
+      toIngredients([
+        { optionId: 'ing1-typA', priceCents: 100 },
+        { optionId: 'ing1-typA>ing2-typB', priceCents: 0 },
+        { optionId: 'ing1-typA>ing2-typB>ing3-typC', priceCents: 50 },
+        { optionId: 'ing1-typA>ing2-typB>ing3-typC', priceCents: 50 },
+        { optionId: 'ing1-typA>ing2-typB>ing3-typC>ing4-typD', priceCents: 0 },
+      ]),
+    ).toEqual([
+      { ingredient: 'ing1-typA', qte: 1, price: 1 },
+      { ingredient: 'ing2-typB', qte: 1, price: 0, ingid: 'ing2-typB', parentid: 'ing1-typA' },
+      // Prix unitaire avec `qte` > 1 (confirmé le 26/11).
+      { ingredient: 'ing3-typC', qte: 2, price: 0.5, ingid: 'ing3-typC', parentid: 'ing2-typB' },
+      { ingredient: 'ing4-typD', qte: 1, price: 0, ingid: 'ing4-typD', parentid: 'ing3-typC' },
+    ]);
   });
 
   it('ingrédients : identifiant complet, même option deux fois en `qte: 2`, étape imbriquée à plat', () => {

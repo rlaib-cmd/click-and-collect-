@@ -2,6 +2,7 @@ import type { ProductDto } from '@splash360/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   activeGroups,
+  groupDepth,
   displayUnitPrice,
   emptySelection,
   missingGroups,
@@ -158,6 +159,75 @@ describe('composition d’un produit', () => {
       s = toggleOption(s, acc, 'frites', formule);
       expect(s['frites>sel']).toEqual([]);
       expect(selectedOptionIds(formule, s)).toEqual(['ket']);
+    });
+  });
+
+  describe('étapes imbriquées sur trois niveaux (lot 24)', () => {
+    const group = (
+      id: string,
+      parentOptionId: string | null,
+      optionId: string,
+    ): ProductDto['optionGroups'][0] => ({
+      id,
+      name: id,
+      required: parentOptionId !== null,
+      min: parentOptionId === null ? 0 : 1,
+      max: 1,
+      maxPerOption: 1,
+      parentOptionId,
+      options: [{ id: optionId, name: optionId, priceCents: 100, available: true }],
+    });
+    const deep: ProductDto = {
+      id: 'menu',
+      name: 'Menu',
+      description: null,
+      priceCents: 1000,
+      imageUrl: null,
+      available: true,
+      allergens: [],
+      featured: false,
+      promo: null,
+      optionGroups: [
+        group('A', null, 'a'),
+        group('a>B', 'a', 'a>b'),
+        group('a>b>C', 'a>b', 'a>b>c'),
+        group('a>b>c>D', 'a>b>c', 'a>b>c>d'),
+      ],
+    };
+    const [gA, gB, gC, gD] = deep.optionGroups as [
+      ProductDto['optionGroups'][0],
+      ProductDto['optionGroups'][0],
+      ProductDto['optionGroups'][0],
+      ProductDto['optionGroups'][0],
+    ];
+
+    it('profondeurs 2 et 3 : chaque niveau proposé quand son parent est choisi', () => {
+      expect(deep.optionGroups.map(groupDepth)).toEqual([0, 1, 2, 3]);
+      let s = toggleOption(emptySelection(deep), gA, 'a', deep);
+      expect(activeGroups(deep, s).map((g) => g.id)).toEqual(['A', 'a>B']);
+      s = toggleOption(s, gB, 'a>b', deep);
+      s = toggleOption(s, gC, 'a>b>c', deep);
+      expect(missingGroups(deep, s).map((g) => g.id)).toEqual(['a>b>c>D']);
+      s = toggleOption(s, gD, 'a>b>c>d', deep);
+      expect(selectedOptionIds(deep, s)).toEqual(['a', 'a>b', 'a>b>c', 'a>b>c>d']);
+      expect(displayUnitPrice(deep, s)).toBe(1400);
+    });
+
+    it('décocher un parent vide ses descendants, à tous les niveaux', () => {
+      let s = emptySelection(deep);
+      for (const [g, id] of [
+        [gA, 'a'],
+        [gB, 'a>b'],
+        [gC, 'a>b>c'],
+        [gD, 'a>b>c>d'],
+      ] as const)
+        s = toggleOption(s, g, id, deep);
+      const cleared = toggleOption(s, gA, 'a', deep);
+      expect(selectedOptionIds(deep, cleared)).toEqual([]);
+      expect([cleared['a>B'], cleared['a>b>C'], cleared['a>b>c>D']]).toEqual([[], [], []]);
+      // Décocher le niveau 2 garde le niveau 1.
+      const partial = toggleOption(s, gB, 'a>b', deep);
+      expect(selectedOptionIds(deep, partial)).toEqual(['a']);
     });
   });
 });

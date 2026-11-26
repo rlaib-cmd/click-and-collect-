@@ -12,6 +12,7 @@ import { formatPrice, formatSupplement } from '@/lib/format';
 import { findProduct } from '@/menu/display';
 import {
   activeGroups,
+  groupDepth,
   displayUnitPrice,
   emptySelection,
   missingGroups,
@@ -24,6 +25,9 @@ import {
 import { titleStyle } from '@/components/brand';
 import { TAB_BAR_CLEARANCE } from '@/components/layout';
 import { useTenant } from '@/tenant/TenantProvider';
+
+/** Retrait d'une étape imbriquée par niveau (formules Splash360, jusqu'à trois niveaux). */
+const NESTED_INDENT = 16;
 
 function groupHint(g: OptionGroupDto): string {
   const base =
@@ -135,7 +139,12 @@ export default function ProductScreen() {
           return (
             <View
               key={group.id}
-              style={[styles.group, group.parentOptionId ? styles.nested : null]}
+              style={[
+                styles.group,
+                groupDepth(group) > 0
+                  ? [styles.nested, { paddingLeft: NESTED_INDENT * groupDepth(group) }]
+                  : null,
+              ]}
               accessibilityRole={stepper ? undefined : 'radiogroup'}
             >
               <View style={styles.groupHead}>
@@ -324,7 +333,7 @@ const styles = StyleSheet.create({
   base: { fontSize: 18, fontWeight: '600' },
   group: { marginTop: 20, gap: 6 },
   /** Étape imbriquée d'une formule : en retrait sous l'option qui l'ouvre. */
-  nested: { marginTop: 8, paddingLeft: 16 },
+  nested: { marginTop: 8 },
   groupHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   groupTitle: { fontSize: 18, fontWeight: '700' },
   badge: {

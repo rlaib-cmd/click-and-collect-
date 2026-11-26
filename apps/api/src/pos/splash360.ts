@@ -74,7 +74,8 @@ export function isoWithOffset(iso: string, timeZone: string): string {
 /**
  * Options d'une ligne → ingrédients `submitcommande` (réponses du 26/11) : identifiant complet,
  * une option répétée part une fois avec sa quantité (`qte`) et son prix unitaire ; une option
- * d'étape imbriquée (« parent>option ») part à plat avec `ingid` et `parentid`.
+ * d'étape imbriquée (« a>b », jusqu'à « a>b>c>d ») part à plat avec `ingid` et `parentid` (ingrédient
+ * parent direct).
  */
 export function toIngredients(
   options: readonly { readonly optionId: string; readonly priceCents: number }[],

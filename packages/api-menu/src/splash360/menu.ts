@@ -1,5 +1,6 @@
 import {
   cents,
+  MAX_NESTING_DEPTH,
   nestedOptionId,
   type CatalogRule,
   type CatalogRuleValue,
@@ -350,7 +351,8 @@ function satisfiable(g: OptionGroup): boolean {
  *
  * Étape imbriquée (`steps[].produit` = identifiant d'ingrédient) : ses groupes suivent le groupe
  * de l'option parente, avec `parentOptionId` et des identifiants préfixés (`nestedOptionId`), pour
- * que la caisse reçoive `parentid`. Un seul niveau : l'étape d'une option déjà imbriquée est ignorée.
+ * que la caisse reçoive `parentid`. Jusqu'à trois niveaux, comme la caisse (lot 24) :
+ * `a>b`, `a>b>c`, `a>b>c>d` ; une étape plus profonde est ignorée.
  */
 function buildOptionGroups(
   types: Parsed['types'],
@@ -367,7 +369,7 @@ function buildOptionGroups(
   }
   const byOwner = new Map(steps.map((st) => [st.produit, st]));
 
-  function groupsOf(ownerId: string, parentOptionId: string | null): OptionGroup[] {
+  function groupsOf(ownerId: string, parentOptionId: string | null, depth: number): OptionGroup[] {
     const step = byOwner.get(ownerId);
     if (!step) return [];
     const prefix = (id: string) => (parentOptionId ? nestedOptionId(parentOptionId, id) : id);
@@ -399,15 +401,16 @@ function buildOptionGroups(
         ...(parentOptionId ? { parentOptionId } : {}),
         options,
       };
-      if (parentOptionId) return [group];
-      // Étapes imbriquées des options de ce groupe, juste après lui.
+      // Étapes imbriquées des options de ce groupe, juste après lui, jusqu'à la profondeur de
+      // la caisse (`MAX_NESTING_DEPTH`) : au-delà, l'étape est ignorée.
+      if (depth >= MAX_NESTING_DEPTH) return [group];
       const nested = (byType.get(r.type) ?? []).flatMap((i) =>
-        groupsOf(i.ingredient_id, i.ingredient_id),
+        groupsOf(i.ingredient_id, prefix(i.ingredient_id), depth + 1),
       );
       return [group, ...nested];
     });
   }
-  return (productId) => groupsOf(productId, null);
+  return (productId) => groupsOf(productId, null, 0);
 }
 
 /** Carte réelle : une lecture de l'API par rafraîchissement du cache (`createMenuCache`). */

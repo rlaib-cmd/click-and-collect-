@@ -1,4 +1,5 @@
 import type { OptionGroupDto, ProductDto } from '@splash360/contracts';
+import { MAX_NESTING_DEPTH, NESTED_OPTION_SEPARATOR } from '@splash360/core';
 
 /**
  * Options choisies, par groupe. Une option choisie deux fois (`maxPerOption` > 1) apparaît deux
@@ -24,27 +25,53 @@ function isChosen(selection: Selection, optionId: string): boolean {
 }
 
 /**
- * Groupes proposés : tous, sauf les étapes imbriquées (formules Splash360) dont l'option parente
- * n'est pas choisie.
+ * Étape imbriquée active (formules Splash360, jusqu'à trois niveaux) : son option parente est
+ * choisie dans un groupe lui-même actif.
  */
-export function activeGroups(product: ProductDto, selection: Selection): OptionGroupDto[] {
-  return product.optionGroups.filter(
-    (g) => g.parentOptionId === null || isChosen(selection, g.parentOptionId),
-  );
+function isActive(
+  product: ProductDto,
+  selection: Selection,
+  group: OptionGroupDto,
+  depth = 0,
+): boolean {
+  const parent = group.parentOptionId;
+  if (parent === null) return true;
+  if (depth > MAX_NESTING_DEPTH || !isChosen(selection, parent)) return false;
+  const owner = product.optionGroups.find((g) => g.options.some((o) => o.id === parent));
+  return owner !== undefined && isActive(product, selection, owner, depth + 1);
 }
 
-/** Retire les choix des étapes imbriquées dont l'option parente n'est plus choisie. */
+/**
+ * Groupes proposés : tous, sauf les étapes imbriquées (formules Splash360) dont l'option parente
+ * n'est pas choisie (à chaque niveau).
+ */
+export function activeGroups(product: ProductDto, selection: Selection): OptionGroupDto[] {
+  return product.optionGroups.filter((g) => isActive(product, selection, g));
+}
+
+/** Niveau d'indentation d'un groupe dans la fiche produit : 0, puis 1 à 3 pour les étapes. */
+export function groupDepth(group: OptionGroupDto): number {
+  return group.parentOptionId === null
+    ? 0
+    : group.parentOptionId.split(NESTED_OPTION_SEPARATOR).length;
+}
+
+/**
+ * Retire les choix des étapes imbriquées devenues inactives : décocher un parent vide aussi ses
+ * descendants, à tous les niveaux.
+ */
 function pruneNested(product: ProductDto | null, selection: Selection): Selection {
   if (!product) return selection;
   let next = selection;
-  for (const g of product.optionGroups) {
-    if (
-      g.parentOptionId !== null &&
-      !isChosen(next, g.parentOptionId) &&
-      chosenIn(next, g.id).length
-    ) {
-      next = { ...next, [g.id]: [] };
+  for (let pass = 0; pass <= MAX_NESTING_DEPTH; pass++) {
+    let changed = false;
+    for (const g of product.optionGroups) {
+      if (chosenIn(next, g.id).length && !isActive(product, next, g)) {
+        next = { ...next, [g.id]: [] };
+        changed = true;
+      }
     }
+    if (!changed) break;
   }
   return next;
 }

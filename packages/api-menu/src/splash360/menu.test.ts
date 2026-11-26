@@ -378,3 +378,44 @@ describe('promotions de catalogue (reglescatalogue, lot 24)', () => {
     expect(parseRuleValue(undefined)).toBeNull();
   });
 });
+
+describe('étapes imbriquées sur trois niveaux (lot 24)', () => {
+  const ing = (n: number, type: string) => ({
+    ingredient_id: `ing${n}-${type}`,
+    type,
+    nom: `Option ${n}`,
+    supplement_c: n === 3 ? 100 : 0,
+  });
+  const regle = (type: string, min = 1) => ({ type, min, max: 1, max_par_produit: 1 });
+  const raw = {
+    categories: [{ categorie_id: 'cat1', nom: 'Carte' }],
+    groupes: [{ groupe_id: 'grp1', categorie: 'cat1', nom: 'Menus' }],
+    types: ['typA', 'typB', 'typC', 'typD', 'typE'].map((t) => ({ type_id: t, nom: t })),
+    ingredients: [ing(1, 'typA'), ing(2, 'typB'), ing(3, 'typC'), ing(4, 'typD'), ing(5, 'typE')],
+    produits: [{ produit_id: 'prd1', groupe: 'grp1', nom: 'Menu', prix_c: 1000 }],
+    steps: [
+      { produit: 'prd1', regles: [regle('typA')] },
+      { produit: 'ing1-typA', regles: [regle('typB')] },
+      { produit: 'ing2-typB', regles: [regle('typC')] },
+      { produit: 'ing3-typC', regles: [regle('typD', 0)] },
+      // Quatrième niveau : au-delà de la caisse, ignoré.
+      { produit: 'ing4-typD', regles: [regle('typE')] },
+    ],
+  };
+  const product = toMenu(raw, 'r', BASE).products[0];
+
+  it('profondeurs 1, 2 et 3 : groupes rattachés à l’option parente, identifiants a>b>c', () => {
+    expect(product?.optionGroups.map((g) => [g.id, g.parentOptionId ?? null])).toEqual([
+      ['typA', null],
+      ['ing1-typA>typB', 'ing1-typA'],
+      ['ing1-typA>ing2-typB>typC', 'ing1-typA>ing2-typB'],
+      ['ing1-typA>ing2-typB>ing3-typC>typD', 'ing1-typA>ing2-typB>ing3-typC'],
+    ]);
+    expect(product?.optionGroups[3]?.options.map((o) => o.id)).toEqual([
+      'ing1-typA>ing2-typB>ing3-typC>ing4-typD',
+    ]);
+    expect(product?.optionGroups[2]?.options[0]?.priceCents).toBe(100);
+    // Étapes obligatoires seulement si leur parent est choisi : produit disponible.
+    expect(product?.available).toBe(true);
+  });
+});

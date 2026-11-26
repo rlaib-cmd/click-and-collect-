@@ -38,7 +38,7 @@ export interface OptionGroup {
   /**
    * Étape imbriquée (formule Splash360) : ce groupe ne s'applique que si l'option `parentOptionId`
    * d'un autre groupe du produit est choisie ; ses identifiants d'option sont alors de la forme
-   * `<parent>>` + identifiant (voir `nestedOptionId`).
+   * `<parent>>` + identifiant (voir `nestedOptionId`), jusqu'à `MAX_NESTING_DEPTH` niveaux.
    */
   readonly parentOptionId?: string | null | undefined;
   readonly options: readonly MenuOption[];
@@ -81,6 +81,18 @@ export function isRequired(group: OptionGroup): boolean {
 
 /** Séparateur entre l'option parente et l'option d'une étape imbriquée. */
 export const NESTED_OPTION_SEPARATOR = '>';
+
+/**
+ * Niveaux d'étapes imbriquées gérés, comme la caisse Splash360 (réponse du 26/11, lot 24) :
+ * option `a` → étape de `a` (options `a>b`) → étape de `a>b` (`a>b>c`) → étape de `a>b>c`.
+ */
+export const MAX_NESTING_DEPTH = 3;
+
+/** Profondeur d'un groupe : 0 au premier niveau, 1 pour une étape d'option `a`, 2 pour `a>b`… */
+export function nestingDepth(group: Pick<OptionGroup, 'parentOptionId'>): number {
+  const parent = group.parentOptionId;
+  return parent ? parent.split(NESTED_OPTION_SEPARATOR).length : 0;
+}
 
 /** Identifiant d'une option d'étape imbriquée : unique dans le produit, parent retrouvable. */
 export function nestedOptionId(parentOptionId: string, optionId: string): string {

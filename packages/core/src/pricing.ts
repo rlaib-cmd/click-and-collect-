@@ -1,4 +1,10 @@
-import { maxPerOption, type Menu, type MenuProduct } from './menu';
+import {
+  MAX_NESTING_DEPTH,
+  maxPerOption,
+  type Menu,
+  type MenuProduct,
+  type OptionGroup,
+} from './menu';
 import { addCents, cents, multiplyCents, type Cents } from './money';
 
 /** Ce que l'application envoie : uniquement des identifiants et des quantités. */
@@ -107,10 +113,19 @@ function priceLine(
     chosen.push({ optionId, groupId: group.id, name: option.name, priceCents: option.priceCents });
   }
 
+  // Étape imbriquée (jusqu'à trois niveaux) : active seulement si son option parente est
+  // choisie et que le groupe de cette option est lui-même actif.
+  const active = (group: OptionGroup, depth = 0): boolean => {
+    const parent = group.parentOptionId;
+    if (!parent) return true;
+    if (!counts.has(parent) || depth > MAX_NESTING_DEPTH) return false;
+    const owner = product.optionGroups.find((g) => g.options.some((o) => o.id === parent));
+    return owner !== undefined && active(owner, depth + 1);
+  };
+
   for (const group of product.optionGroups) {
     const inGroup = chosen.filter((o) => o.groupId === group.id);
-    // Étape imbriquée : ne compte que si son option parente est choisie.
-    if (group.parentOptionId && !counts.has(group.parentOptionId)) {
+    if (!active(group)) {
       for (const o of inGroup)
         errors.push({ code: 'unknown_option', line, productId, optionId: o.optionId });
       continue;
