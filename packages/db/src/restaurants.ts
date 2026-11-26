@@ -18,7 +18,15 @@ export interface Restaurant {
   readonly status: RestaurantStatus;
   /** Branché sur la vraie carte et la vraie caisse Splash360 (ADR 0018) ; sinon démonstration. */
   readonly splash360Live: boolean;
+  /**
+   * Station click and collect Splash360 (identifiant client, dernier segment du chemin des
+   * webhooks, lot 23) ; null ou absent : non réglée.
+   */
+  readonly splash360StationId?: string | null;
 }
+
+/** Format accepté pour l'identifiant de station (contrainte de la base). */
+export const SPLASH360_STATION_ID = /^[A-Za-z0-9_.-]{1,100}$/;
 
 /** Toutes les méthodes exigent l'enseigne : impossible de lire le restaurant d'une autre. */
 export interface RestaurantStore {
@@ -31,6 +39,14 @@ export interface RestaurantStore {
    * serveur n'en porte qu'un (ADR 0018).
    */
   setSplash360Live(tenantId: string, restaurantId: string, live: boolean): Promise<boolean>;
+  /** Restaurant d'une station Splash360 (webhooks, lot 23), toutes enseignes confondues. */
+  findBySplash360Station(stationId: string): Promise<Restaurant | null>;
+  /** Règle la station du restaurant ; « taken » si un autre restaurant l'a déjà. */
+  setSplash360Station(
+    tenantId: string,
+    restaurantId: string,
+    stationId: string | null,
+  ): Promise<'ok' | 'not_found' | 'taken'>;
 }
 
 interface Row {
@@ -47,6 +63,7 @@ interface Row {
   stripe_charges_enabled: boolean;
   status: RestaurantStatus;
   splash360_live: boolean;
+  splash360_station_id: string | null;
 }
 
 function toRestaurant(r: Row): Restaurant {
@@ -64,6 +81,7 @@ function toRestaurant(r: Row): Restaurant {
     stripeChargesEnabled: r.stripe_charges_enabled,
     status: r.status,
     splash360Live: r.splash360_live,
+    splash360StationId: r.splash360_station_id,
   };
 }
 
@@ -100,6 +118,25 @@ export function createPostgresRestaurantStore(sql: Sql): RestaurantStore {
                 returning id`;
       return rows.length > 0;
     },
+    async findBySplash360Station(stationId) {
+      if (!SPLASH360_STATION_ID.test(stationId)) return null;
+      const rows = await sql<Row[]>`
+        select * from public.restaurants where splash360_station_id = ${stationId} limit 1`;
+      return rows[0] ? toRestaurant(rows[0]) : null;
+    },
+    async setSplash360Station(tenantId, restaurantId, stationId) {
+      if (!UUID.test(restaurantId)) return 'not_found';
+      if (stationId !== null && !SPLASH360_STATION_ID.test(stationId)) return 'not_found';
+      try {
+        const rows = await sql`update public.restaurants set splash360_station_id = ${stationId}
+                  where tenant_id = ${tenantId} and id = ${restaurantId} returning id`;
+        return rows.length > 0 ? 'ok' : 'not_found';
+      } catch (error) {
+        // Index unique : la station est déjà rattachée à un autre restaurant.
+        if ((error as { code?: string }).code === '23505') return 'taken';
+        throw error;
+      }
+    },
   };
 }
 
@@ -128,6 +165,20 @@ export function createMemoryRestaurantStore(source: readonly Restaurant[]): Rest
       if (!r || (live && other)) return Promise.resolve(false);
       Object.assign(r, { splash360Live: live });
       return Promise.resolve(true);
+    },
+    findBySplash360Station(stationId) {
+      return Promise.resolve(restaurants.find((r) => r.splash360StationId === stationId) ?? null);
+    },
+    setSplash360Station(tenantId, restaurantId, stationId) {
+      const r = restaurants.find((x) => x.tenantId === tenantId && x.id === restaurantId);
+      if (!r) return Promise.resolve('not_found' as const);
+      if (
+        stationId !== null &&
+        restaurants.some((x) => x.id !== restaurantId && x.splash360StationId === stationId)
+      )
+        return Promise.resolve('taken' as const);
+      Object.assign(r, { splash360StationId: stationId });
+      return Promise.resolve('ok' as const);
     },
   };
 }

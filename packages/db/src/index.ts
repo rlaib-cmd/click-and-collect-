@@ -16,3 +16,4 @@ export * from './splash360-gate';
 export * from './pos-sales';
 export * from './loyalty-youfid';
 export * from './proximity';
+export * from './splash360-webhooks';

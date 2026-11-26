@@ -44,6 +44,22 @@ export interface PosOrderToCancel {
   readonly cancelledAt: string;
 }
 
+export interface PosTicketOrder {
+  readonly orderId: string;
+  readonly status: OrderStatus;
+  readonly paymentMethod: 'online' | 'on_site';
+}
+
+/** Événements de l'historique posés par les webhooks Splash360 (lot 23). */
+export type PosEventStatus = 'pos_paid' | 'pos_cancelled';
+export interface PosEventDetail {
+  readonly reason: string | null;
+  readonly occurredAt: string | null;
+  readonly amountCents: number | null;
+}
+/** Auteur des événements venus de la caisse par webhook. */
+export const POS_WEBHOOK_ACTOR = 'caisse';
+
 /** Opérations après paiement : envoi à la caisse, statuts, jetons de notification. */
 export interface OperationsStore {
   /** Réserve les envois dus (bail de 2 min pour qu'une autre instance ne les prenne pas en même temps). */
@@ -69,6 +85,25 @@ export interface OperationsStore {
     actor: string,
   ): Promise<StatusChange>;
   findByPosReference(posReference: string): Promise<{ tenantId: string; orderId: string } | null>;
+  /**
+   * Commande du restaurant par sa référence Splash360 (ticket reçu au dépôt, `pos_ticket_id`) :
+   * webhook d'encaissement / annulation (lot 23).
+   */
+  findByPosTicket(
+    tenantId: string,
+    restaurantId: string,
+    ticketId: string,
+  ): Promise<PosTicketOrder | null>;
+  /**
+   * Trace un encaissement ou une annulation reçus de la caisse (auteur « caisse »), une seule fois
+   * par commande et par statut ; faux si déjà tracé.
+   */
+  recordPosEvent(
+    tenantId: string,
+    orderId: string,
+    status: PosEventStatus,
+    detail: PosEventDetail,
+  ): Promise<boolean>;
   addPushToken(tenantId: string, orderId: string, token: string): Promise<void>;
   listPushTokens(tenantId: string, orderId: string): Promise<string[]>;
 }
@@ -182,6 +217,35 @@ export function createPostgresOperationsStore(sql: Sql): OperationsStore {
       const [o] = await sql<{ tenant_id: string; id: string }[]>`
         select tenant_id, id from public.orders where pos_reference = ${posReference} limit 1`;
       return o ? { tenantId: o.tenant_id, orderId: o.id } : null;
+    },
+
+    async findByPosTicket(tenantId, restaurantId, ticketId) {
+      // Casse d'origine, minuscules ou majuscules : l'index (restaurant_id, pos_ticket_id) sert.
+      const variants = [...new Set([ticketId, ticketId.toLowerCase(), ticketId.toUpperCase()])];
+      const [o] = await sql<
+        { id: string; status: OrderStatus; payment_method: 'online' | 'on_site' }[]
+      >`
+        select id, status, payment_method from public.orders
+        where tenant_id = ${tenantId} and restaurant_id = ${restaurantId}
+          and pos_ticket_id in ${sql(variants)}
+        limit 1`;
+      return o ? { orderId: o.id, status: o.status, paymentMethod: o.payment_method } : null;
+    },
+
+    async recordPosEvent(tenantId, orderId, status, detail) {
+      return sql.begin(async (tx) => {
+        await tx`select 1 from public.orders where tenant_id = ${tenantId} and id = ${orderId} for update`;
+        const seen = await tx`
+          select 1 from public.order_events
+          where tenant_id = ${tenantId} and order_id = ${orderId} and status = ${status}
+            and actor = ${POS_WEBHOOK_ACTOR}
+          limit 1`;
+        if (seen.length > 0) return false;
+        await tx`insert into public.order_events (tenant_id, order_id, status, actor, detail)
+                 values (${tenantId}, ${orderId}, ${status}, ${POS_WEBHOOK_ACTOR},
+                         ${tx.json({ ...detail })})`;
+        return true;
+      });
     },
 
     async addPushToken(tenantId, orderId, token) {

@@ -585,6 +585,8 @@ export interface OrderDetail {
     readonly status: string;
     readonly actor: string;
     readonly at: string;
+    /** Motif saisi en caisse (annulation reçue par webhook Splash360, lot 23). */
+    readonly note?: string | null;
   }[];
   readonly accessTokenHash: string | null;
   readonly paymentMethod: 'online' | 'on_site';
@@ -672,8 +674,8 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           from public.order_item_options oio
           join public.order_items oi on oi.id = oio.order_item_id
           where oi.tenant_id = ${tenantId} and oi.order_id = ${orderId} order by oio.id`,
-        sql<{ status: string; actor: string; created_at: Date }[]>`
-          select status, actor, created_at from public.order_events
+        sql<{ status: string; actor: string; created_at: Date; note: string | null }[]>`
+          select status, actor, created_at, detail->>'reason' as note from public.order_events
           where tenant_id = ${tenantId} and order_id = ${orderId} order by created_at, id`,
       ]);
       return {
@@ -727,6 +729,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           status: e.status,
           actor: e.actor,
           at: e.created_at.toISOString(),
+          note: e.note,
         })),
         accessTokenHash: o.access_token_hash,
       };
