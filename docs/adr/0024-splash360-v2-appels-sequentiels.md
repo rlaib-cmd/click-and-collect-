@@ -124,3 +124,20 @@ Réponses faisant foi (détail dans `docs/api-splash360/analyse-api-click-collec
     `price` d'une ligne) ; `ingredient` envoyé en plus de `ingid` pour une option imbriquée ;
     format des remises inchangé.
 
+## Réponses du 26/11, suite (lot 24, ADR 0030)
+
+Le directeur technique de Splash360 a donné, d'après le code de la caisse (`release/version-1.4.x`),
+le sens des promotions de catalogue et confirmé les hypothèses d'envoi du point 10 :
+
+- `reglescatalogue` est désormais traduit et appliqué en ligne comme en caisse (ADR 0030) : la
+  conséquence du point 9 (écart à rembourser) ne vaut plus pour les promotions de catalogue.
+- `price` d'un ingrédient avec `qte` > 1 = prix unitaire : **confirmé**. `ingredient` envoyé avec
+  `ingid` : **confirmé**.
+- Remises : format de la borne (`setCommandeFromAPI`) — remise d'article dans
+  `items[].modificateurs` (pourcentage, `itemOnly`), remise de commande en « 10% » ou « 5€ » ;
+  le cadeau fidélité part en remise d'article (ADR 0030).
+- Étapes imbriquées : la caisse en gère **trois niveaux** ; nous aussi depuis le lot 24
+  (`MAX_NESTING_DEPTH`), `parentid` = ingrédient parent direct.
+- Webhook de rupture depuis le gestionnaire de stock : route en conception chez Splash360, sans
+  effet sur le click and collect (les ruptures de la caisse arrivent déjà par webhook, ADR 0029).
+

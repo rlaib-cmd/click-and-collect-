@@ -99,7 +99,7 @@ Réponses faisant foi ; ce qui est appliqué est décrit dans l'ADR 0024 (« Ré
 |---|---|---|---|
 | 8 | Identifiant d'ingrédient de `submitcommande` | Identifiant complet (`ing15407-typ2075`) | Déjà le cas ; test ajouté |
 | 9 | Même option choisie deux fois (`max_par_produit` = 2) | Envoyée une fois avec `qte: 2` | Option répétée dans le panier (core, contrats, application : compteur), regroupée en `qte` à l'envoi, prix unitaire dans `price` |
-| 10 | Étapes imbriquées d'une formule (`steps[].produit` = « ing…-typ… ») | À plat dans `ingredients`, avec `ingid` et `parentid` (ingrédient parent) | Groupe imbriqué rattaché à l'option parente (`parentOptionId`) ; option envoyée avec `ingredient` = `ingid` et `parentid`. Un seul niveau d'imbrication |
+| 10 | Étapes imbriquées d'une formule (`steps[].produit` = « ing…-typ… ») | À plat dans `ingredients`, avec `ingid` et `parentid` (ingrédient parent) ; la caisse gère trois niveaux | Groupe imbriqué rattaché à l'option parente (`parentOptionId`) ; option envoyée avec `ingredient` = `ingid` et `parentid` (parent direct). Trois niveaux depuis le lot 24 (ADR 0030) |
 | 11 | Ordre de `prixArray_c` | sur place, à emporter, livraison, Uber, Deliveroo | Prix à emporter (entrée 1) ou livraison (entrée 2), produits et suppléments ; `prix_c` à défaut. Carte servie au prix du mode (`?mode=`), calcul serveur au prix du mode |
 | 12 | Statuts après `confirmed` | Aucun : la caisse ne renvoie plus rien | Suivi inchangé : l'équipe fait avancer la commande au back-office |
 | 13 | Annuler une commande `standby` | Seulement depuis la caisse | Jamais de dépôt laissé sans besoin ; une commande annulée chez nous (paiement non terminé, caisse pas prête, dépôt incertain) est signalée au back-office : « annulez-la directement en caisse » |
@@ -107,10 +107,10 @@ Réponses faisant foi ; ce qui est appliqué est décrit dans l'ADR 0024 (« Ré
 | 15 | Heure de retrait | `scheduledAt` à la racine, ISO 8601 avec le décalage de Paris (`2026-11-26T14:22:22.177+01:00`) | Envoyé seulement si le client a choisi une heure ; « dès que possible » : rien (heure estimée en commentaire). Le commentaire est gardé |
 | 16 | Frais | TVA 20 % dans `modificateurs`, format exact ci-dessus | `nom: 'Frais'` ; `modificateur_id` = `frais_livraison` ou `frais_service` |
 | 17 | Ruptures de stock | Un webhook existe | Non construit : URL d'inscription, contenu et signature inconnus (questions en attente) |
-| 18 | Promotions de catalogue (`reglescatalogue`) | Appliquées par la caisse à la réception : à appliquer aussi en ligne | Non appliquées : forme insuffisante (voir ci-dessous, questions en attente) |
+| 18 | Promotions de catalogue (`reglescatalogue`) | Appliquées par la caisse à la réception : à appliquer aussi en ligne ; règles données le 26/11 (ci-dessous) | Appliquées en ligne comme en caisse depuis le lot 24 (ADR 0030) |
 | 19 | Pagination de l'export des ventes | Reste à 0 | Inchangé (première page = 0) |
 
-### `reglescatalogue` : ce qui manque pour l'appliquer
+### `reglescatalogue` : règles de la caisse (réponse du 26/11)
 
 Exemple réel (carte Chicken Street Siège du 25/11) :
 
@@ -121,11 +121,51 @@ Exemple réel (carte Chicken Street Siège du 25/11) :
   "selection": "all", "valeur": "100%", "operation": -1, "nom": "3 acheter = 1", "taux": 0 }
 ```
 
-Non déductible sans inventer : quel article est offert (le moins cher ? le dernier ?), si la règle
-se répète (8 articles = 2 offerts ?), le sens de `min`/`max` (taille du lot ?), de `quantite` (0),
-de `selection` (« all »), de `taux` ; si la remise porte sur le prix de base seul ou options
-comprises ; le cas de la **livraison** (aucune règle `livraison` dans l'exemple : pas de promotion
-en livraison ?) ; le cumul avec un code promo ou un cadeau fidélité ; et la façon de l'indiquer
-dans `submitcommande` (modificateur `discount` ? la caisse la recalcule-t-elle elle-même ?).
-Tant que ces points manquent, le prix en ligne ne déduit aucune promotion de catalogue.
+Réponse du directeur technique de Splash360 (26/11), relevée dans le code de la caisse
+(`release/version-1.4.x`), transcrite fidèlement :
 
+**Sens des champs**
+
+- `produits` : produits concernés. Liste vide = la règle s'applique à toute la commande.
+- `min` / `max` : les articles sont comptés par lots de `max` ; dans chaque lot, les articles de
+  rang `min` à `max` sont remisés. Exemples : 4/4 = le 4e offert, 3/3 = le 3e offert, 2/3 = le 2e
+  et le 3e remisés, 0/0 = chaque article remisé. Si `min` > 0 et `max` = 0, la règle est ignorée.
+- `quantite` : nombre maximal d'articles remisés par commande ; 0 = sans limite.
+- `selection` : « one » = chaque produit compté séparément (4 Coca comptent, 2 Coca + 2 Fanta
+  non) ; sinon (« all ») : tous les produits de la liste comptés ensemble.
+- `valeur` : « 100% » ou « 3.9€ » (point décimal).
+- `operation` : -1 = remise ; +1 = frais ajoutés (seulement pour une règle sans produits).
+- `mode` : « surplace », « emporter », « livraison » ou « all ». Le back-office envoie une copie
+  de chaque règle par mode (identifiants `…_surplace`, `…_emporter`, `…_livraison`) : ne garder
+  que les copies du mode de la commande, plus « all ».
+- `start` / `end` : dates en millisecondes ; `end` = 0 = sans date de fin.
+
+**Article remisé** : en « all », les moins chers parmi tous les articles concernés (panier 10, 10,
+6, 4 € avec « le 4e offert » → l'article à 4 €) ; en « one », calcul produit par produit, remise
+sur la ligne de ce produit.
+
+**Répétition** : à chaque lot complet (4e offert : 8 articles → 2 offerts, 7 → 1) ; `quantite`
+plafonne par commande.
+
+**Cumul** : deux remises sur le même article : non — une seule remise par ligne, la première de
+la liste ; une remise existante (coupon, borne) est prioritaire sur les règles. Remise d'article
+et remise de commande : oui ; la remise de commande se calcule sur le total déjà remisé (4e offert
+puis 10 % sur 40 € → 40 − 10 − 3 = 27 €). Deux remises de commande (règle + coupon, ou deux
+règles) : non — seule la première compte.
+
+**Envoi dans `submitcommande`** : même format que la borne (`setCommandeFromAPI`) :
+
+- remise d'article : dans `items[].modificateurs`, une entrée par article remisé :
+  `{ "type": "discount", "origin": "bogo", "nom": "<nom exact de la règle>", "operation": -1,
+  "valeur": "100%", "itemOnly": true }`. La caisse découpe la ligne pour que seul l'article remisé
+  la porte. La valeur doit être un **pourcentage** (un montant en euros sur un article est mal lu) ;
+- remise de commande : dans les `modificateurs` de la commande, « 10% » ou « 5€ » ;
+- `nom` doit être exactement le nom de la règle : la caisse remplace au lieu d'ajouter.
+
+Autres réponses du même jour : `price` d'un ingrédient avec `qte` > 1 = prix unitaire (confirmé) ;
+`ingredient` + `ingid` pour une option imbriquée (confirmé) ; la caisse gère trois niveaux
+d'étapes imbriquées ; la route de rupture depuis le gestionnaire de stock est en conception chez
+Splash360 (sans effet pour le click and collect).
+
+Application chez nous et hypothèses retenues : ADR 0030 ; hypothèses à confirmer : questions en
+attente n° 23.
