@@ -46,6 +46,16 @@ export interface YoufidProbeResult {
   readonly merchantId: number;
   readonly secType: string;
   readonly rewards: number;
+  /** Diagnostic : le marchand et ses cadeaux tels que YouFID les décrit (aucune donnée client). */
+  readonly merchantName: string | null;
+  readonly programName: string | null;
+  readonly pointsOnAmount: boolean;
+  readonly catalog: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly cost: number;
+    readonly type: string | null;
+  }[];
 }
 
 /** Comptes YouFID du serveur, un client (et une session) par enseigne, créés à la demande. */
@@ -100,6 +110,15 @@ export function createYoufidRegistry(options: {
           merchantId: session.merchantId,
           secType: session.secType,
           rewards: merchant.products.length,
+          merchantName: merchant.name,
+          programName: merchant.programName,
+          pointsOnAmount: merchant.pointsOnAmount,
+          catalog: merchant.products.map((p) => ({
+            id: p.id,
+            name: p.name,
+            cost: p.cost,
+            type: p.type,
+          })),
         };
       })();
     },

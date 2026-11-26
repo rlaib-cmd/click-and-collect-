@@ -418,10 +418,14 @@ describe('aiguillage par enseigne et configuration', () => {
     ).toBe('Le club Bill’s Burger');
     expect(registry.has('chickenstreet')).toBe(true);
     expect(registry.probe('inconnue')).toBeNull();
-    expect(await registry.probe('chickenstreet')).toEqual({
+    expect(await registry.probe('chickenstreet')).toMatchObject({
       merchantId: 4242,
       secType: 'oauth1HmacSha256',
       rewards: 2,
+      catalog: [
+        { id: '11', name: 'Frites offertes', cost: 300 },
+        { id: '12', name: 'Boisson offerte', cost: 500 },
+      ],
     });
     expect(await noLoyaltyProvider.getProgram(tenant)).toBeNull();
   });

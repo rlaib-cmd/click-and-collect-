@@ -274,7 +274,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     try {
       const r = await probe;
       await audited({ ok: true, merchantId: r.merchantId });
-      return c.json({ ok: true, merchantId: r.merchantId, rewards: r.rewards, secType: r.secType });
+      return c.json({ ok: true, ...r });
     } catch (error) {
       // Détail technique au journal d'audit seulement (jamais d'identifiant ni de corps).
       const detail = error instanceof Error ? error.message : String(error);
