@@ -235,7 +235,12 @@ function build() {
   // fonction), fidélité de test pour les autres.
   const youfidStore = createPostgresYoufidStore(sql);
   const { loyalty, youfid } = configureLoyalty({
-    fallback: createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
+    // Production : jamais la fidélité de démonstration (points fictifs hors YouFID) ; sans compte
+    // YouFID, l'enseigne n'a simplement pas de club.
+    fallback:
+      appEnv === 'production'
+        ? null
+        : createDemoLoyaltyProvider(createPostgresDemoLoyaltyStore(sql), randomUUID),
     accountsJson: env('YOUFID_ACCOUNTS'),
     baseUrl: env('YOUFID_BASE_URL'),
     deviceId: env('YOUFID_DEVICE_ID'),
