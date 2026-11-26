@@ -95,6 +95,8 @@ describe('codes promo', () => {
     expect(q.totals).toMatchObject({
       subtotalCents: 2100,
       promoDiscountCents: 210,
+      catalogDiscountCents: 0,
+      catalogFeeCents: 0,
       totalCents: 1890,
     });
     expect(q.promoCode).toBe('BIENVENUE');

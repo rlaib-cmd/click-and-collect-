@@ -2,8 +2,11 @@ import {
   cents,
   customerContactKey,
   reservedRewardPoints,
+  type CatalogOrderAdjustment,
+  type CatalogResult,
   type DeliveryZone,
   type FeeSettings,
+  type LineDiscount,
   type OrderMode,
   type OrderStatus,
   type PricedLine,
@@ -71,6 +74,73 @@ export interface NewOrder {
   readonly paymentMethod?: 'online' | 'on_site';
   /** Code promo appliqué (lot 11) ; l'utilisation est enregistrée avec la commande. */
   readonly promo?: { readonly id: string; readonly code: string } | null;
+  /** Promotions de catalogue de la caisse appliquées (lot 24), figées avec la commande. */
+  readonly catalog?: CatalogResult | null;
+}
+
+/** Remise ou frais de règle sans produits, tel que figé (`orders.catalog_adjustments`). */
+function readAdjustments(raw: unknown): CatalogOrderAdjustment[] {
+  const list: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((x: unknown) => {
+    if (typeof x !== 'object' || x === null) return [];
+    const r = x as Record<string, unknown>;
+    if (typeof r.name !== 'string' || typeof r.cents !== 'number') return [];
+    if (r.kind !== 'discount' && r.kind !== 'fee') return [];
+    return [
+      {
+        ruleId: typeof r.ruleId === 'string' ? r.ruleId : '',
+        name: r.name,
+        kind: r.kind,
+        cents: cents(r.cents),
+        valueLabel: typeof r.valueLabel === 'string' ? r.valueLabel : '',
+        vatRate: typeof r.vatRate === 'number' ? r.vatRate : null,
+      },
+    ];
+  });
+}
+
+/** Remises de règles d'une ligne, telles que figées (`order_items.discounts`). */
+function readLineDiscounts(raw: unknown): LineDiscount[] {
+  const list: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((x: unknown) => {
+    if (typeof x !== 'object' || x === null) return [];
+    const r = x as Record<string, unknown>;
+    if (typeof r.name !== 'string' || typeof r.units !== 'number') return [];
+    if (typeof r.unitDiscountCents !== 'number' || typeof r.percentLabel !== 'string') return [];
+    return [
+      {
+        ruleId: typeof r.ruleId === 'string' ? r.ruleId : '',
+        name: r.name,
+        units: r.units,
+        unitDiscountCents: cents(r.unitDiscountCents),
+        percentLabel: r.percentLabel,
+      },
+    ];
+  });
+}
+
+/** Remises d'une ligne dans le résultat des promotions de catalogue. */
+export function lineDiscountsOf(catalog: CatalogResult | null | undefined, line: number) {
+  return (catalog?.items ?? [])
+    .filter((d) => d.line === line)
+    .map((d): LineDiscount => ({
+      ruleId: d.ruleId,
+      name: d.name,
+      units: d.units,
+      unitDiscountCents: d.unitDiscountCents,
+      percentLabel: d.percentLabel,
+    }));
+}
+
+/** Remise commande puis frais des règles sans produits. */
+export function orderAdjustmentsOf(
+  catalog: CatalogResult | null | undefined,
+): CatalogOrderAdjustment[] {
+  return catalog
+    ? [...(catalog.orderDiscount ? [catalog.orderDiscount] : []), ...catalog.fees]
+    : [];
 }
 
 /** Code promo tel que lu pour un devis (ADR 0015). */
@@ -488,7 +558,8 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
             delivery_address, delivery_zone_id, subtotal_cents, delivery_fee_cents, service_fee_cents, discount_cents,
             total_cents, idempotency_key, application_fee_cents, access_token_hash,
             loyalty_member_id, loyalty_reward_id, loyalty_reward_points, loyalty_reward_product_id,
-            promo_code, promo_discount_cents, payment_method, status)
+            promo_code, promo_discount_cents, catalog_discount_cents, catalog_fee_cents,
+            catalog_adjustments, payment_method, status)
           values (${o.id}, ${o.tenantId}, ${o.restaurantId}, ${customer?.id ?? null}, ${counter?.n ?? 0}, ${o.mode},
             ${o.requestedSlot}, ${o.estimatedAt},
             ${o.deliveryAddress ? tx.json(o.deliveryAddress as unknown as Parameters<typeof tx.json>[0]) : null},
@@ -497,6 +568,8 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
             ${o.accessTokenHash}, ${o.loyalty?.memberId ?? null}, ${o.loyalty?.reward?.id ?? null},
             ${o.loyalty?.reward?.costPoints ?? null}, ${o.loyalty?.reward?.productId ?? null},
             ${o.promo?.code ?? null}, ${o.totals.promoDiscountCents},
+            ${o.totals.catalogDiscountCents}, ${o.totals.catalogFeeCents},
+            ${tx.json(orderAdjustmentsOf(o.catalog) as unknown as Parameters<typeof tx.json>[0])},
             ${onSite ? 'on_site' : 'online'},
             ${onSite ? 'confirmed' : 'pending_payment'})
           returning id, number, status, total_cents, created_at`;
@@ -505,9 +578,10 @@ export function createPostgresOrderingStore(sql: Sql): OrderingStore {
         for (const [position, line] of o.lines.entries()) {
           const [item] = await tx<{ id: string }[]>`
             insert into public.order_items (tenant_id, order_id, position, splash360_product_id, name,
-              unit_price_cents, quantity, total_cents, note)
+              unit_price_cents, quantity, total_cents, note, discounts)
             values (${o.tenantId}, ${order.id}, ${position}, ${line.productId}, ${line.name},
-              ${line.unitPriceCents}, ${line.quantity}, ${line.totalCents}, ${line.note})
+              ${line.unitPriceCents}, ${line.quantity}, ${line.totalCents}, ${line.note},
+              ${tx.json(lineDiscountsOf(o.catalog, position) as unknown as Parameters<typeof tx.json>[0])})
             returning id`;
           for (const opt of line.options) {
             await tx`
@@ -580,7 +654,11 @@ export interface OrderDetail {
       readonly name: string;
       readonly priceCents: number;
     }[];
+    /** Promotions de catalogue sur la ligne (lot 24) ; absent des anciennes commandes. */
+    readonly discounts?: readonly LineDiscount[];
   }[];
+  /** Remise et frais des promotions de catalogue sans produits (lot 24). */
+  readonly catalogAdjustments?: readonly CatalogOrderAdjustment[];
   readonly events: readonly {
     readonly status: string;
     readonly actor: string;
@@ -626,6 +704,9 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           service_fee_cents: number;
           discount_cents: number;
           promo_discount_cents: number;
+          catalog_discount_cents: number;
+          catalog_fee_cents: number;
+          catalog_adjustments: unknown;
           total_cents: number;
           refunded_cents: number;
           loyalty_member_id: string | null;
@@ -655,9 +736,11 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
             unit_price_cents: number;
             total_cents: number;
             note: string | null;
+            discounts: unknown;
           }[]
         >`
-          select id, splash360_product_id, name, quantity, unit_price_cents, total_cents, note
+          select id, splash360_product_id, name, quantity, unit_price_cents, total_cents, note,
+                 discounts
           from public.order_items
           where tenant_id = ${tenantId} and order_id = ${orderId} order by position`,
         sql<
@@ -694,8 +777,11 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           serviceFeeCents: cents(o.service_fee_cents),
           discountCents: cents(o.discount_cents),
           promoDiscountCents: cents(o.promo_discount_cents),
+          catalogDiscountCents: cents(o.catalog_discount_cents),
+          catalogFeeCents: cents(o.catalog_fee_cents),
           totalCents: cents(o.total_cents),
         },
+        catalogAdjustments: readAdjustments(o.catalog_adjustments),
         refundedCents: o.refunded_cents,
         paymentMethod: o.payment_method,
         loyalty: o.loyalty_member_id
@@ -716,6 +802,7 @@ export function createPostgresOrderReader(sql: Sql): OrderReader {
           unitPriceCents: i.unit_price_cents,
           totalCents: i.total_cents,
           note: i.note,
+          discounts: readLineDiscounts(i.discounts),
           options: options
             .filter((x) => x.order_item_id === i.id)
             .map((x) => ({

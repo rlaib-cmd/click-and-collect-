@@ -13,7 +13,7 @@ import type {
   TenantStore,
   TenantWithTheme,
 } from '@splash360/db';
-import { menuForMode } from '@splash360/core';
+import { menuForMode, promotedProducts } from '@splash360/core';
 import { DEFAULT_THEME } from '@splash360/theme';
 import { Hono } from 'hono';
 import { isValidPreviewToken } from '../admin/theme-preview';
@@ -126,15 +126,18 @@ export function tenantRoutes(deps: TenantRoutesDeps) {
         live: restaurant.splash360Live,
       });
       const overrides = await deps.admin.listMenuOverrides(c.get('tenant').id, restaurant.id);
+      const mode = menuModeSchema.parse(c.req.query('mode'));
       c.header('Cache-Control', 'public, max-age=30');
       return c.json(
         toMenuDto(
           // Prix du mode choisi par le client (réponse de Splash360 du 26/11 : prixArray_c).
-          menuForMode(cached.menu, menuModeSchema.parse(c.req.query('mode'))),
+          menuForMode(cached.menu, mode),
           restaurant.id,
           cached.fetchedAt,
           cached.stale,
           overrides,
+          // Badge « Promo » : promotions de catalogue en vigueur pour ce mode (lot 24).
+          promotedProducts(cached.menu.catalogRules, mode, deps.now()),
         ),
       );
     } catch (error) {

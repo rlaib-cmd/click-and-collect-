@@ -20,6 +20,8 @@ export function toMenuDto(
   fetchedAt: Date,
   stale: boolean,
   overrides: readonly MenuOverride[] = [],
+  /** Produits en promotion de catalogue (nom de la règle), pour le badge « Promo » (lot 24). */
+  promos: ReadonlyMap<string, string> = new Map(),
 ): MenuDto {
   const find = (kind: MenuOverride['kind'], id: string) =>
     overrides.find((o) => o.kind === kind && o.itemId === id);
@@ -46,6 +48,7 @@ export function toMenuDto(
           available: p.available,
           // Mis en avant sur l'accueil : jamais un produit masqué (déjà filtré) ou indisponible.
           featured: p.available && find('product', p.id)?.featured === true,
+          promo: promos.get(p.id) ?? null,
           allergens: [...p.allergens],
           optionGroups: p.optionGroups.map((g) => ({
             id: g.id,

@@ -93,6 +93,8 @@ describe('devis (recontrôle serveur)', () => {
       serviceFeeCents: 0,
       discountCents: 0,
       promoDiscountCents: 0,
+      catalogDiscountCents: 0,
+      catalogFeeCents: 0,
       totalCents: 1450,
     });
     expect(body.at).toBe(noon);

@@ -95,6 +95,20 @@ export const pricedLineSchema = z.object({
   unitPriceCents: cents,
   totalCents: cents,
   note: z.string().nullable(),
+  /**
+   * Promotions de catalogue de la caisse sur la ligne (lot 24) : `units` articles remisés,
+   * `cents` = remise totale de la ligne ; absent des anciennes réponses.
+   */
+  discounts: z
+    .array(z.object({ name: z.string(), units: z.number().int().positive(), cents }))
+    .default([]),
+});
+
+/** Remise ou frais d'une promotion de catalogue sur toute la commande (lot 24). */
+export const catalogAdjustmentSchema = z.object({
+  name: z.string(),
+  kind: z.enum(['discount', 'fee']),
+  cents,
 });
 
 export const totalsSchema = z.object({
@@ -105,6 +119,10 @@ export const totalsSchema = z.object({
   discountCents: cents.default(0),
   /** Remise du code promo (lot 11). */
   promoDiscountCents: cents.default(0),
+  /** Promotions de catalogue de la caisse : remises articles et commande (lot 24). */
+  catalogDiscountCents: cents.default(0),
+  /** Frais ajoutés par une promotion de catalogue (lot 24). */
+  catalogFeeCents: cents.default(0),
   totalCents: cents,
 });
 
@@ -124,6 +142,8 @@ export const quoteSchema = z.object({
     .default(null),
   /** Code promo appliqué ; null sans code. */
   promoCode: z.string().nullable().default(null),
+  /** Remise et frais des promotions de catalogue sur toute la commande (lot 24). */
+  adjustments: z.array(catalogAdjustmentSchema).default([]),
 });
 
 export const customerSchema = z.object({

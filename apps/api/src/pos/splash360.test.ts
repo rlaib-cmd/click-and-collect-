@@ -32,6 +32,8 @@ function order(overrides: Partial<OrderDetail> = {}): OrderDetail {
       serviceFeeCents: cents(50),
       discountCents: cents(350),
       promoDiscountCents: cents(100),
+      catalogDiscountCents: cents(0),
+      catalogFeeCents: cents(0),
       totalCents: cents(1490),
     },
     refundedCents: 0,

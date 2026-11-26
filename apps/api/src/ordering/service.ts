@@ -2,8 +2,11 @@ import type { MenuCache } from '@splash360/api-menu';
 import type { AddressDto, OrderIssue, QuoteRequest } from '@splash360/contracts';
 import type { LoyaltyTenant } from '@splash360/api-loyalty';
 import {
+  applyCatalogRules,
+  applyCatalogToTotals,
   applyPromo,
   applyReward,
+  EMPTY_CATALOG_RESULT,
   normalizePromoCode,
   asapAvailability,
   availablePoints,
@@ -18,6 +21,7 @@ import {
   menuForMode,
   priceCart,
   slotsForDate,
+  type CatalogResult,
   type DeliveryZone,
   type PricedLine,
   type ScheduleSettings,
@@ -138,6 +142,8 @@ export type QuoteResult =
       } | null;
       /** Code promo appliqué (lot 11, ADR 0015). */
       readonly promo: { readonly id: string; readonly code: string } | null;
+      /** Promotions de catalogue de la caisse appliquées (lot 24, ADR 0030). */
+      readonly catalog: CatalogResult;
     }
   | { readonly ok: false; readonly issues: readonly OrderIssue[] };
 
@@ -274,18 +280,36 @@ export async function quote(
           } else issues.push({ code: applied.error, productId });
         }
       }
-      loyalty = {
-        memberId: member.id,
-        balance: member.points,
-        pointsEarned: totals ? pointsForAmount(totals.totalCents, program) : 0,
-        reward,
-      };
+      // Points gagnés : calculés à la fin, sur le montant payé (promotions et code compris).
+      loyalty = { memberId: member.id, balance: member.points, pointsEarned: 0, reward };
     }
   } else if (request.loyalty && !deps.loyalty) {
     issues.push({ code: 'loyalty_session_invalid' });
   }
 
-  // Code promo (ADR 0015) : après la récompense ; les points se gagnent sur le montant payé.
+  // Promotions de catalogue de la caisse (lot 24, ADR 0030), comme en caisse : après le cadeau
+  // fidélité (remise existante, prioritaire sur l'article offert), avant le code promo. Le code
+  // du client est une remise sur la commande déjà présente : aucune remise commande de règle.
+  let catalog: CatalogResult = EMPTY_CATALOG_RESULT;
+  if (totals && priced.ok) {
+    const rewardLine = loyalty?.reward
+      ? priced.lines.findIndex((l) => l.productId === loyalty?.reward?.productId && l.quantity > 0)
+      : -1;
+    catalog = applyCatalogRules({
+      lines: priced.lines,
+      rules: menu.catalogRules,
+      mode: request.mode,
+      now,
+      reservedUnits: rewardLine >= 0 ? [{ line: rewardLine, units: 1 }] : [],
+      alreadyDiscountedCents: totals.discountCents,
+      orderDiscountTaken: Boolean(request.promoCode),
+    });
+    const applied = applyCatalogToTotals(totals, catalog);
+    if (applied.ok) totals = applied.totals;
+    else issues.push({ code: applied.error });
+  }
+
+  // Code promo (ADR 0015) : après la récompense et les promotions de catalogue.
   let promo: { id: string; code: string } | null = null;
   if (request.promoCode && tenant && totals) {
     const code = normalizePromoCode(request.promoCode);
@@ -302,10 +326,12 @@ export async function quote(
     if (applied.ok && found) {
       totals = applied.totals;
       promo = { id: found.id, code: found.code };
-      if (loyalty && loyaltyProgram) {
-        loyalty = { ...loyalty, pointsEarned: pointsForAmount(totals.totalCents, loyaltyProgram) };
-      }
     } else if (!applied.ok) issues.push({ code: applied.error });
+  }
+
+  // Les points se gagnent sur le montant payé.
+  if (loyalty && loyaltyProgram && totals) {
+    loyalty = { ...loyalty, pointsEarned: pointsForAmount(totals.totalCents, loyaltyProgram) };
   }
 
   if (issues.length > 0 || !priced.ok || !totals || !time.ok) {
@@ -320,5 +346,6 @@ export async function quote(
     zoneId: zone?.id ?? null,
     loyalty,
     promo,
+    catalog,
   };
 }

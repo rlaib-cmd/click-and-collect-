@@ -68,6 +68,8 @@ export const orderIssueSchema = z.object({
     'promo_exhausted',
     'promo_already_used',
     'promo_needs_paid_amount',
+    // Promotions de catalogue de la caisse (lot 24)
+    'catalog_needs_paid_amount',
     // Paiement
     'payment_method_unavailable',
     'on_site_requires_member',

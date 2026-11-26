@@ -115,7 +115,7 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
     const result = await quote(deps, ctx.restaurant, ctx.config, request, c.get('tenant'));
     if (!result.ok) return orderInvalid(c, result.issues);
     const body: Quote = {
-      lines: result.lines.map((l) => ({
+      lines: result.lines.map((l, index) => ({
         productId: l.productId,
         name: l.name,
         quantity: l.quantity,
@@ -127,6 +127,9 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
         unitPriceCents: l.unitPriceCents,
         totalCents: l.totalCents,
         note: l.note,
+        discounts: result.catalog.items
+          .filter((d) => d.line === index)
+          .map((d) => ({ name: d.name, units: d.units, cents: d.unitDiscountCents * d.units })),
       })),
       totals: result.totals,
       at: result.at,
@@ -138,6 +141,10 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
           }
         : null,
       promoCode: result.promo?.code ?? null,
+      adjustments: [
+        ...(result.catalog.orderDiscount ? [result.catalog.orderDiscount] : []),
+        ...result.catalog.fees,
+      ].map((a) => ({ name: a.name, kind: a.kind, cents: a.cents })),
     };
     return c.json(body);
   });
@@ -207,6 +214,7 @@ export function registerOrderingRoutes(app: Hono<Env>, deps: OrderingRoutesDeps)
         : null,
       paymentMethod: request.paymentMethod,
       promo: result.promo,
+      catalog: result.catalog,
     });
     if (!created.ok) {
       // Code promo épuisé ou déjà utilisé par ce client, constaté sous verrou (ADR 0015).

@@ -156,6 +156,8 @@ export const fr = {
       promo_exhausted: 'Ce code promo a déjà été utilisé le nombre de fois prévu.',
       promo_already_used: 'Tu as déjà utilisé ce code promo.',
       promo_needs_paid_amount: 'Ce code ne peut pas rendre la commande gratuite.',
+      catalog_needs_paid_amount:
+        'Les promotions rendraient la commande gratuite : ajoute un article payant.',
       insufficient_points: 'Tu n’as plus assez de points pour cette récompense.',
       reward_needs_paid_items: 'Ajoute au moins un article payant pour utiliser ta récompense.',
       other: 'Votre panier doit être vérifié.',

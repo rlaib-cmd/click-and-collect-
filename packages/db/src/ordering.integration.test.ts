@@ -68,6 +68,8 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
       serviceFeeCents: cents(0),
       discountCents: cents(0),
       promoDiscountCents: cents(0),
+      catalogDiscountCents: cents(0),
+      catalogFeeCents: cents(0),
       totalCents: cents(2900),
     },
     idempotencyKey: `test-${run}-${key}`,
@@ -325,6 +327,81 @@ describe.skipIf(!url)('OrderingStore Postgres', () => {
     expect(listed.find((p) => p.id === created.id)?.uses).toBe(2);
     expect(await promos.setPromoActive(BELLA, created.id, false)).toBe(true);
     expect((await store.findPromo(BELLA, `P${run.slice(-8).toUpperCase()}`))?.active).toBe(false);
+  });
+
+  it('fige les promotions de catalogue : remises par ligne, remise et frais de commande', async () => {
+    const restaurantId = await bellaId();
+    const base = newOrder(restaurantId, 'catalogue', '2030-01-23T11:00:00.000Z', null);
+    // 2 × 14,50 = 29,00 ; un article offert (14,50), 10 % de 14,50 (1,45), frais 0,50.
+    const created = await store.createOrder({
+      ...base,
+      totals: {
+        ...base.totals,
+        catalogDiscountCents: cents(1595),
+        catalogFeeCents: cents(50),
+        totalCents: cents(2900 - 1595 + 50),
+      },
+      catalog: {
+        items: [
+          {
+            line: 0,
+            ruleId: 'modifier4_emporter',
+            name: '1 acheté = 1 offert',
+            units: 1,
+            unitDiscountCents: cents(1450),
+            percentLabel: '100%',
+          },
+        ],
+        itemDiscountCents: cents(1450),
+        orderDiscount: {
+          ruleId: 'dix_emporter',
+          name: '10 %',
+          kind: 'discount',
+          cents: cents(145),
+          valueLabel: '10%',
+          vatRate: null,
+        },
+        fees: [
+          {
+            ruleId: 'sac_emporter',
+            name: 'Sac',
+            kind: 'fee',
+            cents: cents(50),
+            valueLabel: '0.5€',
+            vatRate: 0.2,
+          },
+        ],
+        discountCents: cents(1595),
+        feeCents: cents(50),
+      },
+    });
+    if (!created.ok) throw new Error('commande refusée');
+    const detail = await reader.getOrderDetail(BELLA, created.order.id);
+    expect(detail?.totals).toMatchObject({
+      catalogDiscountCents: 1595,
+      catalogFeeCents: 50,
+      totalCents: 1355,
+    });
+    expect(detail?.lines[0]?.discounts).toEqual([
+      {
+        ruleId: 'modifier4_emporter',
+        name: '1 acheté = 1 offert',
+        units: 1,
+        unitDiscountCents: 1450,
+        percentLabel: '100%',
+      },
+    ]);
+    expect(detail?.catalogAdjustments?.map((a) => [a.kind, a.name, a.cents, a.vatRate])).toEqual([
+      ['discount', '10 %', 145, null],
+      ['fee', 'Sac', 50, 0.2],
+    ]);
+    // Total incohérent : refusé par la base.
+    await expect(
+      store.createOrder({
+        ...newOrder(restaurantId, 'catalogue-faux', '2030-01-23T11:00:00.000Z', null),
+        totals: { ...base.totals, catalogDiscountCents: cents(100) },
+      }),
+    ).rejects.toThrow();
   });
 
   it('client sans e-mail : reconnu par son téléphone, sans doublon', async () => {

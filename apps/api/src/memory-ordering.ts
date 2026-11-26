@@ -11,6 +11,8 @@ import {
   OPENING_LEASE_MS,
   POS_WEBHOOK_ACTOR,
   SLOT_HOLDING_STATUSES,
+  lineDiscountsOf,
+  orderAdjustmentsOf,
   type CreateOrderResult,
   type NewOrder,
   type OrderDetail,
@@ -349,13 +351,15 @@ export function createMemoryOrderBackend(
           : null,
         customer: o.customer,
         deliveryAddress: o.deliveryAddress,
-        lines: o.lines.map((l) => ({
+        catalogAdjustments: orderAdjustmentsOf(o.catalog),
+        lines: o.lines.map((l, index) => ({
           productId: l.productId,
           name: l.name,
           quantity: l.quantity,
           unitPriceCents: l.unitPriceCents,
           totalCents: l.totalCents,
           note: l.note,
+          discounts: lineDiscountsOf(o.catalog, index),
           options: l.options.map((x) => ({
             groupId: x.groupId,
             optionId: x.optionId,

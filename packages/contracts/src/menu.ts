@@ -45,6 +45,11 @@ export const productSchema = z.object({
   optionGroups: z.array(optionGroupSchema),
   /** Mis en avant par la marque sur l'accueil (jamais vrai pour un produit indisponible). */
   featured: z.boolean().default(false),
+  /**
+   * Promotion de catalogue de la caisse en vigueur sur ce produit (nom de la règle, badge
+   * « Promo », lot 24) ; la remise elle-même est calculée par le serveur au devis.
+   */
+  promo: z.string().nullable().default(null),
 });
 
 /** Mode de commande demandé pour la carte : prix du mode (`?mode=`), à emporter par défaut. */

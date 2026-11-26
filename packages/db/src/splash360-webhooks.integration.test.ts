@@ -186,6 +186,8 @@ describe.skipIf(!url)('Webhooks Splash360 Postgres (lot 23)', () => {
         serviceFeeCents: cents(0),
         discountCents: cents(0),
         promoDiscountCents: cents(0),
+        catalogDiscountCents: cents(0),
+        catalogFeeCents: cents(0),
         totalCents: cents(350),
       },
       idempotencyKey: `wh-${run}-1`,
