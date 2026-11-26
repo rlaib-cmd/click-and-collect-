@@ -141,6 +141,22 @@ export default function AccountScreen() {
             </Text>
           </Pressable>
         ) : null}
+
+        {/* « Supprimer mon compte » (ADR 0028, App Store 5.1.1(v)) : discret, sous la déconnexion. */}
+        {member ? (
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => router.push('/supprimer-mon-compte')}
+            hitSlop={8}
+            style={styles.deleteAccount}
+          >
+            <Text
+              style={{ color: palette.textMuted, fontSize: 14, textDecorationLine: 'underline' }}
+            >
+              {messages.accountDeletion.menuEntry}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -190,4 +206,5 @@ const styles = StyleSheet.create({
     minHeight: 52,
     marginTop: 8,
   },
+  deleteAccount: { alignSelf: 'center', minHeight: 44, justifyContent: 'center' },
 });

@@ -301,6 +301,29 @@ export const fr = {
     orderLine: (n: number, date: string) => `Commande n° ${n} · ${date}`,
     memberSince: 'Membre du club',
   },
+  /** « Supprimer mon compte » (ADR 0028, App Store 5.1.1(v)). */
+  accountDeletion: {
+    menuEntry: 'Supprimer mon compte',
+    title: 'Supprimer mon compte',
+    intro: 'Ton compte club et les données qui y sont liées seront effacés.',
+    consequences: [
+      'Tes points et tes cadeaux non utilisés sont perdus.',
+      'Ta carte VIP, ton profil et tes cartes bancaires enregistrées sont effacés.',
+      'Les bons plans à proximité s’arrêtent et tes stories Ambassadeur en attente ne seront pas créditées.',
+      'Tes commandes passées restent connues du restaurant, pour sa comptabilité.',
+    ],
+    partner: (days: number) =>
+      `Ta fiche chez notre partenaire de fidélité sera aussi effacée : la demande lui est transmise et l’effacement est fait sous ${days} jours.`,
+    irreversible: 'Cette action est définitive : ton compte ne pourra pas être récupéré.',
+    confirm: 'Supprimer définitivement mon compte',
+    deleting: 'Suppression…',
+    cancel: 'Garder mon compte',
+    error: 'Suppression impossible pour le moment. Réessaie dans un instant.',
+    done: 'Ton compte a bien été supprimé.',
+    donePartner: (days: number) =>
+      `Ton compte a bien été supprimé. L’effacement chez notre partenaire de fidélité est demandé et sera fait sous ${days} jours.`,
+    dismiss: 'Fermer',
+  },
   tabs: {
     home: 'Accueil',
     rewards: 'Avantages',

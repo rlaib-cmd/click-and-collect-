@@ -10,6 +10,7 @@ import { FeaturedProducts } from '@/components/FeaturedProducts';
 import { FidelityCard, JoinCard } from '@/components/loyalty';
 import { TenantLogo } from '@/components/TenantLogo';
 import { useCart } from '@/cart/CartProvider';
+import { farewellMessage } from '@/loyalty/account-deletion';
 import { useLoyalty } from '@/loyalty/LoyaltyProvider';
 import { tierProducts, useRewardCatalog } from '@/loyalty/rewards';
 import { useTenant } from '@/tenant/TenantProvider';
@@ -19,7 +20,7 @@ const t = messages.loyalty;
 /** Accueil (lot 8) : commander en un geste, puis le club fidélité. */
 export default function HomeScreen() {
   const { config, palette, style, radii } = useTenant();
-  const { program, member } = useLoyalty();
+  const { program, member, farewell, dismissFarewell } = useLoyalty();
   const insets = useSafeAreaInsets();
   const brand = style.header === 'brand';
   const club = program?.enabled ? program : null;
@@ -50,6 +51,25 @@ export default function HomeScreen() {
       {brand ? <CheckerBand /> : null}
 
       <View style={styles.content}>
+        {/* Compte tout juste supprimé (ADR 0028) : confirmation jusqu'à sa fermeture. */}
+        {farewell ? (
+          <View
+            accessibilityRole="alert"
+            style={[
+              styles.farewell,
+              { backgroundColor: palette.surface, borderRadius: radii.card },
+            ]}
+          >
+            <Text style={{ color: palette.text, flex: 1, lineHeight: 20 }}>
+              {farewellMessage(farewell)}
+            </Text>
+            <Pressable accessibilityRole="button" onPress={dismissFarewell} hitSlop={8}>
+              <Text style={{ color: palette.accent, fontWeight: '700' }}>
+                {messages.accountDeletion.dismiss}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
         {member ? (
           <Text style={{ color: palette.textMuted, fontSize: 15 }}>{t.hello(member.name)}</Text>
         ) : null}
@@ -161,6 +181,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   page: { paddingBottom: 32 },
+  farewell: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   hero: { alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingBottom: 10 },
   brandName: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
   content: {

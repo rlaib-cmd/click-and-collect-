@@ -6,6 +6,7 @@ import type {
   ProximityStore,
   StripeCustomerStore,
 } from '@splash360/db';
+import { PARTNER_ERASURE_DAYS } from '@splash360/contracts';
 import type { CardGateway } from '../payments/cards';
 
 /**
@@ -40,9 +41,6 @@ export interface MemberErasure {
 
 /** Auteur des actions faites par le client lui-même depuis l'application. */
 export const CLIENT_ACTOR: AuditActor = { id: null, email: 'client' };
-
-/** Délai annoncé au client pour l'effacement chez le partenaire de fidélité. */
-export const PARTNER_ERASURE_DAYS = 30;
 
 /** Tours de détachement des cartes (20 cartes par lecture chez Stripe). */
 const CARD_ROUNDS = 5;

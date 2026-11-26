@@ -22,6 +22,9 @@ export const rewardCategoriesSchema = z.object({
 export type RewardCategoriesDto = z.infer<typeof rewardCategoriesSchema>;
 
 /** Réponse de GET /v1/tenants/{subdomain}/loyalty/program. */
+/** Délai annoncé pour l'effacement du compte chez le partenaire de fidélité (ADR 0028). */
+export const PARTNER_ERASURE_DAYS = 30;
+
 export const loyaltyProgramSchema = z.discriminatedUnion('enabled', [
   z.object({ enabled: z.literal(false) }),
   z.object({

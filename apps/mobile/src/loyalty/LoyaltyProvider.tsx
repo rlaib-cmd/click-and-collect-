@@ -23,8 +23,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { apiGet, apiPatch, apiPost, ApiRequestError } from '@/api/client';
+import { z } from 'zod';
+import { apiGet, apiPatch, apiPost, apiSend, ApiRequestError } from '@/api/client';
+import { disableProximity } from '@/proximity/geofence';
 import { useTenant } from '@/tenant/TenantProvider';
+import { deleteAccount, type DeletionOutcome } from './account-deletion';
 
 interface LoyaltyContextValue {
   /** undefined : programme en cours de chargement. */
@@ -47,6 +50,14 @@ interface LoyaltyContextValue {
   readonly finishWelcome: () => void;
   /** Prénom, e-mail, date de naissance (tous facultatifs sauf le prénom déjà connu). */
   readonly updateProfile: (input: MemberProfileUpdateDto) => Promise<void>;
+  /**
+   * « Supprimer mon compte » (ADR 0028) : effacement côté serveur, puis bons plans à proximité
+   * arrêtés et déconnexion locale. Lève une erreur si le serveur n'a pas confirmé.
+   */
+  readonly deleteAccount: () => Promise<void>;
+  /** Compte tout juste supprimé : message à montrer à l'accueil, jusqu'à sa fermeture. */
+  readonly farewell: DeletionOutcome | null;
+  readonly dismissFarewell: () => void;
 }
 
 const LoyaltyContext = createContext<LoyaltyContextValue | null>(null);
@@ -67,6 +78,7 @@ export function LoyaltyProvider({ children }: { children: ReactNode }) {
   const [memberToken, setMemberToken] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
   const [welcome, setWelcome] = useState(false);
+  const [farewell, setFarewell] = useState<DeletionOutcome | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(storageKey(sub))
@@ -167,8 +179,41 @@ export function LoyaltyProvider({ children }: { children: ReactNode }) {
         );
         client.setQueryData(['loyalty-me', sub, memberToken], updated);
       },
+      deleteAccount: async () => {
+        if (!memberToken) throw new ApiRequestError('unauthorized', 401);
+        const outcome = await deleteAccount(
+          {
+            request: async () => {
+              await apiSend('DELETE', `/v1/tenants/${sub}/loyalty/me`, z.null(), {
+                Authorization: `Bearer ${memberToken}`,
+              });
+            },
+            stopProximity: disableProximity,
+            logout: () => {
+              setWelcome(false);
+              store(null);
+              client.removeQueries({ queryKey: ['loyalty-me', sub] });
+            },
+          },
+          program.data?.enabled === true && program.data.partnerErasure,
+        );
+        setFarewell(outcome);
+      },
+      farewell,
+      dismissFarewell: () => setFarewell(null),
     }),
-    [program.data, restored, memberToken, member, sessionMutation, store, sub, client, welcome],
+    [
+      program.data,
+      restored,
+      memberToken,
+      member,
+      sessionMutation,
+      store,
+      sub,
+      client,
+      welcome,
+      farewell,
+    ],
   );
 
   return <LoyaltyContext.Provider value={value}>{children}</LoyaltyContext.Provider>;
