@@ -34,6 +34,7 @@ Trois environnements : développement, recette, production. Chacun a sa base Sup
 | `SPLASH360_ORDERS_API_URL` | non | Export des ventes, `https://api2.splash360.fr` par défaut |
 | `SPLASH360_ORDERS_CLIENT_ID`, `SPLASH360_ORDERS_CLIENT_SECRET` | non | Identifiants dédiés à l'export des ventes, si Splash360 en fournit d'autres (les deux ou aucun). Secrets du serveur |
 | `SPLASH360_FEE_VAT_RATE` | non | Taux de TVA des frais transmis à la caisse (0,2 par défaut, à confirmer avec Splash360) |
+| `SPLASH360_WEBHOOK_SECRETS` | pour les webhooks Splash360 | Secrets de signature `whsec_…` donnés par Splash360, séparés par des virgules (un par URL, plus l'ancien pendant un changement de secret) ; absent : webhooks refusés (503). Secret du serveur et de la fonction Edge, jamais journalisé (lot 23, ADR 0029) |
 | `POS_READY_TIMEOUT_SECONDS`, `POS_CONFIRM_TIMEOUT_SECONDS` | non | Attente de la caisse avant paiement (60 s) et de sa confirmation après paiement (300 s, puis remboursement automatique) |
 | `POS_WEBHOOK_SECRET` | pour la caisse | Secret partagé avec Splash360 (retour des statuts) |
 | `GEOCODER_URL` | non | Géocodeur au format API Adresse (Géoplateforme par défaut) |
@@ -374,3 +375,38 @@ qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS po
    back-office : c'est un rappel. L'enseigne (le propriétaire) demande l'effacement **par e-mail à
    YouFID** (identifiant YouFID `usr_id` = colonne Cible), fait **sous un mois au plus** (RGPD ;
    l'application annonce 30 jours au client).
+
+## Webhooks Splash360 (lot 23, ADR 0029)
+
+1. Migration `20261128000000_splash360_webhooks.sql` (recette puis production), **avant** l'API
+   qui l'utilise : colonne `restaurants.splash360_station_id` (unique), table
+   `menu_stock_overrides` (RLS, serveur), table `splash360_private.webhook_receipts` (schéma privé).
+2. Secret `SPLASH360_WEBHOOK_SECRETS` : valeurs `whsec_…` transmises par Splash360 par un canal
+   sûr, à poser **uniquement** en secret (recette : `supabase secrets set
+   SPLASH360_WEBHOOK_SECRETS=… --project-ref yfrvtrebukdbxnuqhlfy` ; production : secret de la
+   fonction ou du serveur). Plusieurs secrets séparés par des virgules ; pendant un changement de
+   secret (24 h), garder l'ancien et le nouveau, puis retirer l'ancien. Un secret mal recopié
+   empêche le démarrage (message avec son rang, jamais sa valeur).
+3. URL à donner à Splash360 (une par événement ; Splash360 ajoute la station en dernier segment) :
+
+   | Événement | Recette | Production |
+   |---|---|---|
+   | Disponibilité | `https://yfrvtrebukdbxnuqhlfy.supabase.co/functions/v1/api/v1/webhooks/splash360/stock` | `https://azenkeuuejwwtbudvwqt.supabase.co/functions/v1/api/v1/webhooks/splash360/stock` |
+   | Prix de livraison | `https://yfrvtrebukdbxnuqhlfy.supabase.co/functions/v1/api/v1/webhooks/splash360/prices` | `https://azenkeuuejwwtbudvwqt.supabase.co/functions/v1/api/v1/webhooks/splash360/prices` |
+   | Catalogue | `https://yfrvtrebukdbxnuqhlfy.supabase.co/functions/v1/api/v1/webhooks/splash360/catalog` | `https://azenkeuuejwwtbudvwqt.supabase.co/functions/v1/api/v1/webhooks/splash360/catalog` |
+   | Commandes | `https://yfrvtrebukdbxnuqhlfy.supabase.co/functions/v1/api/v1/webhooks/splash360/orders` | `https://azenkeuuejwwtbudvwqt.supabase.co/functions/v1/api/v1/webhooks/splash360/orders` |
+
+   La fonction Edge `api` doit accepter les appels sans jeton Supabase (`verify_jwt = false`,
+   comme pour le webhook Stripe) : Splash360 n'envoie que ses en-têtes `webhook-*`.
+4. Rattacher chaque station : back-office (super-administrateur) → Paiement → Caisse Splash360 →
+   « Station Splash360 » du restaurant (identifiant client de la station, ex. `123_4abc5def`).
+   Une station encore inconnue est acceptée (2xx) et apparaît dans « Webhooks reçus » avec le
+   résultat « Station inconnue » : son identifiant complet s'y lit.
+5. Contrôle : demander à Splash360 la vérification des URL (challenge) puis un appel de test par
+   URL (§8.5) ; chacun apparaît dans « Webhooks reçus » (« Appel de test »). Les appels reçus sont
+   gardés 7 jours (purge horaire).
+6. Effets en exploitation : un article hors stock en caisse disparaît des articles commandables
+   en quelques secondes (carte et devis) ; une commande annulée en caisse est annulée (sur place)
+   ou remboursée intégralement (payée en ligne), le client est prévenu ; une commande à payer sur
+   place encaissée en caisse passe à « remise » (points du club acquis). Un « encaissée » de la
+   caisse ne rend **jamais** « payée » une commande en ligne : seul Stripe le fait.
