@@ -128,18 +128,21 @@ describe('fournisseur YouFID', () => {
     expect((await store.getLink(tenant.id, member.id))?.qrCode).toBe(yf?.qrCode);
   });
 
-  it('client déjà connu en magasin : retrouvé, ni prénom par défaut ni bienvenue envoyés', async () => {
-    const { loyalty, fake } = setup();
+  it('client déjà connu en magasin : retrouvé, sans prénom par défaut, bienvenue une seule fois', async () => {
+    const { loyalty, fake, store } = setup();
     const yf = fake.addCustomer({ phone: '+33622222222', points: 420 });
-    const { member, created } = await loyalty.join(tenant, {
-      name: 'Membre',
-      email: null,
-      phone: '+33622222222',
-    });
+    const join = () => loyalty.join(tenant, { name: 'Membre', email: null, phone: '+33622222222' });
+    const { member, created } = await join();
     expect(created).toBe(false);
-    expect(member).toMatchObject({ id: String(yf.usrId), points: 420, name: 'Camille Durand' });
+    expect(member).toMatchObject({ id: String(yf.usrId), points: 520, name: 'Camille Durand' });
     expect(fake.calls.some((c) => c.route === 'customerSubmitResponse')).toBe(false);
-    expect(fake.calls.some((c) => c.route === 'marchandCheckScanUser')).toBe(false);
+    const scans = () => fake.calls.filter((c) => c.route === 'marchandCheckScanUser').length;
+    expect(scans()).toBe(1);
+    // Nouvelle connexion, ou compte supprimé puis recréé : pas de seconde bienvenue.
+    await join();
+    await store.deleteLink(tenant.id, String(yf.usrId));
+    expect((await join()).member.points).toBe(520);
+    expect(scans()).toBe(1);
   });
 
   it('sans téléphone : un e-mail connu retrouve le client, sinon inscription refusée', async () => {

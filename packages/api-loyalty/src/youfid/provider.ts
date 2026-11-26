@@ -347,16 +347,19 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
           await store.updateLinkProfile(tenant.id, reg.usrId, { email });
         }
         await submitProfile(reg.usrId, reg.profileQuestion, answers);
-        const { welcomePoints } = await store.getProgramSettings(tenant.id);
-        if (welcomePoints > 0) {
-          const w = await credit(tenant, link, {
-            key: `welcome:${reg.usrId}`,
-            kind: 'welcome',
-            points: welcomePoints,
-            label: 'Points de bienvenue',
-          });
-          if (!w.ok) log('YouFID : points de bienvenue non crédités', { error: w.error });
-        }
+      }
+      // Bienvenue à la première adhésion dans l'application de l'enseigne, même pour un client
+      // déjà connu de YouFID (décision du propriétaire, 26/11). La clé `welcome:<usr_id>` est
+      // gardée même après suppression du compte : une seule bienvenue par client et par enseigne.
+      const { welcomePoints } = await store.getProgramSettings(tenant.id);
+      if (welcomePoints > 0) {
+        const w = await credit(tenant, link, {
+          key: `welcome:${reg.usrId}`,
+          kind: 'welcome',
+          points: welcomePoints,
+          label: 'Points de bienvenue',
+        });
+        if (!w.ok) log('YouFID : points de bienvenue non crédités', { error: w.error });
       }
       const member = await memberOf((await store.getLink(tenant.id, reg.usrId)) ?? link);
       if (!member) throw new YoufidError('Client YouFID introuvable après inscription', 'api');

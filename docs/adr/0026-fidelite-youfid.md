@@ -72,7 +72,9 @@ sur la route 3 (`profile_question`, recherche par QR code) et non plus sur la ro
   puis points de bienvenue par la route 5 (`forced_amount`, clé `welcome:<usr_id>`).
   `findByPhone` ne consulte que le lien local : la route 10 crée le client, elle n'est appelée
   qu'après acceptation des conditions. Un client déjà connu en magasin est retrouvé avec ses points
-  (pas de prénom par défaut envoyé, pas de bienvenue).
+  (pas de prénom par défaut envoyé). **Décision du 26/11 au soir** : il reçoit aussi la bienvenue à
+  sa première adhésion dans l'application de l'enseigne. La clé `welcome:<usr_id>` reste dans
+  `loyalty_operations` après suppression du compte : une seule bienvenue par client et par enseigne.
 - Inscription par e-mail seul : impossible chez YouFID (création par téléphone) ; refus clair, un
   compte existant reste retrouvé par son e-mail.
 
