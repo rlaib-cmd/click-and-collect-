@@ -8,8 +8,9 @@ import {
   type Splash360Commande,
   type Splash360CommandeIngredient,
   type Splash360FeeModificateur,
+  type Splash360ItemDiscountModificateur,
 } from '@splash360/api-menu';
-import { splitOptionId } from '@splash360/core';
+import { itemPercentLabel, splitOptionId } from '@splash360/core';
 import type { OrderDetail, Restaurant } from '@splash360/db';
 import type { Splash360Probe } from '../routes/admin';
 import type { SalesSource } from '../loyalty/ticket-check';
@@ -96,17 +97,29 @@ export function toIngredients(
 }
 
 /** Frais au format exact de Splash360 (26/11) : `valeur` « 1.00€ », TVA dans `taux`. */
-function fee(id: string, amountCents: number, taux: number): Splash360FeeModificateur {
+function fee(id: string, valeur: string, taux: number, nom = 'Frais'): Splash360FeeModificateur {
   return {
     modificateur_id: id,
     type: 'frais',
-    valeur: eurosLabel(amountCents),
+    valeur,
     taux,
     item: null,
     ingredient: null,
-    nom: 'Frais',
+    nom,
     operation: 1,
   };
+}
+
+/** Nom de la remise d'article du cadeau fidélité (un seul article, prix de base offert). */
+export const LOYALTY_GIFT_NAME = 'Cadeau fidélité';
+
+/** Remise d'un article, une entrée par article remisé (format de la borne, 26/11). */
+function itemDiscount(
+  origin: string,
+  nom: string,
+  valeur: string,
+): Splash360ItemDiscountModificateur {
+  return { type: 'discount', origin, nom, operation: -1, valeur, itemOnly: true };
 }
 
 function hour(iso: string, timeZone: string): string {
@@ -125,14 +138,38 @@ export function toSplash360Commande(
 ): Splash360Commande {
   const timeZone = options.timeZone ?? 'Europe/Paris';
   const mode = order.mode === 'delivery' ? 'livraison' : 'emporter';
+  const t = order.totals;
+  // Cadeau fidélité : remise existante sur un article (le premier du produit offert), envoyée
+  // comme remise d'article pour que la caisse ne lui applique pas une promotion de catalogue.
+  const rewardProductId = order.loyalty?.rewardProductId ?? null;
+  const rewardLine =
+    t.discountCents > 0 && rewardProductId
+      ? order.lines.findIndex((l) => l.productId === rewardProductId && l.quantity > 0)
+      : -1;
   const items = order.lines.map((line, index) => {
     const optionsCents = line.options.reduce((sum, o) => sum + o.priceCents, 0);
+    const modificateurs = [
+      ...(index === rewardLine
+        ? [
+            itemDiscount(
+              'loyalty',
+              LOYALTY_GIFT_NAME,
+              itemPercentLabel(t.discountCents, line.unitPriceCents),
+            ),
+          ]
+        : []),
+      // Promotions de catalogue : une entrée par article remisé, nom exact de la règle.
+      ...(line.discounts ?? []).flatMap((d) =>
+        Array.from({ length: d.units }, () => itemDiscount('bogo', d.name, d.percentLabel)),
+      ),
+    ];
     return {
       itemid: index + 1,
       produitid: line.productId,
       quantite: line.quantity,
       price: euros(line.unitPriceCents - optionsCents),
       ingredients: toIngredients(line.options),
+      ...(modificateurs.length > 0 ? { modificateurs } : {}),
     };
   });
 
@@ -148,18 +185,34 @@ export function toSplash360Commande(
     ),
   ];
 
-  const t = order.totals;
+  const adjustments = order.catalogAdjustments ?? [];
   const modificateurs: Splash360Commande['modificateurs'] = [
-    ...(t.discountCents > 0
-      ? [{ type: 'discount' as const, valeur: eurosLabel(t.discountCents), nom: 'Cadeau fidélité' }]
+    // Ancienne commande sans produit offert connu : remise sur la commande, comme avant.
+    ...(t.discountCents > 0 && rewardLine < 0
+      ? [{ type: 'discount' as const, valeur: eurosLabel(t.discountCents), nom: LOYALTY_GIFT_NAME }]
       : []),
+    // Une seule remise sur la commande : le code promo du client, sinon la règle de catalogue.
     ...(t.promoDiscountCents > 0
       ? [{ type: 'discount' as const, valeur: eurosLabel(t.promoDiscountCents), nom: 'Code promo' }]
       : []),
+    ...adjustments
+      .filter((a) => a.kind === 'discount')
+      .map((a) => ({
+        type: 'discount' as const,
+        valeur: a.valueLabel,
+        nom: a.name,
+        operation: -1 as const,
+      })),
     ...(t.deliveryFeeCents > 0
-      ? [fee('frais_livraison', t.deliveryFeeCents, options.feeVatRate)]
+      ? [fee('frais_livraison', eurosLabel(t.deliveryFeeCents), options.feeVatRate)]
       : []),
-    ...(t.serviceFeeCents > 0 ? [fee('frais_service', t.serviceFeeCents, options.feeVatRate)] : []),
+    ...(t.serviceFeeCents > 0
+      ? [fee('frais_service', eurosLabel(t.serviceFeeCents), options.feeVatRate)]
+      : []),
+    // Frais d'une promotion de catalogue : valeur et nom de la règle, sa TVA si reçue.
+    ...adjustments
+      .filter((a) => a.kind === 'fee')
+      .map((a) => fee(a.ruleId, a.valueLabel, a.vatRate ?? options.feeVatRate, a.name)),
   ];
 
   const address = order.deliveryAddress;

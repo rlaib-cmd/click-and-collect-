@@ -134,6 +134,161 @@ describe('toSplash360Commande', () => {
     });
   });
 
+  it('promotions de catalogue : une remise par article remisé (pourcentage, nom exact), remise et frais de commande', () => {
+    const base = order();
+    const c = toSplash360Commande(
+      order({
+        totals: {
+          ...base.totals,
+          discountCents: cents(0),
+          promoDiscountCents: cents(0),
+          catalogDiscountCents: cents(300 + 390 + 100),
+          catalogFeeCents: cents(20),
+          totalCents: cents(1890 + 50 - 790 + 20),
+        },
+        lines: [
+          {
+            ...base.lines[0]!,
+            discounts: [
+              {
+                ruleId: 'r2_emporter',
+                name: 'Burger à 3,90 € de moins',
+                units: 1,
+                unitDiscountCents: cents(390),
+                percentLabel: '30.23%',
+              },
+            ],
+          },
+          {
+            ...base.lines[1]!,
+            quantity: 4,
+            totalCents: 1200,
+            discounts: [
+              {
+                ruleId: 'modifier4_emporter',
+                name: '3 acheter = 1',
+                units: 1,
+                unitDiscountCents: cents(300),
+                percentLabel: '100%',
+              },
+            ],
+          },
+        ],
+        catalogAdjustments: [
+          {
+            ruleId: 'dix_emporter',
+            name: '10% commande',
+            kind: 'discount',
+            cents: cents(100),
+            valueLabel: '10%',
+            vatRate: 0,
+          },
+          {
+            ruleId: 'sac_emporter',
+            name: 'Sac',
+            kind: 'fee',
+            cents: cents(20),
+            valueLabel: '0.2€',
+            vatRate: null,
+          },
+        ],
+      }),
+      { feeVatRate: 0.2 },
+    );
+    expect(c.items[0]?.modificateurs).toEqual([
+      {
+        type: 'discount',
+        origin: 'bogo',
+        nom: 'Burger à 3,90 € de moins',
+        operation: -1,
+        valeur: '30.23%',
+        itemOnly: true,
+      },
+    ]);
+    expect(c.items[1]?.modificateurs).toHaveLength(1);
+    expect(c.modificateurs).toEqual([
+      { type: 'discount', valeur: '10%', nom: '10% commande', operation: -1 },
+      expect.objectContaining({ modificateur_id: 'frais_service' }),
+      {
+        modificateur_id: 'sac_emporter',
+        type: 'frais',
+        valeur: '0.2€',
+        taux: 0.2,
+        item: null,
+        ingredient: null,
+        nom: 'Sac',
+        operation: 1,
+      },
+    ]);
+    // Deux articles remisés sur la même ligne : deux entrées.
+    const two = toSplash360Commande(
+      order({
+        lines: [
+          {
+            ...base.lines[1]!,
+            quantity: 8,
+            discounts: [
+              {
+                ruleId: 'modifier4_emporter',
+                name: '3 acheter = 1',
+                units: 2,
+                unitDiscountCents: cents(300),
+                percentLabel: '100%',
+              },
+            ],
+          },
+        ],
+      }),
+      { feeVatRate: 0.2 },
+    );
+    expect(two.items[0]?.modificateurs?.map((m) => [m.nom, m.valeur])).toEqual([
+      ['3 acheter = 1', '100%'],
+      ['3 acheter = 1', '100%'],
+    ]);
+  });
+
+  it('cadeau fidélité : remise d’article sur le produit offert (prix de base en pourcentage)', () => {
+    const c = toSplash360Commande(
+      order({
+        loyalty: {
+          memberId: 'm1',
+          rewardId: 'rw',
+          rewardPoints: 100,
+          rewardProductId: 'prd1826',
+          settled: false,
+        },
+      }),
+      { feeVatRate: 0.2 },
+    );
+    // Remise de 3,50 € sur des frites à 3,00 € : plafonnée à 100 %.
+    expect(c.items[1]?.modificateurs).toEqual([
+      {
+        type: 'discount',
+        origin: 'loyalty',
+        nom: 'Cadeau fidélité',
+        operation: -1,
+        valeur: '100%',
+        itemOnly: true,
+      },
+    ]);
+    expect(c.modificateurs.map((m) => m.nom)).toEqual(['Code promo', 'Frais']);
+    const burger = toSplash360Commande(
+      order({
+        totals: { ...order().totals, discountCents: cents(1190) },
+        loyalty: {
+          memberId: 'm1',
+          rewardId: 'rw',
+          rewardPoints: 100,
+          rewardProductId: 'prd87',
+          settled: false,
+        },
+      }),
+      { feeVatRate: 0.2 },
+    );
+    // Prix de base 11,90 € offert sur un article à 12,90 € (option comprise).
+    expect(burger.items[0]?.modificateurs?.[0]?.valeur).toBe('92.25%');
+  });
+
   it('heure choisie dans `scheduledAt` (heure de Paris, décalage compris) ; rien pour « dès que possible »', () => {
     expect(commande.scheduledAt).toBe('2026-11-24T12:30:00.000+01:00');
     const summer = toSplash360Commande(order({ requestedSlot: '2026-07-01T10:15:30.177Z' }), {

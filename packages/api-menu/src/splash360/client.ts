@@ -110,6 +110,25 @@ export interface Splash360CommandeItem {
   readonly quantite: number;
   readonly price: number;
   readonly ingredients: readonly Splash360CommandeIngredient[];
+  /**
+   * Remises d'article (format de la borne, `setCommandeFromAPI`, réponse du 26/11) : une entrée
+   * par article remisé ; la caisse découpe la ligne pour que seul cet article la porte.
+   */
+  readonly modificateurs?: readonly Splash360ItemDiscountModificateur[];
+}
+
+/**
+ * Remise d'un article : `valeur` toujours en pourcentage (« 100% ») — un montant en euros sur un
+ * article est mal lu par la caisse ; `nom` = nom exact de la règle (la caisse remplace au lieu
+ * d'ajouter) ; `origin` « bogo » pour une promotion de catalogue.
+ */
+export interface Splash360ItemDiscountModificateur {
+  readonly type: 'discount';
+  readonly origin: string;
+  readonly nom: string;
+  readonly operation: -1;
+  readonly valeur: string;
+  readonly itemOnly: true;
 }
 
 /**
@@ -130,7 +149,10 @@ export interface Splash360CommandeIngredient {
 export interface Splash360FeeModificateur {
   readonly modificateur_id: string;
   readonly type: 'frais';
-  /** Euros à deux décimales suivis de « € » : « 1.00€ ». */
+  /**
+   * Euros à deux décimales suivis de « € » : « 1.00€ » ; valeur de la règle telle que reçue
+   * (« 0.5€ », « 5% ») pour les frais d'une promotion de catalogue.
+   */
   readonly valeur: string;
   readonly taux: number;
   readonly item: null;
@@ -139,10 +161,12 @@ export interface Splash360FeeModificateur {
   readonly operation: 1;
 }
 
+/** Remise sur la commande : `valeur` « 10% » ou « 5€ » (réponse du 26/11). */
 export interface Splash360DiscountModificateur {
   readonly type: 'discount';
   readonly valeur: string;
   readonly nom: string;
+  readonly operation?: -1;
 }
 
 export interface Splash360Commande {
