@@ -81,9 +81,9 @@ sur la route 3 (`profile_question`, recherche par QR code) et non plus sur la ro
 - Paliers = `products` de la route 2 (id, coût, nom) ; les catégories offertes par palier (lot 16)
   restent réglées au back-office et suivent les identifiants YouFID.
 - Points par euro et points de bienvenue : réglages de l'enseigne (`loyalty_program_settings`),
-  modifiables au back-office. Défauts décidés le 25/11 : **10 points par euro, 100 points de
+  modifiables au back-office. Défauts décidés le 25/11 : **1 point par euro (décision du 26/11, au lieu de 10), 100 points de
   bienvenue**. **Décision du 26/11** : le gain d'une commande en ligne est calculé par notre règle
-  (montant payé × points par euro) et envoyé en crédit forcé (`forced_amount`, prioritaire chez
+  (montant payé × points par euro, 1 par défaut) et envoyé en crédit forcé (`forced_amount`, prioritaire chez
   YouFID) : le gain annoncé est le gain crédité. Constaté en recette : avec `amount` = 1,00 €,
   YouFID créditait 0 point (règle du marchand différente). En caisse, la règle YouFID s'applique.
 

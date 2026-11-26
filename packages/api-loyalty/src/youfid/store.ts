@@ -66,7 +66,7 @@ export interface LoyaltyProgramSettings {
 }
 
 export const DEFAULT_PROGRAM_SETTINGS: LoyaltyProgramSettings = {
-  pointsPerEuro: 10,
+  pointsPerEuro: 1,
   welcomePoints: 100,
 };
 

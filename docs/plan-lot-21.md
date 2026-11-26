@@ -5,7 +5,7 @@ fidélité YouFID de Splash360 pour les enseignes configurées, derrière `Loyal
 retirer la démonstration (tests, développement, enseignes sans YouFID). Décisions : ADR 0026.
 Documentation de l'API : `docs/api-splash360/fidelite-youfid.md`.
 
-Décisions du propriétaire (25/11) : 10 points par euro et 100 points de bienvenue par défaut,
+Décisions du propriétaire : 1 point par euro (26/11, d'abord 10 le 25/11) et 100 points de bienvenue par défaut,
 modifiables par enseigne ; aucun code PIN dans notre produit ; secret `YOUFID_ACCOUNTS` indexé par
 sous-domaine (`chickenstreet`), posé en recette par le propriétaire ; URL de l'API confirmée.
 

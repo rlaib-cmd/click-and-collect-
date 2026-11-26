@@ -22,8 +22,8 @@ insert into public.loyalty_program_settings (tenant_id)
 select is(
   (select array[points_per_euro, welcome_points] from public.loyalty_program_settings
    where tenant_id = 'ffffffff-0000-4000-8000-000000000021'),
-  array[10, 100],
-  'défauts : 10 points par euro, 100 points de bienvenue'
+  array[1, 100],
+  'défauts : 1 point par euro, 100 points de bienvenue'
 );
 select throws_ok(
   $$ insert into public.loyalty_operations (tenant_id, op_key, kind, member_id, points, label)

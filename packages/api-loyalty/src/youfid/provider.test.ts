@@ -52,12 +52,12 @@ const order = (memberId: string, orderId: string, extra: Partial<{ reward: boole
 });
 
 describe('fournisseur YouFID', () => {
-  it('programme : cadeaux de la route 2 et réglages de l’enseigne (défauts 10 pts/€, 100 bienvenue)', async () => {
+  it('programme : cadeaux de la route 2 et réglages de l’enseigne (défauts 1 pt/€, 100 bienvenue)', async () => {
     const { loyalty, store, fake } = setup();
     const program = await loyalty.getProgram(tenant);
     expect(program).toEqual({
       name: 'Club Test',
-      pointsPerEuro: 10,
+      pointsPerEuro: 1,
       welcomePoints: 100,
       source: 'youfid',
       rewards: [
