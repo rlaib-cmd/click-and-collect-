@@ -79,7 +79,7 @@ Questions pour Splash360 (Abdoul). Chacune indique le choix provisoire retenu.
 | Y12 | Route 10 : un nouveau client se reconnaît-il bien à l'absence de `phone` dans la réponse ? | Oui (bienvenue créditée seulement dans ce cas) |
 | Y13 | Route 5 : `amount` = total payé, frais de livraison compris et cadeau déduit ? En euros décimaux (`12.5`) ? | Total payé en euros, frais compris, pas d'appel si le total est nul |
 | Y14 | Route 6 : contrôle-t-elle le solde ? Quel message en cas de solde insuffisant ? `id` du cadeau en nombre ? | Solde contrôlé avant par la route 3 ; id envoyé en nombre |
-| Y15 | Effacement RGPD d'un client chez YouFID : quelle procédure ? | Lien local effacé, effacement YouFID à demander |
+| Y15 | Effacement RGPD d'un client chez YouFID : quelle procédure ? | Lien local effacé, demande notée au journal (`loyalty.erasure_requested`, ADR 0028), effacement YouFID à demander à Splash360 sous 30 jours |
 | Y16 | Inscription sans téléphone (e-mail seul) : la route 5 `is_register` demande un `qr_code` fourni par l'appelant ; qui le génère ? | Inscription par SMS uniquement |
 | Y17 | Le `qr_code` renvoyé est-il exactement le contenu que la tablette scanne (carte VIP de l'app) ? | Oui, affiché tel quel dans le QR |
 | Y18 | Les points ont une durée de validité (`loyalty_program.validity`) : faut-il l'afficher ? | Non affichée |

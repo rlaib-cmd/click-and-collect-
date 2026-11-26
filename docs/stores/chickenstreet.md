@@ -47,8 +47,14 @@ l'enseigne sur sa marque. La configuration de l'application est dans `apps/mobil
 | Position | Facultatif, désactivée par défaut | « Bons plans à proximité » : seule l'entrée dans une zone de 200 m est transmise, **aucun historique de position** | Non |
 | Jeton de notification | Facultatif | Suivi de commande, bons plans | Expo (envoi des notifications) |
 
-Pas de publicité, pas de suivi entre applications, pas de revente de données. Suppression du compte :
-depuis l'app (Compte) ou sur demande à l'enseigne.
+Pas de publicité, pas de suivi entre applications, pas de revente de données.
+
+**Suppression du compte** (App Store 5.1.1(v), Google Play « Suppression des données ») : dans
+l'application, **Compte → Supprimer mon compte**, puis confirmation. Le compte club, les points,
+le profil, les cartes bancaires enregistrées, les données « à proximité » et Ambassadeur en attente
+sont effacés, et toutes les sessions sont fermées. La fiche chez le partenaire de fidélité (YouFID)
+est effacée sur demande transmise par l'équipe, sous 30 jours (ADR 0028). Aussi possible sur demande
+à l'enseigne (effacement depuis le back-office).
 
 ## Autorisations et justification pour la revue
 

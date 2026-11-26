@@ -359,3 +359,17 @@ qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS po
 7. Non vérifié en intégration continue : comportement réel des zones sur appareil (délai de
    détection, précision de 100 à 200 m, application terminée sur Android). À contrôler sur un
    iPhone et un Android avant d'activer la fonction pour une enseigne.
+
+## Suppression du compte dans l'application (ADR 0028)
+
+1. Aucune migration ni variable nouvelle : déploiement de l'API, puis de l'application (mise à
+   jour OTA possible : aucun module natif ajouté). Déployer l'API **avant** l'application : un
+   ancien serveur répond 404 à `DELETE …/loyalty/me` et l'application affiche « Suppression
+   impossible ».
+2. Revue App Store (règle 5.1.1(v)) : chemin à indiquer dans les notes de revue — se connecter
+   au club, puis **Compte → Supprimer mon compte** → « Supprimer définitivement mon compte ».
+   Google Play (Sécurité des données → Suppression des données) : même chemin, plus la demande à
+   l'enseigne.
+3. Enseignes YouFID : chaque suppression ajoute `loyalty.erasure_requested` à la page Journal du
+   back-office. Transmettre la demande à Splash360 (identifiant YouFID `usr_id` = colonne Cible)
+   pour un effacement chez YouFID **sous 30 jours**, délai annoncé au client.
