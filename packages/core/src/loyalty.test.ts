@@ -249,6 +249,8 @@ describe('palier par catégories (lot 16)', () => {
       serviceFeeCents: cents(0),
       discountCents: cents(0),
       promoDiscountCents: cents(0),
+      catalogDiscountCents: cents(0),
+      catalogFeeCents: cents(0),
       totalCents: cents(1500),
     };
     const lines = [

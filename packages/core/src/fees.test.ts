@@ -18,6 +18,8 @@ describe('frais et minimum', () => {
         serviceFeeCents: 50,
         discountCents: 0,
         promoDiscountCents: 0,
+        catalogDiscountCents: 0,
+        catalogFeeCents: 0,
         totalCents: 850,
       },
     });
@@ -38,6 +40,8 @@ describe('frais et minimum', () => {
         serviceFeeCents: 50,
         discountCents: 0,
         promoDiscountCents: 0,
+        catalogDiscountCents: 0,
+        catalogFeeCents: 0,
         totalCents: 2340,
       },
     });

@@ -1,3 +1,4 @@
+import type { CatalogRule } from './catalog-rules';
 import type { OrderMode } from './fees';
 import type { Cents } from './money';
 
@@ -67,6 +68,11 @@ export interface Menu {
   readonly restaurantId: string;
   readonly categories: readonly MenuCategory[];
   readonly products: readonly MenuProduct[];
+  /**
+   * Promotions de catalogue de la caisse (`reglescatalogue`, lot 24), toutes copies et dates
+   * comprises : `applyCatalogRules` choisit celles du mode et de l'instant de la commande.
+   */
+  readonly catalogRules?: readonly CatalogRule[] | undefined;
 }
 
 export function isRequired(group: OptionGroup): boolean {

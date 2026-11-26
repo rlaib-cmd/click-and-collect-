@@ -13,3 +13,4 @@ export * from './promo';
 export * from './permissions';
 export * from './proximity';
 export * from './stock';
+export * from './catalog-rules';

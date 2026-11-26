@@ -20,6 +20,13 @@ export interface Totals {
   readonly discountCents: Cents;
   /** Remise du code promo (0 sans code), appliquée après la récompense (lot 11). */
   readonly promoDiscountCents: Cents;
+  /**
+   * Promotions de catalogue de la caisse (`reglescatalogue`, lot 24) : remises articles et remise
+   * sur la commande (0 sans promotion).
+   */
+  readonly catalogDiscountCents: Cents;
+  /** Frais ajoutés par une règle de catalogue sans produits (`operation` +1). */
+  readonly catalogFeeCents: Cents;
   readonly totalCents: Cents;
 }
 
@@ -67,6 +74,8 @@ export function computeTotals(input: {
       serviceFeeCents,
       discountCents: cents(0),
       promoDiscountCents: cents(0),
+      catalogDiscountCents: cents(0),
+      catalogFeeCents: cents(0),
       totalCents: addCents(subtotalCents, deliveryFeeCents, serviceFeeCents),
     },
   };

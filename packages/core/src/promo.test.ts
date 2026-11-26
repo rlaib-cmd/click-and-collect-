@@ -10,6 +10,8 @@ const totals = (subtotal: number, delivery = 0, reward = 0): Totals => ({
   serviceFeeCents: cents(0),
   discountCents: cents(reward),
   promoDiscountCents: cents(0),
+  catalogDiscountCents: cents(0),
+  catalogFeeCents: cents(0),
   totalCents: cents(subtotal + delivery - reward),
 });
 const promo = (p: Partial<PromoCode> = {}): PromoCode => ({

@@ -51,7 +51,8 @@ export function validatePromoDefinition(p: PromoCode): string | null {
 
 /**
  * Applique un code promo aux totaux (après la récompense fidélité) :
- * - pourcentage du sous-total des articles moins la récompense, arrondi à l'inférieur ;
+ * - pourcentage du sous-total des articles moins la récompense et les remises articles des
+ *   promotions de catalogue (lot 24), arrondi à l'inférieur ;
  * - montant fixe plafonné à ce même montant ;
  * - les frais (livraison, service) ne sont jamais remisés ;
  * - il doit rester au moins `MIN_CHARGE_CENTS` à payer (une commande n'est jamais gratuite).
@@ -74,7 +75,10 @@ export function applyPromo(input: {
   if (promo.maxUses !== null && uses >= promo.maxUses)
     return { ok: false, error: 'promo_exhausted' };
   if (alreadyUsed) return { ok: false, error: 'promo_already_used' };
-  const base = Math.max(0, totals.subtotalCents - totals.discountCents);
+  const base = Math.max(
+    0,
+    totals.subtotalCents - totals.discountCents - totals.catalogDiscountCents,
+  );
   const raw = promo.kind === 'percent' ? Math.floor((base * promo.value) / 100) : promo.value;
   const promoDiscountCents = cents(Math.min(raw, base));
   const totalCents = totals.totalCents - promoDiscountCents;
