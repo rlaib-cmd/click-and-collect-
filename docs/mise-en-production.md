@@ -174,6 +174,9 @@ fonction `api` qui les utilise) :
 | `20261125120000_pos_sales_page_zero.sql` | Export des ventes paginé à partir de 0 (lot 20) |
 | `20261126000000_loyalty_youfid.sql` | Fidélité YouFID (lot 21) |
 | `20261127000000_proximity_push.sql` | Bons plans à proximité (lot 22) |
+| `20261127010000_loyalty_points_per_euro_default.sql` | 1 point par euro par défaut (lot 21) |
+| `20261128000000_splash360_webhooks.sql` | Webhooks Splash360 (lot 23) — **appliquée en production le 26/11** |
+| `20261129000000_catalog_promotions.sql` | Promotions de catalogue (lot 24) — **appliquée en production le 26/11** |
 
 **2. Secrets de la fonction `api` en production** (Supabase → Edge Functions → Secrets ; jamais
 dans le dépôt ni par message) :
