@@ -179,9 +179,9 @@ dans le dépôt ni par message) :
 
 | Secret | Valeur | Fourni par |
 |---|---|---|
-| `SPLASH360_CLIENT_ID`, `SPLASH360_CLIENT_SECRET` | Accès principal (commandes, ventes) — **nouveaux** identifiants, les actuels ont circulé par message | Splash360 |
+| `SPLASH360_CLIENT_ID`, `SPLASH360_CLIENT_SECRET` | Accès principal 4182 (commandes, ventes) — **posé le 26/11** ; le propriétaire garde les mêmes accès (pas de renouvellement) | Splash360 |
 | `SPLASH360_TOKEN_URL`, `SPLASH360_SCOPE` | `https://api2.splash360.fr/oauth/v2/token`, `user` | — |
-| `SPLASH360_MENU_CLIENT_ID`, `SPLASH360_MENU_CLIENT_SECRET` | Accès carte (nouveaux, idem) | Splash360 |
+| `SPLASH360_MENU_CLIENT_ID`, `SPLASH360_MENU_CLIENT_SECRET` | Accès carte 4114 — **posé le 26/11**, mêmes accès conservés | Splash360 |
 | `SPLASH360_MENU_TOKEN_URL`, `SPLASH360_MENU_TOKEN_AUTH`, `SPLASH360_MENU_PATH` | `https://api.splash360.fr/oauth/v2/token`, `body`, `/api/export/v2/menus` | — |
 | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` | Clés **live** + webhook Connect live vers `…/functions/v1/api/v1/webhooks/stripe` | Propriétaire (Stripe) |
 | `STRIPE_PAYMENT_DOMAINS` | Domaine web de production (Apple Pay / Google Pay) | Équipe |
