@@ -324,8 +324,9 @@ function OrderDrawer({
       <ol className="history">
         {o.history.map((h, i) => (
           <li key={i}>
-            {time(h.at)} · {(STATUS as Record<string, string>)[h.status] ?? h.status}{' '}
-            <span className="muted">({actor(h.actor)})</span>
+            {time(h.at)} ·{' '}
+            {(STATUS as Record<string, string>)[h.status] ?? t.posEvents[h.status] ?? h.status}
+            {h.note ? ` : ${h.note}` : ''} <span className="muted">({actor(h.actor)})</span>
           </li>
         ))}
       </ol>

@@ -300,6 +300,11 @@ export const adminFr = {
     refunded: (amount: string) => `Remboursé : ${amount}`,
     customer: 'Client',
     history: 'Historique',
+    /** Événements reçus de la caisse Splash360 par webhook (lot 23). */
+    posEvents: {
+      pos_paid: 'Encaissée en caisse',
+      pos_cancelled: 'Annulée en caisse',
+    } as Record<string, string>,
     total: 'Total',
   },
   dashboard: {
@@ -462,6 +467,52 @@ export const adminFr = {
       testOk: (products: number, categories: number) =>
         `Connexion réussie : ${products} produits dans ${categories} catégories.`,
       testFailed: (message: string) => `Connexion impossible : ${message}`,
+    },
+    /** Webhooks Splash360 (lot 23, ADR 0029). */
+    webhooks: {
+      station: 'Station Splash360',
+      stationHelp:
+        'Identifiant client de la station click and collect (dernier segment des URL de webhooks, par exemple 123_4abc5def).',
+      stationNone: 'Non réglée',
+      stationPlaceholder: '123_4abc5def',
+      stock: (unavailable: number, prices: number) =>
+        `Caisse : ${unavailable} article(s) hors stock, ${prices} prix de livraison propre(s)`,
+      title: 'Webhooks reçus',
+      help: 'Les 100 derniers appels de Splash360, toutes stations (aucune donnée personnelle). Une station inconnue se rattache ci-dessus.',
+      notConfigured:
+        'Secrets de signature absents du serveur (SPLASH360_WEBHOOK_SECRETS) : les webhooks sont refusés.',
+      receivedAt: 'Reçu',
+      event: 'Événement',
+      outcome: 'Résultat',
+      detail: 'Détail',
+      events: {
+        stock: 'Disponibilité',
+        prices: 'Prix de livraison',
+        catalog: 'Catalogue',
+        orders: 'Commande',
+      },
+      outcomes: {
+        received: 'Reçu, en cours',
+        applied: 'Appliqué',
+        ignored: 'Sans effet',
+        test: 'Appel de test',
+        unknown_station: 'Station inconnue',
+        unknown_order: 'Commande inconnue',
+        failed: 'Échec',
+      },
+      /** Libellés du résumé d'un appel (valeurs techniques affichées telles quelles). */
+      summary: {
+        items: 'articles',
+        unavailable: 'hors stock',
+        skipped: 'illisibles',
+        catalogId: 'catalogue',
+        revision: 'version',
+        clearedPrices: 'prix effacés',
+        status: 'statut',
+        effect: 'effet',
+        firstTime: 'première réception',
+        error: 'erreur',
+      } as Record<string, string>,
     },
   },
   customers: {
