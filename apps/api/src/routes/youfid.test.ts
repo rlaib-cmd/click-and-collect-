@@ -334,7 +334,16 @@ describe('fidélité YouFID au back-office (lot 21)', () => {
       email: 'admin@splash360.test',
     });
     const body = await res.json();
-    expect(body).toEqual({ ok: true, merchantId: 4242, rewards: 2, secType: 'oauth1HmacSha256' });
+    expect(body).toMatchObject({
+      ok: true,
+      merchantId: 4242,
+      rewards: 2,
+      secType: 'oauth1HmacSha256',
+      catalog: [
+        { id: '11', name: 'Frites offertes', cost: 300 },
+        { id: '12', name: 'Boisson offerte', cost: 500 },
+      ],
+    });
     expect(JSON.stringify(body)).not.toContain('secret-de-test');
     const other = await admin(s, `/tenants/${GREEN_ID}/youfid/test`, {
       method: 'POST',
