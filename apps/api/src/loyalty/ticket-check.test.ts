@@ -6,7 +6,7 @@ import {
   type Restaurant,
   type VerifiableTicket,
 } from '@splash360/db';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   matchTicket,
   nextCursor,
@@ -282,7 +282,11 @@ describe('vérification périodique des tickets', () => {
   });
 
   it('ticket de borne scanné (QR) : journée de la participation et la précédente', async () => {
+    // La participation est datée par le magasin à l'heure courante : on la fige au 25 à 11 h.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
     const s = await setup([photo({ date: null, time: null, totalCents: null })]);
+    vi.useRealTimers();
     const fake = fakeSource({ [YESTERDAY]: [[]], [TODAY]: [[sale({ jourComptable: TODAY })]] });
     const deps = { ...s, source: fake.source };
     // Participation créée maintenant (journée comptable du 25) : le 24 d'abord, puis le 25.

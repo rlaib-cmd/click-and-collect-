@@ -533,7 +533,7 @@ export const adminFr = {
   loyaltySettings: {
     title: 'Règles de points',
     intro:
-      'Utilisées pour annoncer le gain dans l’application et créditer la bienvenue. Le gain réel d’une commande est calculé par YouFID sur le montant payé.',
+      'Points gagnés sur une commande en ligne (montant payé × points par euro) et points de bienvenue : calculés ici et crédités tels quels chez YouFID. En caisse, la règle de YouFID s’applique.',
     pointsPerEuro: 'Points par euro',
     welcomePoints: 'Points de bienvenue',
     save: 'Enregistrer',

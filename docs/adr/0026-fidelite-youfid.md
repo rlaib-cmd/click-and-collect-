@@ -82,14 +82,16 @@ sur la route 3 (`profile_question`, recherche par QR code) et non plus sur la ro
   restent réglées au back-office et suivent les identifiants YouFID.
 - Points par euro et points de bienvenue : réglages de l'enseigne (`loyalty_program_settings`),
   modifiables au back-office. Défauts décidés le 25/11 : **10 points par euro, 100 points de
-  bienvenue**. Le gain réel d'une commande est calculé par YouFID sur le montant ; notre réglage
-  sert à l'annoncer.
+  bienvenue**. **Décision du 26/11** : le gain d'une commande en ligne est calculé par notre règle
+  (montant payé × points par euro) et envoyé en crédit forcé (`forced_amount`, prioritaire chez
+  YouFID) : le gain annoncé est le gain crédité. Constaté en recette : avec `amount` = 1,00 €,
+  YouFID créditait 0 point (règle du marchand différente). En caisse, la règle YouFID s'applique.
 
 ### Commande payée : exactement une fois
 
 - Ordre : cadeau (route 6, après contrôle du solde par la route 3), puis gain (route 5 avec
-  `amount` = total payé en euros exacts, converti des centimes sans calcul à virgule). Pas de gain
-  pour un total nul (YouFID créditerait les points fixes de passage).
+  `forced_amount` = points de notre règle, décision du 26/11 ; plus d'envoi de `amount`). Pas
+  d'appel quand le gain est nul (YouFID créditerait les points fixes de passage).
 - Registre `loyalty_operations` (`tenant_id`, clé unique `order:<id>:redeem|earn`,
   `welcome:<usr_id>`, `ambassador:<participation>`, `adjust:<uuid>` ; type, points, libellé,
   statut, code d'erreur, points crédités, essais ; RLS serveur). Avant l'appel, la clé est

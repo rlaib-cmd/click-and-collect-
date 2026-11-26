@@ -387,7 +387,9 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
         );
         if (!r.ok) return { ok: false, error: r.error };
       }
-      if (s.amountCents > 0) {
+      // Points de la commande : calculés par notre règle (points par euro de l'enseigne) et
+      // envoyés en crédit forcé, prioritaire chez YouFID : le gain annoncé est le gain crédité.
+      if (s.earnPoints > 0) {
         const r = await runOperation(
           tenant,
           {
@@ -400,7 +402,7 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
           },
           async (send) => {
             const res = await send(() =>
-              client.scan({ qrCode: link.qrCode, usrId: link.usrId, amountCents: s.amountCents }),
+              client.scan({ qrCode: link.qrCode, usrId: link.usrId, forcedPoints: s.earnPoints }),
             );
             if (res.maximumScansReached) throw new Refused('daily_limit');
             return res.wonPoints;

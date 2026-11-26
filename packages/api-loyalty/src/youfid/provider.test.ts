@@ -184,7 +184,7 @@ describe('fournisseur YouFID', () => {
     });
   });
 
-  it('commande payée : cadeau (route 6) puis gain sur le montant (route 5), une seule fois', async () => {
+  it('commande payée : cadeau (route 6) puis gain de notre règle en crédit forcé (route 5), une seule fois', async () => {
     const { loyalty, fake } = setup();
     const { member } = await loyalty.join(tenant, {
       name: 'Membre',
@@ -199,7 +199,9 @@ describe('fournisseur YouFID', () => {
     expect((await loyalty.getMember(tenant, member.id))?.points).toBe(100 + 250 - 300 + 125);
     expect(fake.calls.filter((c) => c.route === 'transformToPresent')).toHaveLength(1);
     const scans = fake.calls.filter((c) => c.route === 'marchandCheckScanUser');
-    expect(scans.map((c) => c.body.amount ?? c.body.forced_amount)).toEqual([100, 250, 12.5]);
+    // Gain de la commande calculé par la règle de l'enseigne et envoyé en crédit forcé, sans montant.
+    expect(scans.map((c) => c.body.forced_amount)).toEqual([100, 250, 125]);
+    expect(scans.every((c) => c.body.amount === undefined)).toBe(true);
     const transform = fake.calls.find((c) => c.route === 'transformToPresent');
     expect(transform?.body.products).toEqual([{ id: 11, cost: 300, name: 'Frites offertes' }]);
     const history = await loyalty.history(tenant, member.id);
@@ -227,10 +229,9 @@ describe('fournisseur YouFID', () => {
     expect(results).toEqual(
       expect.arrayContaining([{ ok: true }, { ok: false, error: 'in_progress' }]),
     );
-    const earns = fake.calls.filter(
-      (c) => c.route === 'marchandCheckScanUser' && c.body.amount !== undefined,
-    );
-    expect(earns).toHaveLength(1);
+    // Bienvenue (100) puis un seul gain de commande, malgré deux règlements simultanés.
+    const scans = fake.calls.filter((c) => c.route === 'marchandCheckScanUser');
+    expect(scans).toHaveLength(2);
   });
 
   it('cadeau sans assez de points : refusé sans appel à la route 6, puis repris plus tard', async () => {

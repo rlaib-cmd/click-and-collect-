@@ -250,11 +250,12 @@ describe('fidélité YouFID dans l’application (lot 21)', () => {
       });
     }
     const after = await me(s, memberToken);
-    // 100 + 250 − 300 + 105 (10,50 € envoyés à YouFID).
+    // 100 + 250 − 300 + 105 (10,50 € × 10 points, envoyés en crédit forcé).
     expect(after.points).toBe(155);
     expect(after.history.map((h) => h.kind)).toEqual(['earn', 'redeem', 'adjust', 'welcome']);
     expect(s.fake.calls.filter((c) => c.route === 'transformToPresent')).toHaveLength(1);
-    expect(s.fake.calls.filter((c) => c.body.amount === 10.5)).toHaveLength(1);
+    expect(s.fake.calls.filter((c) => c.body.forced_amount === 105)).toHaveLength(1);
+    expect(s.fake.calls.some((c) => c.body.amount !== undefined)).toBe(false);
     expect(s.backend.orders[0]?.loyaltySettled).toBe(true);
   });
 });
