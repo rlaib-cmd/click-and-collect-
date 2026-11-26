@@ -114,4 +114,4 @@ la TVA, « REGLEMENT : CB 10,00 EUR ». En bas, une **autre** référence à ne 
 ## Questions à Splash360 (questions-en-attente n° 17) : toutes répondues
 
 `ticket_id` imprimé en texte sur le ticket de caisse : oui. QR de borne = même `ticket_id` : oui.
-Journée comptable coupée à 02:00 : oui. Pagination : annoncée à partir de 1, constatée à partir de 0 (migration 20261125120000).
+Journée comptable coupée à 02:00 : oui. Pagination : annoncée à partir de 1, constatée à partir de 0 (migration 20261125120000) ; Splash360 a confirmé le 26/11 qu'elle reste à 0.

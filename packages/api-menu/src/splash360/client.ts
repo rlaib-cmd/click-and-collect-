@@ -55,7 +55,7 @@ export interface Splash360SalesQuery {
   readonly fromDate: string;
   readonly toDate: string;
   readonly status?: 'confirmed' | 'deleted' | 'confirmed,deleted';
-  /** Première page = 1 (confirmé par Splash360 le 25/11). */
+  /** Première page = 0 (constaté le 25/11, confirmé par Splash360 le 26/11 : la pagination reste à 0). */
   readonly page?: number;
   /** 1 à 100 (maximum de l'API). */
   readonly pageSize?: number;

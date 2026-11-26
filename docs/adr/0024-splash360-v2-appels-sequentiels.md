@@ -73,7 +73,54 @@ activée sans règle, droits retirés à `anon` et `authenticated` ; test pgTAP 
   plus) puis échouent proprement (carte servie depuis le cache, commande réessayée par le suivi).
 - Si la base est indisponible, les appels Splash360 échouent aussi : choix assumé, puisque la commande
   ne peut de toute façon pas être enregistrée.
-- Non traduit, en attente de Splash360 (`docs/questions-en-attente.md`, n° 18) : `max_par_produit` > 1
-  (quantité par option), étapes imbriquées (étape d'un ingrédient choisi dans une formule),
-  `prixArray_c` (prix par mode), `reglescatalogue` (promotions), `gifts`, `compo`/`composition`.
+- Non traduit, en attente de Splash360 (`docs/questions-en-attente.md`, n° 18) :
+  `reglescatalogue` (promotions), `gifts`, `compo`/`composition`. `max_par_produit`, étapes
+  imbriquées et `prixArray_c` sont traduits depuis le 26/11 (ci-dessous).
 - La vérification des tickets ambassadeur par l'export des ventes attend un exemple réel de réponse.
+
+## Réponses du 26/11 (directeur technique de Splash360)
+
+Réponses faisant foi (détail dans `docs/api-splash360/analyse-api-click-collect.md`). Décisions :
+
+1. **Prix par mode** : `prixArray_c` (et `supplementArray_c`) = [sur place, à emporter, livraison,
+   Uber, Deliveroo]. La carte interne porte `modePrices` (`pickup` = entrée 1, `delivery` =
+   entrée 2, `prix_c` / `supplement_c` à défaut) ; `menuForMode` (`packages/core`) choisit le prix
+   du mode. Le serveur calcule le panier au prix du mode de la commande ; la carte publique se lit
+   avec `?mode=pickup|delivery` (à emporter par défaut) et l'application la demande pour le mode
+   choisi : le prix affiché est celui qui sera payé. Une ancienne version de l'application voit les
+   prix à emporter ; le devis, recalculé par le serveur, donne le vrai total.
+2. **Même option deux fois** (`max_par_produit`) : `maxPerOption` sur le groupe ; l'option est
+   répétée dans `optionIds` (contrat inchangé, 60 identifiants au plus) et dans `order_item_options`
+   (une ligne par unité, sans migration) ; prix × quantité. La caisse la reçoit une fois avec
+   `qte` (prix unitaire dans `price`). Application : compteur − / + par option.
+3. **Étapes imbriquées** (`steps[].produit` = ingrédient) : groupe d'options rattaché à l'option
+   parente (`parentOptionId`), identifiants `parent>option` pour rester uniques dans le produit et
+   retrouver le parent sans migration. Exigé seulement si l'option parente est choisie ; une option
+   qui ouvre une étape ne se prend qu'une fois. Envoi à plat : `ingredient` = `ingid` = option,
+   `parentid` = ingrédient parent. Un seul niveau d'imbrication.
+4. **Heure** : `scheduledAt` (ISO 8601, décalage de Paris, millisecondes) seulement quand le client
+   a choisi une heure ; « dès que possible » n'envoie rien (l'heure estimée reste en commentaire).
+5. **Frais** : modificateur au format exact donné (`modificateur_id`, `valeur` « 1.00€ »,
+   `taux` 0,2, `item`/`ingredient` nuls, `nom` « Frais », `operation` 1). Les remises gardent leur
+   format (`type`, `valeur`, `nom`), aucun format n'ayant été donné pour elles.
+6. **Pas d'idempotence chez Splash360** (un second `submitcommande` crée une seconde commande) :
+   le dépôt est réservé une seule fois par commande (`orders.pos_opening_at`). Réservation déjà
+   prise depuis plus de 30 s sans ticket enregistré = dépôt **incertain** : jamais refait
+   automatiquement (ni par la poignée de main, ni par les nouveaux essais de l'envoi) ; avant
+   paiement la commande est annulée, après paiement l'envoi passe en alerte « vérifiez en caisse ».
+   Seul « Renvoyer à la caisse » au back-office libère la réservation, après vérification.
+7. **Annulation d'une commande `standby`** : seulement en caisse. On ne dépose en caisse qu'au
+   moment du paiement (ADR 0018) ; quand nous abandonnons une commande déposée (paiement non
+   terminé, caisse pas prête, dépôt incertain), elle est journalisée et le back-office affiche
+   « annulez-la directement en caisse » (24 h, `GET /v1/admin/alerts` → `posToCancel`).
+8. **Statuts après `confirmed`** : la caisse n'en renvoie aucun ; le suivi reste celui du
+   back-office.
+9. **Non construit** : webhook de rupture de stock (adresse d'inscription, contenu et signature
+   inconnus) et promotions de catalogue `reglescatalogue` (forme insuffisante, voir l'analyse).
+   Conséquence connue : si la caisse applique une promotion de catalogue à la réception, le total
+   en caisse peut être inférieur au montant payé en ligne ; l'équipe rembourse l'écart au
+   back-office tant que la règle n'est pas appliquée en ligne.
+10. Hypothèses à confirmer : `price` d'un ingrédient avec `qte` > 1 = prix **unitaire** (comme
+    `price` d'une ligne) ; `ingredient` envoyé en plus de `ingid` pour une option imbriquée ;
+    format des remises inchangé.
+

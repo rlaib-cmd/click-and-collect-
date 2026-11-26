@@ -11,7 +11,7 @@ ADR 0025.
 
 | Étape | Contenu |
 |---|---|
-| 1 | Lecture de l'export des ventes (`packages/api-menu`, `readSalesPage`) : enveloppe stricte, ventes lues une à une, `ticket_id` UUID en minuscules, total en centimes (`Math.round(total × 100)`) ; pagination à partir de 1 |
+| 1 | Lecture de l'export des ventes (`packages/api-menu`, `readSalesPage`) : enveloppe stricte, ventes lues une à une, `ticket_id` UUID en minuscules, total en centimes (`Math.round(total × 100)`) ; pagination à partir de 0 (constaté le 25/11, confirmé le 26/11) |
 | 2 | Migrations `20261125100000_ambassador_ticket_photo.sql` puis `20261125110000_ambassador_ticket_id.sql` : `ticket_check`, `ticket_id`, `ticket_date`, `ticket_time`, `ticket_total_cents` sur les participations ; événements `ticket_read` et `ticket_checked` ; tables `pos_sales` et `pos_sales_sync` (`tenant_id`, RLS, accès serveur) |
 | 3 | Journée comptable (`business-day.ts`) : coupure à 02:00 heure de Paris (`BUSINESS_DAY_CUTOFF`), changements d'heure compris |
 | 4 | Lecture du ticket par Claude (`ticket-read.ts`) : disposition réelle d'un ticket Splash360 dans les consignes (UUID sous le « #numéro », jamais la référence NF525 « Ticket : T… »), UUID strict côté serveur avec correction O→0 / I,l→1 seulement si le résultat est un UUID ; photo jamais conservée |

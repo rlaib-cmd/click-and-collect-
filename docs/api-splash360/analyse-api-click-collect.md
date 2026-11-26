@@ -52,23 +52,23 @@ ni de client copiée).
 - À confirmer avec Splash360 : unité des montants entiers (centimes ?).
 - Réponses de Splash360 (25/11, ADR 0025) : le `ticket_id` est imprimé en texte sur le ticket de
   caisse (UUID seul sur sa ligne, sous le « #numéro ») et encodé dans le QR des tickets de borne ;
-  `jour_comptable` : une vente avant 02:00 (Paris) appartient à la veille ; pagination annoncée à partir de 1 mais constatée à partir de 0 (`page=1` = deuxième page).
+  `jour_comptable` : une vente avant 02:00 (Paris) appartient à la veille ; pagination annoncée à partir de 1 mais constatée à partir de 0 (`page=1` = deuxième page) ; **confirmé le 26/11 : elle reste à 0**.
 
 ## Correspondance avec notre application
 
 | Splash360 | Chez nous | Remarque |
 |---|---|---|
 | `categories` → `groupes` → `produits` | catégories / produits de `Menu` (`packages/core`) | Deux niveaux côté Splash360 (catégorie puis groupe) ; `groupes_alt` = produit dans plusieurs groupes |
-| `produits[].prix_c`, `prixArray_c[]` | prix TTC en centimes | `prixArray_c` a 3 à 5 entrées : correspondance entrée ↔ mode (sur place / à emporter / livraison) à confirmer |
+| `produits[].prix_c`, `prixArray_c[]` | prix TTC en centimes, par mode | Ordre (26/11) : sur place, à emporter, livraison, Uber, Deliveroo. À emporter = entrée 1, livraison = entrée 2 (`ttc`) ; `prix_c` si le tableau manque ou est trop court. Idem `supplementArray_c` des ingrédients |
 | `ingredients[]` (`supplement_c`, `asproduct`) | options | Lien produit ↔ ingrédients via `composition` / `compo` (non typés) |
-| `steps[]` + `regles[]` | groupes d'options (min / max) | Format de `regle` non documenté |
+| `steps[]` + `regles[]` | groupes d'options (min / max, `max_par_produit`) | Étape d'un ingrédient (`steps[].produit` = « ing…-typ… ») : étape imbriquée, groupe rattaché à l'option parente |
 | `active`, `visible` | disponible / masqué | Valeurs entières, sens à confirmer |
 | `image.location` | photo | URL absolue ou relative à confirmer |
 | `mode` : `emporter` / `livraison` / `surplace` | `pickup` / `delivery` / — | |
 | `total` (nombre, euros) | `total_cents` | Conversion centimes → euros au dernier moment, arrondi exact |
 | `modificateurs` `discount` | code promo, cadeau fidélité | `valeur` en chaîne « 3.50€ » ou « 10% » |
-| `modificateurs` `frais` (+ `taux` TVA) | frais de livraison / de service | |
-| `orderNumber` | numéro de commande en ligne | Sert aussi de clé d'idempotence, si Splash360 la respecte |
+| `modificateurs` `frais` (+ `taux` TVA) | frais de livraison / de service | Format exact (26/11) : `{ modificateur_id, type: 'frais', valeur: '1.00€', taux: 0.2, item: null, ingredient: null, nom: 'Frais', operation: 1 }` |
+| `orderNumber` | numéro de commande en ligne | **Pas** de clé d'idempotence (26/11) : un second envoi crée une seconde commande ; l'unicité est garantie de notre côté |
 | `paymentType` | paiement sur place | `carte`, `especes`… pour les paiements à la remise |
 | `submitcmdpaiement` `reglements[{type:'carte', valeur, detail}]` | paiement Stripe confirmé par webhook | `detail` = identifiant du paiement Stripe |
 
@@ -90,3 +90,42 @@ Règle maintenue : le paiement n'est notifié à Splash360 qu'après le webhook 
 12. **Jeton** : durée de vie, limites de débit, quota.
 13. **`comments`** : tableau de tableaux (`array<array<…>>`) — voulu ?
 14. **Changement de carte** : un moyen de savoir que la carte a changé (révision, webhook), ou faut-il la relire régulièrement ?
+
+## Réponses du 26/11 (directeur technique de Splash360)
+
+Réponses faisant foi ; ce qui est appliqué est décrit dans l'ADR 0024 (« Réponses du 26/11 »).
+
+| # | Sujet | Réponse | Appliqué |
+|---|---|---|---|
+| 8 | Identifiant d'ingrédient de `submitcommande` | Identifiant complet (`ing15407-typ2075`) | Déjà le cas ; test ajouté |
+| 9 | Même option choisie deux fois (`max_par_produit` = 2) | Envoyée une fois avec `qte: 2` | Option répétée dans le panier (core, contrats, application : compteur), regroupée en `qte` à l'envoi, prix unitaire dans `price` |
+| 10 | Étapes imbriquées d'une formule (`steps[].produit` = « ing…-typ… ») | À plat dans `ingredients`, avec `ingid` et `parentid` (ingrédient parent) | Groupe imbriqué rattaché à l'option parente (`parentOptionId`) ; option envoyée avec `ingredient` = `ingid` et `parentid`. Un seul niveau d'imbrication |
+| 11 | Ordre de `prixArray_c` | sur place, à emporter, livraison, Uber, Deliveroo | Prix à emporter (entrée 1) ou livraison (entrée 2), produits et suppléments ; `prix_c` à défaut. Carte servie au prix du mode (`?mode=`), calcul serveur au prix du mode |
+| 12 | Statuts après `confirmed` | Aucun : la caisse ne renvoie plus rien | Suivi inchangé : l'équipe fait avancer la commande au back-office |
+| 13 | Annuler une commande `standby` | Seulement depuis la caisse | Jamais de dépôt laissé sans besoin ; une commande annulée chez nous (paiement non terminé, caisse pas prête, dépôt incertain) est signalée au back-office : « annulez-la directement en caisse » |
+| 14 | Second `submitcommande` avec le même `orderNumber` | Crée une seconde commande | Dépôt réservé une seule fois (`pos_opening_at`) ; un dépôt commencé sans ticket n'est jamais refait automatiquement, seulement par « Renvoyer à la caisse » après vérification |
+| 15 | Heure de retrait | `scheduledAt` à la racine, ISO 8601 avec le décalage de Paris (`2026-11-26T14:22:22.177+01:00`) | Envoyé seulement si le client a choisi une heure ; « dès que possible » : rien (heure estimée en commentaire). Le commentaire est gardé |
+| 16 | Frais | TVA 20 % dans `modificateurs`, format exact ci-dessus | `nom: 'Frais'` ; `modificateur_id` = `frais_livraison` ou `frais_service` |
+| 17 | Ruptures de stock | Un webhook existe | Non construit : URL d'inscription, contenu et signature inconnus (questions en attente) |
+| 18 | Promotions de catalogue (`reglescatalogue`) | Appliquées par la caisse à la réception : à appliquer aussi en ligne | Non appliquées : forme insuffisante (voir ci-dessous, questions en attente) |
+| 19 | Pagination de l'export des ventes | Reste à 0 | Inchangé (première page = 0) |
+
+### `reglescatalogue` : ce qui manque pour l'appliquer
+
+Exemple réel (carte Chicken Street Siège du 25/11) :
+
+```json
+{ "reglecatalogue_id": "modifier4_emporter", "type": "catalogue", "mode": "emporter",
+  "start": 1780963200000, "end": 4936723199000, "min": 4, "max": 4, "quantite": 0,
+  "produits": ["prd15178", "prd15177", "prd15176", "prd15170", "prd15169"],
+  "selection": "all", "valeur": "100%", "operation": -1, "nom": "3 acheter = 1", "taux": 0 }
+```
+
+Non déductible sans inventer : quel article est offert (le moins cher ? le dernier ?), si la règle
+se répète (8 articles = 2 offerts ?), le sens de `min`/`max` (taille du lot ?), de `quantite` (0),
+de `selection` (« all »), de `taux` ; si la remise porte sur le prix de base seul ou options
+comprises ; le cas de la **livraison** (aucune règle `livraison` dans l'exemple : pas de promotion
+en livraison ?) ; le cumul avec un code promo ou un cadeau fidélité ; et la façon de l'indiquer
+dans `submitcommande` (modificateur `discount` ? la caisse la recalcule-t-elle elle-même ?).
+Tant que ces points manquent, le prix en ligne ne déduit aucune promotion de catalogue.
+
