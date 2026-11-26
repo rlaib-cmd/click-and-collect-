@@ -253,9 +253,9 @@ export function createPostgresYoufidStore(sql: Sql): YoufidPostgresStore {
       const [row] = await sql<{ points_per_euro: number; welcome_points: number }[]>`
         select points_per_euro, welcome_points from public.loyalty_program_settings
         where tenant_id = ${tenantId}`;
-      // Défauts décidés le 25/11 (identiques aux valeurs par défaut de la table).
+      // Défauts du propriétaire : 1 point par euro (26/11), 100 de bienvenue ; identiques à la table.
       return {
-        pointsPerEuro: row?.points_per_euro ?? 10,
+        pointsPerEuro: row?.points_per_euro ?? 1,
         welcomePoints: row?.welcome_points ?? 100,
       };
     },

@@ -101,12 +101,12 @@ describe.skipIf(!url)('Fidélité YouFID : lien, registre, réglages (lot 21)', 
     expect(await store.resolveOperation(BELLA, 'pas-un-uuid')).toBe(false);
   });
 
-  it('réglages du programme : défauts 10 et 100, puis valeurs de l’enseigne', async () => {
+  it('réglages du programme : défauts 1 et 100, puis valeurs de l’enseigne', async () => {
     expect(await store.getProgramSettings(GREEN)).toEqual({
-      pointsPerEuro: 10,
+      pointsPerEuro: 1,
       welcomePoints: 100,
     });
-    await store.saveProgramSettings(GREEN, { pointsPerEuro: 1, welcomePoints: 0 });
-    expect(await store.getProgramSettings(GREEN)).toEqual({ pointsPerEuro: 1, welcomePoints: 0 });
+    await store.saveProgramSettings(GREEN, { pointsPerEuro: 5, welcomePoints: 0 });
+    expect(await store.getProgramSettings(GREEN)).toEqual({ pointsPerEuro: 5, welcomePoints: 0 });
   });
 });
