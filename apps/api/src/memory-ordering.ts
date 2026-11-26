@@ -9,6 +9,7 @@ import {
 } from '@splash360/core';
 import {
   OPENING_LEASE_MS,
+  POS_WEBHOOK_ACTOR,
   SLOT_HOLDING_STATUSES,
   type CreateOrderResult,
   type NewOrder,
@@ -32,7 +33,7 @@ export interface StoredOrder extends NewOrder {
   paymentIntentId: string | null;
   refundedCents: number;
   createdAt: string;
-  events: { status: string; actor: string; at: string }[];
+  events: { status: string; actor: string; at: string; note?: string | null }[];
   posReference?: string;
   loyaltySettled?: boolean;
   /** Poignée de main avec la caisse (ADR 0018), comme les colonnes pos_* de Postgres. */
@@ -482,6 +483,36 @@ export function createMemoryOrderBackend(
     findByPosReference(reference) {
       const o = orders.find((x) => x.posReference === reference);
       return Promise.resolve(o ? { tenantId: o.tenantId, orderId: o.id } : null);
+    },
+    findByPosTicket(tenantId, restaurantId, ticketId) {
+      const o = orders.find(
+        (x) =>
+          x.tenantId === tenantId &&
+          x.restaurantId === restaurantId &&
+          x.pos?.ticketId.toLowerCase() === ticketId.toLowerCase(),
+      );
+      return Promise.resolve(
+        o
+          ? {
+              orderId: o.id,
+              status: o.status as OrderStatus,
+              paymentMethod:
+                o.paymentMethod === 'on_site' ? ('on_site' as const) : ('online' as const),
+            }
+          : null,
+      );
+    },
+    recordPosEvent(tenantId, orderId, status, detail) {
+      const o = orders.find((x) => x.tenantId === tenantId && x.id === orderId);
+      if (!o || o.events.some((e) => e.status === status && e.actor === POS_WEBHOOK_ACTOR))
+        return Promise.resolve(false);
+      o.events.push({
+        status,
+        actor: POS_WEBHOOK_ACTOR,
+        at: new Date().toISOString(),
+        note: detail.reason,
+      });
+      return Promise.resolve(true);
     },
     addPushToken(tenantId, orderId, token) {
       if (!orders.some((x) => x.tenantId === tenantId && x.id === orderId))

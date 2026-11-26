@@ -20,6 +20,8 @@ import {
   type AdminPromoDto,
   refundRequestSchema,
   settingsSchema,
+  splash360StationSchema,
+  type Splash360WebhookLog,
   staffUpdateSchema,
   statusChangeSchema,
   themeUpdateSchema,
@@ -48,6 +50,7 @@ import type {
   ProximityStore,
   PaymentStore,
   RestaurantStore,
+  Splash360WebhookStore,
   TenantStore,
   ThemeRecord,
 } from '@splash360/db';
@@ -125,6 +128,10 @@ export interface AdminRoutesDeps extends NotifyDeps {
   readonly assets?: AssetStorage | null;
   /** API Splash360 réelle (ADR 0018) ; null : identifiants absents, démonstration seulement. */
   readonly splash360?: Splash360Probe | null | undefined;
+  /** Webhooks Splash360 (lot 23) : journal et états de la caisse ; absent = désactivés. */
+  readonly splash360Webhooks?: Splash360WebhookStore | undefined;
+  /** Secrets de signature des webhooks posés sur le serveur. */
+  readonly splash360WebhooksConfigured?: boolean | undefined;
   readonly now?: (() => Date) | undefined;
 }
 
@@ -318,6 +325,7 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     const list = (await deps.restaurants.listByTenant(tenantId(c))).filter(
       (r) => !scope || r.id === scope,
     );
+    const stock = (await deps.splash360Webhooks?.countOverrides(tenantId(c))) ?? {};
     return c.json({
       restaurants: list.map((r) => ({
         id: r.id,
@@ -327,6 +335,8 @@ export function adminRoutes(deps: AdminRoutesDeps) {
         stripeAccountId: r.stripeAccountId,
         stripeChargesEnabled: r.stripeChargesEnabled,
         splash360Live: r.splash360Live,
+        splash360StationId: r.splash360StationId ?? null,
+        stock: stock[r.id] ?? { unavailable: 0, deliveryPrices: 0 },
       })),
       splash360Configured: Boolean(deps.splash360),
     });
@@ -355,6 +365,50 @@ export function adminRoutes(deps: AdminRoutesDeps) {
     deps.menus.invalidate(restaurant.id);
     await audit(c, input.live ? 'splash360.connect' : 'splash360.disconnect', restaurant.id);
     return c.body(null, 204);
+  });
+
+  // Station Splash360 des webhooks (lot 23, ADR 0029) : réglée par le super-administrateur.
+  app.put('/restaurants/:id/splash360/station', async (c) => {
+    const denied = allow(c, 'platform');
+    if (denied) return denied;
+    const input = await body(c, splash360StationSchema);
+    if (!input) return apiError(c, 'invalid_request', 'Identifiant de station invalide');
+    const restaurant = await restaurantFor(c, c.req.param('id'));
+    if (!restaurant) return apiError(c, 'not_found', 'Restaurant inconnu');
+    const result = await deps.restaurants.setSplash360Station(
+      tenantId(c),
+      restaurant.id,
+      input.stationId,
+    );
+    if (result === 'not_found') return apiError(c, 'not_found', 'Restaurant inconnu');
+    if (result === 'taken')
+      return apiError(c, 'conflict', 'Cette station est déjà rattachée à un autre restaurant');
+    deps.menus.invalidate(restaurant.id);
+    await audit(c, 'splash360.station', restaurant.id, { stationId: input.stationId });
+    return c.body(null, 204);
+  });
+
+  // Journal « Webhooks reçus » (lot 23) : 100 derniers appels, toutes stations, sans donnée
+  // personnelle ; sert à rattacher une station inconnue à son restaurant.
+  app.get('/splash360/webhooks', async (c) => {
+    const denied = allow(c, 'platform', false);
+    if (denied) return denied;
+    const receipts = (await deps.splash360Webhooks?.recent(100)) ?? [];
+    const log: Splash360WebhookLog = {
+      configured: Boolean(deps.splash360WebhooksConfigured && deps.splash360Webhooks),
+      receipts: receipts.map((r) => ({
+        webhookId: r.webhookId,
+        event: r.event,
+        stationId: r.stationId,
+        restaurantId: r.restaurantId,
+        outcome: r.outcome,
+        summary: { ...r.summary },
+        receivedAt: r.receivedAt,
+        processedAt: r.processedAt,
+      })),
+    };
+    c.header('Cache-Control', 'no-store');
+    return c.json(log);
   });
 
   app.post('/restaurants/:id/splash360/test', async (c) => {

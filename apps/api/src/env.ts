@@ -89,6 +89,12 @@ const envSchema = z.object({
   SPLASH360_MENU_TOKEN_AUTH: z.enum(['basic', 'body']).optional(),
   /** Taux de TVA des frais envoyés à la caisse (à confirmer avec Splash360). */
   SPLASH360_FEE_VAT_RATE: z.coerce.number().min(0).max(1).default(0.2),
+  /**
+   * Webhooks Splash360 (lot 23, ADR 0029) : secrets de signature `whsec_…`, séparés par des
+   * virgules (un par URL, plus l'ancien pendant un changement de secret). Absent : webhooks
+   * refusés (503). Lus par `parseWebhookSecrets` au démarrage ; jamais journalisés.
+   */
+  SPLASH360_WEBHOOK_SECRETS: z.string().optional(),
   /** Attente maximale de la caisse avant paiement, puis après paiement. */
   POS_READY_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(60),
   POS_CONFIRM_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(60),

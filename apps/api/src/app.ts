@@ -6,7 +6,7 @@ import type {
 } from '@splash360/db';
 import type { LoyaltyProvider } from '@splash360/api-loyalty';
 import type { AuthInviter } from './admin/invite';
-import type { MenuCache } from '@splash360/api-menu';
+import type { MenuCache, WebhookKey } from '@splash360/api-menu';
 import type {
   AdminStore,
   AmbassadorStore,
@@ -17,8 +17,10 @@ import type {
   PaymentStore,
   PosTicketStore,
   RestaurantStore,
+  Splash360WebhookStore,
   TenantStore,
 } from '@splash360/db';
+import { WEBHOOK_RECEIPT_RETENTION_MS } from '@splash360/db';
 import type { NotificationSender } from './notifications/sender';
 import { notifyStatus, tenantNameResolver } from './notifications/service';
 import type { CardGateway } from './payments/cards';
@@ -54,6 +56,9 @@ import {
 import { MAX_PHOTO_BYTES } from '@splash360/contracts';
 import { tenantRoutes } from './routes/tenants';
 import { webhookRoutes } from './routes/webhooks';
+import { splash360WebhookRoutes } from './routes/splash360-webhooks';
+import { createStockMenuCache } from './splash360/stock-menu';
+import { processSplash360Webhook } from './splash360/webhooks';
 
 export interface AppDeps {
   readonly tenants: TenantStore;
@@ -96,7 +101,13 @@ export interface AppDeps {
   /** Sonde de disponibilité (base de données). */
   readonly ready?: () => Promise<boolean>;
   /** Requêtes par minute et par IP : création/paiement/devis, et lectures publiques. */
-  readonly rateLimits?: { orders: number; reads: number; admin?: number; photos?: number };
+  readonly rateLimits?: {
+    orders: number;
+    reads: number;
+    admin?: number;
+    photos?: number;
+    webhooks?: number;
+  };
   /** Attente imposée à un back-office obsolète avant de lui répondre (défaut 60 s). */
   readonly outdatedClientHoldMs?: number;
   readonly trustProxy?: boolean;
@@ -137,6 +148,15 @@ export interface AppDeps {
   readonly clientAppUrl?: string | undefined;
   /** Notifications « Bons plans à proximité » (lot 22, ADR 0027) ; absent = désactivées. */
   readonly proximity?: ProximityStore | undefined;
+  /** Webhooks Splash360 reçus et états de la caisse (lot 23, ADR 0029) ; absent = désactivés. */
+  readonly splash360Webhooks?: Splash360WebhookStore | undefined;
+  /** Clés de signature (`SPLASH360_WEBHOOK_SECRETS`) ; vide = réception refusée (503). */
+  readonly splash360WebhookKeys?: readonly WebhookKey[] | undefined;
+  /**
+   * Tâche lancée après la réponse (webhooks Splash360) : `EdgeRuntime.waitUntil` sur Supabase
+   * Edge ; par défaut, promesse détachée (serveur Node).
+   */
+  readonly background?: ((name: string, task: Promise<unknown>) => void) | undefined;
 }
 
 /**
@@ -144,10 +164,16 @@ export interface AppDeps {
  * pour tester les routes sans base (ADR 0003).
  */
 export function createApp(input: AppDeps) {
+  // Carte complétée des états reçus de la caisse Splash360 (lot 23) : carte servie, aperçu du
+  // back-office et calcul serveur du prix lisent tous ce cache.
+  const stockMenus = input.splash360Webhooks
+    ? createStockMenuCache(input.menus, input.splash360Webhooks, { now: input.now })
+    : null;
+  const withStock: AppDeps = stockMenus ? { ...input, menus: stockMenus } : input;
   // Paliers de cadeaux complétés des catégories réglées par l'enseigne (lot 16).
-  const deps: AppDeps = input.loyalty
-    ? { ...input, loyalty: withRewardCategories(input.loyalty, input.admin) }
-    : input;
+  const deps: AppDeps = withStock.loyalty
+    ? { ...withStock, loyalty: withRewardCategories(withStock.loyalty, withStock.admin) }
+    : withStock;
   const app = new Hono();
 
   const log = deps.logger ?? jsonLog;
@@ -246,6 +272,11 @@ export function createApp(input: AppDeps) {
     '/v1/tenants/*',
     rateLimit({ limit: limits.reads, windowMs: 60_000, trustProxy, ipHeader }),
   );
+  // Webhooks Splash360 (lot 23) : plafond large, la caisse peut envoyer des rafales.
+  app.use(
+    '/v1/webhooks/splash360/*',
+    rateLimit({ limit: limits.webhooks ?? 1200, windowMs: 60_000, trustProxy, ipHeader }),
+  );
   // Back-office : plafond par adresse, vérifié en premier, avant toute lecture en base et avant
   // le garde ci-dessous (audit du 25/11, M6). Un onglet qui boucle est arrêté ici.
   app.use(
@@ -330,6 +361,42 @@ export function createApp(input: AppDeps) {
       onPaid,
     }),
   );
+  const background =
+    deps.background ??
+    ((name: string, task: Promise<unknown>) => {
+      void task.catch((error: unknown) =>
+        log('error', 'Tâche de fond en échec', { task: name, error: String(error) }),
+      );
+    });
+  const splash360Store = deps.splash360Webhooks;
+  if (splash360Store && stockMenus) {
+    app.route(
+      '/v1/webhooks/splash360',
+      splash360WebhookRoutes({
+        keys: deps.splash360WebhookKeys ?? [],
+        restaurants: deps.restaurants,
+        store: splash360Store,
+        background,
+        now: deps.now ?? (() => new Date()),
+        log: warn,
+        process: (job) =>
+          processSplash360Webhook(
+            {
+              store: splash360Store,
+              menus: deps.menus,
+              stock: stockMenus,
+              operations: deps.operations,
+              tickets: deps.tickets,
+              payments: deps.payments,
+              gateway: deps.gateway,
+              notify,
+              log: warn,
+            },
+            job,
+          ),
+      }),
+    );
+  }
   app.route('/v1/pos', posRoutes({ ...notify, posWebhookSecret: deps.posWebhookSecret ?? null }));
   app.route(
     '/v1/admin',
@@ -356,6 +423,8 @@ export function createApp(input: AppDeps) {
       previewSecret,
       assets: deps.assets ?? null,
       splash360: deps.splash360 ?? null,
+      splash360Webhooks: deps.splash360Webhooks,
+      splash360WebhooksConfigured: (deps.splash360WebhookKeys?.length ?? 0) > 0,
       now: deps.now,
     }),
   );
@@ -452,9 +521,17 @@ export function createApp(input: AppDeps) {
     deps.proximity
       ? purgeProximityEvents(deps.proximity, deps.now?.() ?? new Date())
       : Promise.resolve(0);
+  // Webhooks Splash360 (lot 23) : appels reçus gardés 7 jours (48 h au moins exigées, §4).
+  const runSplash360Purge = () =>
+    deps.splash360Webhooks
+      ? deps.splash360Webhooks.purge(
+          new Date((deps.now?.() ?? new Date()).getTime() - WEBHOOK_RECEIPT_RETENTION_MS),
+        )
+      : Promise.resolve(0);
   return Object.assign(app, {
     runDispatches: () => processDispatches(dispatch),
     runAmbassador,
     runProximityPurge,
+    runSplash360Purge,
   });
 }

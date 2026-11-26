@@ -8,6 +8,7 @@ import {
   createRoutingMenuProvider,
   createSplash360Client,
   createSplash360MenuProvider,
+  parseWebhookSecrets,
   splash360CredentialsFrom,
 } from '@splash360/api-menu';
 import {
@@ -30,6 +31,7 @@ import {
   createPostgresOtpStore,
   createPostgresMemberSessionStore,
   createPostgresProximityStore,
+  createPostgresSplash360WebhookStore,
 } from '@splash360/db';
 import { createSupabaseVerifier } from './admin/auth';
 import { createSupabaseAssetStorage } from './admin/logo';
@@ -139,6 +141,9 @@ const { loyalty, youfid } = configureLoyalty({
 });
 
 const app = createApp({
+  // Webhooks Splash360 (lot 23) : secrets lus au démarrage (erreur explicite, sans la valeur).
+  splash360Webhooks: createPostgresSplash360WebhookStore(sql),
+  splash360WebhookKeys: parseWebhookSecrets(env.SPLASH360_WEBHOOK_SECRETS),
   tenants,
   restaurants,
   menus,
@@ -296,7 +301,17 @@ const proximityPurge = setInterval(() => {
     );
 }, 3_600_000);
 
+// Webhooks Splash360 (lot 23) : appels reçus de plus de 7 jours effacés, toutes les heures.
+const splash360Purge = setInterval(() => {
+  app
+    .runSplash360Purge()
+    .catch((error: unknown) =>
+      jsonLog('error', 'Purge des webhooks Splash360 en échec', { error: String(error) }),
+    );
+}, 3_600_000);
+
 function shutdown() {
+  clearInterval(splash360Purge);
   clearInterval(expiry);
   clearInterval(proximityPurge);
   clearInterval(dispatcher);

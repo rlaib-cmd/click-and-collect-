@@ -38,6 +38,47 @@ export const adminRestaurantSchema = z.object({
   stripeChargesEnabled: z.boolean(),
   /** Branché sur la vraie carte et la vraie caisse Splash360 (ADR 0018). */
   splash360Live: z.boolean().default(false),
+  /** Station click and collect Splash360 des webhooks (lot 23) ; null : non réglée. */
+  splash360StationId: z.string().nullable().default(null),
+  /** États reçus de la caisse : articles hors stock, prix de livraison propres (lot 23). */
+  stock: z
+    .object({ unavailable: z.number().int(), deliveryPrices: z.number().int() })
+    .default({ unavailable: 0, deliveryPrices: 0 }),
+});
+
+/** Identifiant client de la station Splash360 (dernier segment du chemin des webhooks). */
+export const splash360StationSchema = z.object({
+  stationId: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_.-]{1,100}$/)
+    .nullable(),
+});
+
+/** Journal « Webhooks reçus » du super-administrateur (lot 23) : aucune donnée personnelle. */
+export const splash360WebhookLogSchema = z.object({
+  /** Secrets de signature posés sur le serveur. */
+  configured: z.boolean(),
+  receipts: z.array(
+    z.object({
+      webhookId: z.string(),
+      event: z.enum(['stock', 'prices', 'catalog', 'orders']),
+      stationId: z.string(),
+      restaurantId: z.string().nullable(),
+      outcome: z.enum([
+        'received',
+        'applied',
+        'ignored',
+        'test',
+        'unknown_station',
+        'unknown_order',
+        'failed',
+      ]),
+      summary: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+      receivedAt: z.iso.datetime(),
+      processedAt: z.iso.datetime().nullable(),
+    }),
+  ),
 });
 
 /** Avancement de la commande dans la caisse Splash360 (ADR 0018). */
@@ -93,7 +134,15 @@ export const adminOrderDetailSchema = z.object({
       note: z.string().nullable(),
     }),
   ),
-  history: z.array(z.object({ status: z.string(), actor: z.string(), at: z.iso.datetime() })),
+  history: z.array(
+    z.object({
+      status: z.string(),
+      actor: z.string(),
+      at: z.iso.datetime(),
+      /** Motif saisi en caisse (annulation reçue de Splash360, lot 23). */
+      note: z.string().nullable().optional(),
+    }),
+  ),
 });
 
 export const statusChangeSchema = z.object({
@@ -324,6 +373,7 @@ export const alertsResponseSchema = z.object({
 
 export type Me = z.infer<typeof meSchema>;
 export type AdminRestaurant = z.infer<typeof adminRestaurantSchema>;
+export type Splash360WebhookLog = z.infer<typeof splash360WebhookLogSchema>;
 export type AdminOrder = z.infer<typeof adminOrderSchema>;
 export type AdminOrderDetail = z.infer<typeof adminOrderDetailSchema>;
 export type SettingsDto = z.infer<typeof settingsSchema>;

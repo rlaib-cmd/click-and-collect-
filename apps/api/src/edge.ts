@@ -17,6 +17,7 @@ import {
   createRoutingMenuProvider,
   createSplash360Client,
   createSplash360MenuProvider,
+  parseWebhookSecrets,
   splash360CredentialsFrom,
 } from '@splash360/api-menu';
 import {
@@ -40,6 +41,7 @@ import {
   createPostgresOtpStore,
   createPostgresMemberSessionStore,
   createPostgresProximityStore,
+  createPostgresSplash360WebhookStore,
 } from '@splash360/db';
 import { Hono } from 'hono';
 import { corsOriginsFrom } from './http/cors';
@@ -211,6 +213,8 @@ const posTiming = {
 const geo = createBanGeoProvider(env('GEOCODER_URL') ?? 'https://data.geopf.fr/geocodage/search');
 
 const adminUrl = env('ADMIN_URL') ?? 'http://localhost:3000';
+// Webhooks Splash360 (lot 23, ADR 0029) : secrets de fonction, jamais journalisés.
+const splash360WebhookKeys = parseWebhookSecrets(env('SPLASH360_WEBHOOK_SECRETS'));
 
 // Invitations du back-office : Supabase Auth du même projet, clé de service fournie par le runtime.
 const inviter = createSupabaseInviter({
@@ -300,6 +304,10 @@ function build() {
     youfid,
     memberSessions: createPostgresMemberSessionStore(sql),
     proximity: createPostgresProximityStore(sql),
+    // Webhooks Splash360 (lot 23) : réponse immédiate, traitement confié à `background`.
+    splash360Webhooks: createPostgresSplash360WebhookStore(sql),
+    splash360WebhookKeys,
+    background,
     // Connexion de démonstration sans code : seulement si demandée explicitement, hors production
     // (désactivée par défaut, audit du 25/11).
     loyaltyDemoLogin: env('LOYALTY_DEMO_LOGIN') === '1' && appEnv !== 'production',
@@ -419,6 +427,8 @@ root.use('*', async (c, next) => {
   if (clientTraffic && now - lastProximityPurge > 3_600_000) {
     lastProximityPurge = now;
     background('proximité', current.app.runProximityPurge());
+    // Webhooks Splash360 (lot 23) : appels reçus de plus de 7 jours effacés.
+    background('webhooks Splash360', current.app.runSplash360Purge());
   }
   inFlight += 1;
   try {
