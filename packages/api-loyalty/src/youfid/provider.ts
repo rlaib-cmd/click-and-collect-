@@ -53,7 +53,9 @@ const USR_ID = /^\d{1,18}$/;
 
 /** Échec certain (rien n'a été appliqué chez YouFID) détecté avant ou pendant l'opération. */
 class Refused extends Error {
-  constructor(readonly code: 'unknown_member' | 'insufficient_points' | 'daily_limit') {
+  constructor(
+    readonly code: 'unknown_member' | 'insufficient_points' | 'daily_limit' | 'not_credited',
+  ) {
     super(code);
   }
 }
@@ -187,6 +189,15 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
             key: op.key,
           });
         }
+        if (error.code === 'not_credited') {
+          // Visible au back-office (« Opérations à vérifier ») ; rien n'a été crédité, un
+          // nouveau règlement ou une correction manuelle peut la reprendre sans doublon.
+          log('Fidélité YouFID : aucun point crédité, opération à vérifier', {
+            tenantId: tenant.id,
+            key: op.key,
+          });
+          return { ok: false, error: 'provider_error' };
+        }
         return { ok: false, error: error.code };
       }
       // Issue inconnue si la requête est partie et que la réponse manque ou est illisible.
@@ -220,6 +231,8 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
         client.scan({ qrCode: link.qrCode, usrId: link.usrId, forcedPoints: op.points }),
       );
       if (r.maximumScansReached) throw new Refused('daily_limit');
+      // Aucun point crédité alors qu'on en demandait : rien n'a été appliqué, à vérifier.
+      if (r.wonPoints === 0 && op.points > 0) throw new Refused('not_credited');
       return r.wonPoints;
     });
   }
@@ -375,6 +388,32 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
     async settleOrder(tenant, s): Promise<SettleResult> {
       const link = await linkFor(tenant.id, s.memberId);
       if (!link) return { ok: false, error: 'unknown_member' };
+      // Gain d'abord, puis cadeau : YouFID ignorait un crédit envoyé juste après un échange
+      // (constaté en recette le 26/11). Points de la commande : calculés par notre règle (points par euro de l'enseigne) et
+      // envoyés en crédit forcé, prioritaire chez YouFID : le gain annoncé est le gain crédité.
+      if (s.earnPoints > 0) {
+        const r = await runOperation(
+          tenant,
+          {
+            key: `order:${s.orderId}:earn`,
+            kind: 'earn',
+            memberId: link.usrId,
+            orderId: s.orderId,
+            points: s.earnPoints,
+            label: `Commande n° ${s.orderNumber}`,
+          },
+          async (send) => {
+            const res = await send(() =>
+              client.scan({ qrCode: link.qrCode, usrId: link.usrId, forcedPoints: s.earnPoints }),
+            );
+            if (res.maximumScansReached) throw new Refused('daily_limit');
+            // Constaté le 26/11 : YouFID créditait 0 point juste après un échange de cadeau.
+            if (res.wonPoints === 0) throw new Refused('not_credited');
+            return res.wonPoints;
+          },
+        );
+        if (!r.ok) return { ok: false, error: r.error };
+      }
       const reward = s.reward;
       if (reward) {
         const r = await runOperation(
@@ -397,29 +436,6 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
               ]),
             );
             return -reward.costPoints;
-          },
-        );
-        if (!r.ok) return { ok: false, error: r.error };
-      }
-      // Points de la commande : calculés par notre règle (points par euro de l'enseigne) et
-      // envoyés en crédit forcé, prioritaire chez YouFID : le gain annoncé est le gain crédité.
-      if (s.earnPoints > 0) {
-        const r = await runOperation(
-          tenant,
-          {
-            key: `order:${s.orderId}:earn`,
-            kind: 'earn',
-            memberId: link.usrId,
-            orderId: s.orderId,
-            points: s.earnPoints,
-            label: `Commande n° ${s.orderNumber}`,
-          },
-          async (send) => {
-            const res = await send(() =>
-              client.scan({ qrCode: link.qrCode, usrId: link.usrId, forcedPoints: s.earnPoints }),
-            );
-            if (res.maximumScansReached) throw new Refused('daily_limit');
-            return res.wonPoints;
           },
         );
         if (!r.ok) return { ok: false, error: r.error };

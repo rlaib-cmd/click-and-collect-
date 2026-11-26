@@ -35,6 +35,9 @@ export function createFakeYoufid(options: { now: () => number }) {
   let inits = 0;
   const state = {
     maxScansReached: false,
+    /** Comportement constaté le 26/11 : crédit forcé ignoré (0 point) juste après un échange. */
+    zeroCreditAfterTransform: false,
+    lastWasTransform: false,
     secType: 'oauth1HmacSha256' as string,
     /** Attente simulée de chaque réponse (ms, sur un délai réel). */
     delayMs: 0,
@@ -146,8 +149,11 @@ export function createFakeYoufid(options: { now: () => number }) {
           pin_user: c.pin,
         });
       }
-      const won =
-        typeof b.forced_amount === 'number'
+      const ignored = state.zeroCreditAfterTransform && state.lastWasTransform;
+      state.lastWasTransform = false;
+      const won = ignored
+        ? 0
+        : typeof b.forced_amount === 'number'
           ? b.forced_amount
           : typeof b.amount === 'number'
             ? b.amount > 4000
@@ -168,6 +174,7 @@ export function createFakeYoufid(options: { now: () => number }) {
       });
     },
     transformToPresent(b) {
+      state.lastWasTransform = true;
       const c = byId(b.usr_id);
       if (!c) return err('Utilisateur introuvable');
       const cost = (b.products as { cost: number }[]).reduce((s, p) => s + p.cost, 0);
