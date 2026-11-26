@@ -1221,6 +1221,12 @@ export function adminRoutes(deps: AdminRoutesDeps) {
             'conflict',
             'YouFID refuse : nombre de passages du jour atteint pour ce client. Réessayez demain.',
           );
+        case 'balance_cap':
+          return apiError(
+            c,
+            'conflict',
+            'YouFID refuse : plafond de solde atteint pour ce client. Aucun point crédité.',
+          );
         case 'already_processed':
           return apiError(c, 'conflict', 'Opération déjà en cours pour ce client');
         case 'provider_error':

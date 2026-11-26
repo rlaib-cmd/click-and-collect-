@@ -10,7 +10,7 @@ import { createHmac } from 'node:crypto';
 export interface FakeCustomer {
   usrId: number;
   qrCode: string;
-  /** Format national, comme sur la tablette. */
+  /** Format E.164 (+33…), comparé tel quel par YouFID (réponse de Splash360 du 26/11). */
   phone: string;
   nom: string;
   prenom: string;
@@ -35,6 +35,14 @@ export function createFakeYoufid(options: { now: () => number }) {
   let inits = 0;
   const state = {
     maxScansReached: false,
+    /** Plafond de solde du marchand (MAX_POINTS_REACHED au-delà) ; null : aucun. */
+    balanceCap: null as number | null,
+    /** Montant maximal accepté (AMOUNT_TOO_HIGH au-delà) ; null : aucun. */
+    maxAmount: null as number | null,
+    /** Route 6 en erreur générique (« Problem during withdrawPoints on LOYALTY »). */
+    withdrawFails: false,
+    /** Route 10 : « Duplicated user » (téléphone présent sur plusieurs fiches). */
+    duplicatedUser: false,
     /** Comportement constaté le 26/11 : crédit forcé ignoré (0 point) juste après un échange. */
     zeroCreditAfterTransform: false,
     lastWasTransform: false,
@@ -54,7 +62,8 @@ export function createFakeYoufid(options: { now: () => number }) {
   });
   const byQr = (qr: unknown) => customers.find((c) => c.qrCode === qr);
   const byId = (id: unknown) => customers.find((c) => c.usrId === Number(id));
-  const national = (p: string) => (p.startsWith('+33') ? `0${p.slice(3)}` : p);
+  /** QR code d'un compte créé par téléphone : 8 chiffres commençant par 1, en texte. */
+  const qrFor = (usrId: number) => String(10_000_000 + usrId);
 
   function verify(raw: string, body: Body, authorization: string | null): boolean {
     if (state.secType !== 'oauth1HmacSha256') return true;
@@ -140,13 +149,26 @@ export function createFakeYoufid(options: { now: () => number }) {
     marchandCheckScanUser(b) {
       const c = byQr(b.qr_code);
       if (!c) return err('Utilisateur introuvable');
-      if (state.maxScansReached) {
-        return ok({
+      const refused = (code: string, maxScans: '0' | '1') =>
+        ok({
+          code,
           usr_id: c.usrId,
-          won_pts: 0,
+          won_pts: '0',
           total_pts: c.points,
-          maximum_scans_reached: '1',
+          maximum_scans_reached: maxScans,
           pin_user: c.pin,
+        });
+      if (state.maxScansReached) return refused('MAX_SCAN_REACHED', '1');
+      if (state.maxAmount !== null && typeof b.amount === 'number' && b.amount > state.maxAmount) {
+        return refused('AMOUNT_TOO_HIGH', '0');
+      }
+      if (state.balanceCap !== null && c.points >= state.balanceCap) {
+        // Plafond atteint : `maximum_scans_reached` absent (réponse de Splash360 du 26/11).
+        return ok({
+          code: 'MAX_POINTS_REACHED',
+          usr_id: c.usrId,
+          won_pts: '0',
+          total_pts: c.points,
         });
       }
       const ignored = state.zeroCreditAfterTransform && state.lastWasTransform;
@@ -166,6 +188,7 @@ export function createFakeYoufid(options: { now: () => number }) {
         last_name: c.nom,
         first_name: c.prenom,
         fid_status: 'MEMBER',
+        code: '',
         won_pts: won,
         total_pts: c.points,
         maximum_scans_reached: '0',
@@ -177,6 +200,7 @@ export function createFakeYoufid(options: { now: () => number }) {
       state.lastWasTransform = true;
       const c = byId(b.usr_id);
       if (!c) return err('Utilisateur introuvable');
+      if (state.withdrawFails) return err('Error: Problem during withdrawPoints on LOYALTY');
       const cost = (b.products as { cost: number }[]).reduce((s, p) => s + p.cost, 0);
       if (c.points < cost) return err('Points insuffisants');
       c.points -= cost;
@@ -199,6 +223,7 @@ export function createFakeYoufid(options: { now: () => number }) {
     },
     registerCustomerByPhone(b) {
       if (!b.phone) return err('phone manquant', 'ERR0400', 400);
+      if (state.duplicatedUser) return err('Duplicated user');
       const phone = String(b.phone);
       const existing = customers.find((c) => c.phone === phone);
       const c =
@@ -207,7 +232,7 @@ export function createFakeYoufid(options: { now: () => number }) {
           nextUsr += 1;
           const created: FakeCustomer = {
             usrId: nextUsr,
-            qrCode: `QR${String(nextUsr)}XYZ`,
+            qrCode: qrFor(nextUsr),
             phone,
             nom: '',
             prenom: '',
@@ -293,14 +318,13 @@ export function createFakeYoufid(options: { now: () => number }) {
       nextUsr += 1;
       const created: FakeCustomer = {
         usrId: nextUsr,
-        qrCode: `QR${String(nextUsr)}XYZ`,
+        qrCode: qrFor(nextUsr),
         nom: 'Durand',
         prenom: 'Camille',
         points: 0,
         pin: FAKE_PIN,
         email: null,
         ...c,
-        phone: national(c.phone),
       };
       customers.push(created);
       return created;

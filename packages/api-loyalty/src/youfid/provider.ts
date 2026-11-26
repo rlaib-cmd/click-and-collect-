@@ -13,6 +13,7 @@ import {
 import {
   YoufidError,
   type ProfileQuestionType,
+  type YoufidScanRefusal,
   type YoufidClient,
   type YoufidCustomer,
   type YoufidProfileQuestion,
@@ -51,27 +52,63 @@ const ADMIN_LOOKUPS = 20;
 
 const USR_ID = /^\d{1,18}$/;
 
+type RefusalCode =
+  | 'unknown_member'
+  | 'insufficient_points'
+  | 'daily_limit'
+  /** Plafond de solde YouFID atteint (`code` MAX_POINTS_REACHED, Splash360 26/11). */
+  | 'balance_cap'
+  /** Montant refusé par YouFID (`code` AMOUNT_TOO_HIGH). */
+  | 'amount_too_high'
+  /** Route 6 en erreur (« Problem during withdrawPoints ») : cadeau non déduit. */
+  | 'redeem_failed'
+  | 'not_credited';
+
 /** Échec certain (rien n'a été appliqué chez YouFID) détecté avant ou pendant l'opération. */
 class Refused extends Error {
-  constructor(
-    readonly code: 'unknown_member' | 'insufficient_points' | 'daily_limit' | 'not_credited',
-  ) {
+  constructor(readonly code: RefusalCode) {
     super(code);
   }
 }
+
+/** Journal d'un refus : message clair pour l'équipe (visible aussi dans « Opérations à vérifier »). */
+const REFUSAL_LOG: Partial<Record<RefusalCode, string>> = {
+  daily_limit: 'Fidélité YouFID : nombre de passages du jour atteint',
+  balance_cap: 'Fidélité YouFID : plafond de solde atteint, aucun point crédité',
+  amount_too_high: 'Fidélité YouFID : montant refusé (trop élevé), aucun point crédité',
+  redeem_failed: 'Fidélité YouFID : cadeau refusé par YouFID (route 6), opération à vérifier',
+};
 
 type OperationOutcome =
   | { readonly ok: true; readonly points: number | null }
   | {
       readonly ok: false;
       readonly error:
-        | 'unknown_member'
-        | 'insufficient_points'
-        | 'daily_limit'
-        | 'in_progress'
-        | 'uncertain'
-        | 'provider_error';
+        Exclude<RefusalCode, 'not_credited'> | 'in_progress' | 'uncertain' | 'provider_error';
     };
+
+/** Refus de la route 5 : `code` (MAX_POINTS_REACHED…) puis filet « 0 point crédité ». */
+function checkScan(
+  r: { readonly refusal: YoufidScanRefusal | null; readonly wonPoints: number },
+  requested: number,
+): number {
+  if (r.refusal) throw new Refused(r.refusal);
+  // Aucun point crédité sans code explicite : rien n'a été appliqué, à vérifier.
+  if (r.wonPoints === 0 && requested > 0) throw new Refused('not_credited');
+  return r.wonPoints;
+}
+
+/**
+ * Inscription refusée par YouFID : « Duplicated user » (route 10), le téléphone correspond à
+ * plusieurs fiches chez YouFID. À régler par l'équipe avec Splash360 ; le client reçoit un message
+ * générique (lot 21, réponses du 26/11).
+ */
+export class LoyaltyDuplicateCustomerError extends Error {
+  constructor() {
+    super('YouFID : client en double (Duplicated user)');
+    this.name = 'LoyaltyDuplicateCustomerError';
+  }
+}
 
 /**
  * Nom d'un palier YouFID pour l'application : le coût saisi en fin de nom chez YouFID
@@ -183,12 +220,8 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
     } catch (error) {
       if (error instanceof Refused) {
         await store.finishOperation(tenant.id, op.key, { status: 'failed', error: error.code });
-        if (error.code === 'daily_limit') {
-          log('Fidélité YouFID : nombre de passages du jour atteint', {
-            tenantId: tenant.id,
-            key: op.key,
-          });
-        }
+        const message = REFUSAL_LOG[error.code];
+        if (message) log(message, { tenantId: tenant.id, key: op.key });
         if (error.code === 'not_credited') {
           // Visible au back-office (« Opérations à vérifier ») ; rien n'a été crédité, un
           // nouveau règlement ou une correction manuelle peut la reprendre sans doublon.
@@ -227,13 +260,11 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
     },
   ): Promise<OperationOutcome> {
     return runOperation(tenant, { ...op, memberId: link.usrId, orderId: null }, async (send) => {
+      // Bonus, bienvenue, correction : crédit forcé seul, sans montant (Splash360, 26/11).
       const r = await send(() =>
         client.scan({ qrCode: link.qrCode, usrId: link.usrId, forcedPoints: op.points }),
       );
-      if (r.maximumScansReached) throw new Refused('daily_limit');
-      // Aucun point crédité alors qu'on en demandait : rien n'a été appliqué, à vérifier.
-      if (r.wonPoints === 0 && op.points > 0) throw new Refused('not_credited');
-      return r.wonPoints;
+      return checkScan(r, op.points);
     });
   }
 
@@ -291,7 +322,15 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
       // Téléphone toujours enregistré au format international (+33…), quel que soit l'appelant.
       const phone = normalizeFrenchPhone(input.phone);
       if (!phone) throw new LoyaltyUnsupportedError('phone_required');
-      const reg = await client.registerByPhone(phone);
+      const reg = await client.registerByPhone(phone).catch((error: unknown) => {
+        if (error instanceof YoufidError && error.duplicatedUser) {
+          log('YouFID : inscription refusée, client en double (Duplicated user)', {
+            tenantId: tenant.id,
+          });
+          throw new LoyaltyDuplicateCustomerError();
+        }
+        throw error;
+      });
       const created = !reg.existing;
       const link = await store.saveLink(tenant.id, {
         usrId: reg.usrId,
@@ -404,13 +443,17 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
             label: `Commande n° ${s.orderNumber}`,
           },
           async (send) => {
+            // `forced_amount` fait foi pour les points ; `amount` (euros exacts) alimente les
+            // statistiques du marchand (Splash360, 26/11).
             const res = await send(() =>
-              client.scan({ qrCode: link.qrCode, usrId: link.usrId, forcedPoints: s.earnPoints }),
+              client.scan({
+                qrCode: link.qrCode,
+                usrId: link.usrId,
+                forcedPoints: s.earnPoints,
+                amountCents: s.amountCents,
+              }),
             );
-            if (res.maximumScansReached) throw new Refused('daily_limit');
-            // Constaté le 26/11 : YouFID créditait 0 point juste après un échange de cadeau.
-            if (res.wonPoints === 0) throw new Refused('not_credited');
-            return res.wonPoints;
+            return checkScan(res, s.earnPoints);
           },
         );
         if (!r.ok) earnError = r.error;
@@ -436,7 +479,13 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
               client.transformToPresent(link.usrId, [
                 { id: reward.id, cost: reward.costPoints, name: reward.name },
               ]),
-            );
+            ).catch((error: unknown) => {
+              // Refus explicite (« Problem during withdrawPoints on LOYALTY ») : rien n'est déduit.
+              if (error instanceof YoufidError && error.kind === 'api') {
+                throw new Refused('redeem_failed');
+              }
+              throw error;
+            });
             return -reward.costPoints;
           },
         );
@@ -490,7 +539,7 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
         return {
           ok: false,
           error:
-            r.error === 'unknown_member' || r.error === 'daily_limit'
+            r.error === 'unknown_member' || r.error === 'daily_limit' || r.error === 'balance_cap'
               ? r.error
               : r.error === 'in_progress'
                 ? 'already_processed'

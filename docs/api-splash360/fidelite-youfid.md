@@ -152,7 +152,7 @@ qui n'existe pas sur le serveur.
 | `categories` | array | Si `is_desk` = 1 : `category_id`, `name`, `products` (`product_id`, `name`) |
 | `img_adv_1` … `img_adv_10` | string | URL des visuels publicitaires |
 | `products` | array | Cadeaux, du moins cher au plus cher : `id`, `cost`, `name`, `type` |
-| `loyalty_program` | object | Si le marchand en a un : `id`, `name`, `program_type`, `validity` (durée de validité des points) |
+| `loyalty_program` | object | Si le marchand en a un : `id`, `name`, `program_type`, `validity` (non utilisé : les points n'expirent pas, réponse du 26/11) |
 | `code` | string | En cas d'erreur : `ERR0404` (paramètre manquant ou marchand inconnu), `ERR0401` |
 
 ### 3. Recherche d'un client
@@ -209,9 +209,9 @@ inscrire le client.
 | `qr_code` | string | oui | QR code du client |
 | `is_register` | integer | non | `1` : nouveau client (`email` et `qr_code` requis) |
 | `email` | string | si `is_register` = 1 | E-mail du client |
-| `phone` | string | non | Téléphone du client |
+| `phone` | string | non | Téléphone du client, en E.164 (non envoyé par l'application) |
 | `usr_id` | integer | non | Identifiant du client (`user_id` dans la v1.0) |
-| `amount` | decimal | non | Montant de la commande (`montant` dans la v1.0) |
+| `amount` | decimal | non | Montant de la commande en euros (`montant` dans la v1.0) ; envoyé avec `forced_amount` pour les statistiques du marchand |
 | `forced_amount` | integer | non | Nombre de points à créditer tel quel (nouveau) |
 | `optout` | integer | non | `1` : refuse la newsletter ; `0` : l'accepte |
 
@@ -231,6 +231,7 @@ Points crédités, par ordre de priorité :
 | `won_pts` | integer | Points gagnés (`wont_pts` dans la v1.0) |
 | `total_pts` | integer | Solde de points |
 | `maximum_scans_reached` | string | `1` si le nombre de scans par jour est atteint |
+| `code` | string | Avec `status` = ok et `won_pts` = « 0 » : `MAX_POINTS_REACHED` (plafond de solde), `MAX_SCAN_REACHED`, `AMOUNT_TOO_HIGH` ; vide si crédité |
 | `pin_user` | string | PIN du client |
 | `ask_phone` | integer | `1` : demander le téléphone |
 | `code`, `message` | string | Code et message d'erreur |
@@ -245,7 +246,9 @@ Points crédités, par ordre de priorité :
 | `usr_id` | integer | oui | Identifiant du client |
 | `products` | array | oui | Cadeaux : `id` (requis), `cost` (requis), `name` (optionnel) |
 
-Réponse : `status`, et `total_pts`, le solde restant.
+Réponse : `status`, et `total_pts`, le solde restant. En erreur, réponse générique
+`{"status":"error","message":"Error: Problem during withdrawPoints on LOYALTY"}` (26/11) :
+le solde doit être contrôlé avant (route 3).
 
 ### 7. Recherche de clients
 
@@ -305,13 +308,13 @@ n'existe pas, il est créé avec un QR code et un solde de 0.
 | Requête | Type | Requis | Description |
 |---|---|---|---|
 | `merchant_id` | integer | oui | Identifiant du marchand |
-| `phone` | string | oui | Téléphone du client |
+| `phone` | string | oui | Téléphone du client, **en E.164** (`+33612345678`, réponse du 26/11) |
 
 | Réponse | Type | Description |
 |---|---|---|
-| `status` | string | `ok` ou `error` |
+| `status` | string | `ok` ou `error` (dont `message` = « Duplicated user ») |
 | `usr_id` | integer | Identifiant du client |
-| `qr_code` | string | QR code du client |
+| `qr_code` | string | QR code du client (texte ; 8 chiffres commençant par 1 pour un compte créé par téléphone) |
 | `phone` | string | Téléphone, client existant seulement |
 | `total_points` | integer | Solde de points |
 | `gifts` | array | Cadeaux accessibles avec ce solde : `id`, `nom`, `cout`, `photo` |
@@ -471,11 +474,11 @@ l'API fidélité.
 | `findByEmail` | Route 3 (`email`) | Le lien local est créé ou mis à jour |
 | `getMember` | Lien local (`usr_id` → `qr_code`), puis route 3 | L'identifiant de membre est le `usr_id` YouFID (texte) ; la carte VIP montre le `qr_code` |
 | `updateProfile` | Route 3 (par QR code, pour la question en attente `profile_question`) puis route 12 (`NAME`, `EMAIL`, `BIRTH`) | Un appel par champ. YouFID n'efface rien : l'effacement d'un champ reste local. E-mail et date de naissance copiés localement (la route 3 ne les renvoie pas). `GENDER` inutilisé |
-| `settleOrder` | Route 6 (cadeau) puis route 5 avec `amount` | Exactement une fois grâce au registre local `loyalty_operations` (voir ADR 0026) |
+| `settleOrder` | Route 5 (`forced_amount` = gain de notre règle, `amount` = total payé en euros) puis route 6 (cadeau) | Exactement une fois grâce au registre local `loyalty_operations` (voir ADR 0026) |
 | `adjustPoints` | Route 5 avec `forced_amount` | Positif seulement ; retrait refusé (« non pris en charge par YouFID ») |
 | `history` | Registre local | Opérations faites par l'application seulement (`historyScope: "app"`) |
 | `listMembers` | Liens locaux (sans recherche), route 7 (nom, prénom, e-mail), liens locaux (téléphone) | La route 7 ne cherche pas par téléphone et ne donne pas le solde : route 3 pour chaque résultat (20 au plus) |
-| `deleteMember` | — | Pas de route : seul le lien local est effacé ; l'effacement chez YouFID se demande à Splash360 |
+| `deleteMember` | — | Pas de route : seul le lien local est effacé ; l'enseigne demande l'effacement par e-mail à YouFID (un mois au plus) |
 
 ### Routes utilisées
 
@@ -493,7 +496,25 @@ volontairement non implémentée (faille signalée, et pas de code PIN dans notr
 - **PIN client en clair** (routes 3, 5, 14) : les réponses sont lues par des schémas qui ne
   déclarent pas ces champs ; ils n'existent dans aucun objet renvoyé, ne sont ni stockés ni
   journalisés. La route 14 n'est pas appelée.
+- **Refus de la route 5** (`code`) : `MAX_POINTS_REACHED` → `balance_cap` (« Plafond de solde
+  YouFID atteint »), `MAX_SCAN_REACHED` → `daily_limit`, `AMOUNT_TOO_HIGH` → `amount_too_high` ;
+  0 point sans code → `not_credited`. Tous visibles dans « Opérations à vérifier », jamais renvoyés
+  automatiquement.
 - **`maximum_scans_reached`** : le gain n'est pas crédité ; traité comme un échec visible
   (registre « refusée », message au back-office), jamais ignoré.
 - **Statuts** : `ok` / `ko` (route 3 : client absent) / `success` (route 12 ; 14 et 15 non utilisées) /
   `error`, lus dans le corps quel que soit le statut HTTP.
+
+### Réponses du 26/11 (directeur technique de Splash360)
+
+| Sujet | Réponse | Appliqué |
+|---|---|---|
+| Format du téléphone (routes 5 et 10) | E.164 (`+33612345678`) ; le serveur compare les chaînes | Client : E.164 seulement (option `phoneFormat` retirée) ; lien local consulté d'abord |
+| Route 10 « Duplicated user » | Erreur possible si le téléphone est en double | Erreur claire : journal, `loyalty.youfid_duplicate_user` au journal du back-office, message générique au client |
+| Route 5, `code` | `MAX_POINTS_REACHED` (plafond, sans `maximum_scans_reached`), `MAX_SCAN_REACHED` (avec « 1 »), `AMOUNT_TOO_HIGH` ; vide = succès ; `status` reste « ok » et `won_pts` « 0 » | Refus `balance_cap`, `daily_limit`, `amount_too_high` |
+| `amount` et `forced_amount` | Les deux ensemble pour une commande : `forced_amount` fait foi, `amount` sert aux statistiques | Envoyés ensemble pour le gain d'une commande ; `forced_amount` seul ailleurs |
+| Route 6 en erreur | Message générique « Problem during withdrawPoints on LOYALTY » | Refus `redeem_failed` |
+| Validité des points | Les points n'expirent pas | `validity` jamais affiché |
+| `qr_code` | Texte : 8 chiffres commençant par 1 pour un compte créé par téléphone | Jamais converti en nombre |
+| Effacement RGPD | Sur demande à YouFID, un mois au plus | Demande par e-mail par l'enseigne ; rappel au journal (ADR 0028) |
+

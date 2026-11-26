@@ -61,6 +61,8 @@ export type AdjustResult =
         | 'unsupported'
         /** YouFID : nombre de passages par jour atteint (`maximum_scans_reached`). */
         | 'daily_limit'
+        /** YouFID : plafond de solde du client atteint (`code` MAX_POINTS_REACHED). */
+        | 'balance_cap'
         /** Opération déjà faite, en cours ou à vérifier (registre local, lot 21). */
         | 'already_processed'
         /** Refus ou panne du fournisseur ; une issue inconnue est à vérifier au back-office. */
@@ -88,9 +90,9 @@ export interface OrderSettlement {
   readonly memberId: string;
   readonly orderId: string;
   readonly orderNumber: number;
-  /** Estimation selon le programme (points par euro) ; YouFID calcule lui-même à partir du montant. */
+  /** Gain calculé par notre règle (points par euro), crédité tel quel (`forced_amount`) chez YouFID. */
   readonly earnPoints: number;
-  /** Montant payé en centimes, base du gain chez YouFID (lot 21). */
+  /** Montant payé en centimes, envoyé à YouFID pour les statistiques du marchand (`amount`). */
   readonly amountCents: number;
   readonly reward: {
     readonly id: string;
@@ -111,6 +113,12 @@ export type SettleResult =
         /** Issue inconnue (panne réseau après envoi) : à vérifier, jamais rejouée seule. */
         | 'uncertain'
         | 'daily_limit'
+        /** YouFID : plafond de solde atteint ; jamais renvoyé automatiquement (back-office). */
+        | 'balance_cap'
+        /** YouFID : montant refusé (`code` AMOUNT_TOO_HIGH). */
+        | 'amount_too_high'
+        /** YouFID : cadeau refusé par la route 6 (erreur générique « withdrawPoints »). */
+        | 'redeem_failed'
         | 'provider_error';
     };
 

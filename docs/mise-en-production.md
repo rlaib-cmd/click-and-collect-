@@ -371,5 +371,6 @@ qui l'utilise. L'app installée (iOS/Android) a besoin d'un nouveau build EAS po
    Google Play (Sécurité des données → Suppression des données) : même chemin, plus la demande à
    l'enseigne.
 3. Enseignes YouFID : chaque suppression ajoute `loyalty.erasure_requested` à la page Journal du
-   back-office. Transmettre la demande à Splash360 (identifiant YouFID `usr_id` = colonne Cible)
-   pour un effacement chez YouFID **sous 30 jours**, délai annoncé au client.
+   back-office : c'est un rappel. L'enseigne (le propriétaire) demande l'effacement **par e-mail à
+   YouFID** (identifiant YouFID `usr_id` = colonne Cible), fait **sous un mois au plus** (RGPD ;
+   l'application annonce 30 jours au client).

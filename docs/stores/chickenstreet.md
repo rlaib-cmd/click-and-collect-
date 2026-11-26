@@ -53,7 +53,7 @@ Pas de publicité, pas de suivi entre applications, pas de revente de données.
 l'application, **Compte → Supprimer mon compte**, puis confirmation. Le compte club, les points,
 le profil, les cartes bancaires enregistrées, les données « à proximité » et Ambassadeur en attente
 sont effacés, et toutes les sessions sont fermées. La fiche chez le partenaire de fidélité (YouFID)
-est effacée sur demande transmise par l'équipe, sous 30 jours (ADR 0028). Aussi possible sur demande
+est effacée sur demande envoyée par e-mail à YouFID par l'enseigne, sous un mois au plus (ADR 0028). Aussi possible sur demande
 à l'enseigne (effacement depuis le back-office).
 
 ## Autorisations et justification pour la revue

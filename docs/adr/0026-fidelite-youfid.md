@@ -146,3 +146,43 @@ sur la route 3 (`profile_question`, recherche par QR code) et non plus sur la ro
   (id de la question en attente si son type correspond, sinon 0), format de `BIRTH`
   (AAAA-MM-JJ), détection d'un nouveau client (absence de `phone` à la route 10), montant envoyé
   (total payé, frais compris).
+
+## Réponses du 26/11 (directeur technique de Splash360)
+
+Réponses faisant foi, appliquées le 26/11 :
+
+1. **Téléphone en E.164** (`+33612345678`) pour la route 10 (et le champ `phone` de la route 5,
+   que l'application n'envoie pas) : YouFID compare les chaînes, le format national `06…` créerait
+   un doublon d'un client connu en magasin. L'option `phoneFormat` du client est retirée ; le
+   lien local reste consulté d'abord (`findByPhone`), un membre déjà lié n'appelle pas la route 10.
+   Route 10 en erreur « Duplicated user » : `LoyaltyDuplicateCustomerError`, journal technique,
+   entrée `loyalty.youfid_duplicate_user` au journal du back-office (sans téléphone), message
+   générique au client (`loyalty_unavailable`).
+2. **Route 5, champ `code`** (avec `status` = ok et `won_pts` = « 0 ») :
+   `MAX_POINTS_REACHED` (plafond de solde ; `maximum_scans_reached` absent) → refus
+   `balance_cap`, « Plafond de solde YouFID atteint » dans « Opérations à vérifier », jamais
+   renvoyé automatiquement ; `MAX_SCAN_REACHED` (`maximum_scans_reached` = « 1 ») →
+   `daily_limit` ; `AMOUNT_TOO_HIGH` → refus `amount_too_high` ; `code` vide = succès. Le filet
+   `not_credited` (0 point sans code) est gardé.
+3. **Gain d'une commande** : `forced_amount` (fait foi pour les points) **et** `amount` (euros
+   exacts, calculés depuis les centimes) pour les statistiques du marchand. Bienvenue, bonus et
+   corrections : `forced_amount` seul.
+4. **Route 6** : erreur générique `{"status":"error","message":"Error: Problem during
+   withdrawPoints on LOYALTY"}` → refus `redeem_failed` (solde contrôlé avant par la route 3).
+5. **Les points n'expirent pas** : `loyalty_program.validity` n'est ni renvoyé ni affiché (test).
+6. **`qr_code` est un texte** (8 chiffres commençant par 1 pour un compte créé par téléphone) :
+   lu et envoyé en texte, jamais converti en nombre.
+7. **Effacement RGPD** : demandé par e-mail à YouFID par l'enseigne, sous un mois au plus
+   (ADR 0028).
+
+Décisions du propriétaire (26/11), sans changement de code :
+
+- **Historique des points du client** (passages et cadeaux, en magasin compris) : route demandée à
+  Splash360 sous 4 semaines, au plus tard le **24/12/2026**. D'ici là, l'historique reste celui
+  des opérations faites par l'application.
+- **Corrections serveur** : la faille de la route 13 (PIN de n'importe quel client) est demandée
+  en urgence, sous quelques jours ; les routes 15 (compteur du bon) et 12 (`FEMALE`) ne sont pas
+  urgentes, l'application ne les utilise pas.
+
+Reste ouvert : valeur du plafond de solde du marchand 2 (`questions-en-attente.md`, Y19).
+

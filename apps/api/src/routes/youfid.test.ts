@@ -157,7 +157,8 @@ describe('fidélité YouFID dans l’application (lot 21)', () => {
   it('inscription par SMS : compte YouFID, QR code de la carte VIP, bienvenue, historique « app »', async () => {
     const s = setup();
     const session = await signUp(s);
-    const yf = s.fake.customers.find((c) => c.phone === '0612345678');
+    // Téléphone envoyé en E.164 à YouFID (réponses de Splash360 du 26/11).
+    const yf = s.fake.customers.find((c) => c.phone === '+33612345678');
     expect(yf?.prenom).toBe('Sam');
     expect(session.member).toMatchObject({
       name: 'Sam',
@@ -254,8 +255,11 @@ describe('fidélité YouFID dans l’application (lot 21)', () => {
     expect(after.points).toBe(60);
     expect(after.history.map((h) => h.kind)).toEqual(['redeem', 'earn', 'adjust', 'welcome']);
     expect(s.fake.calls.filter((c) => c.route === 'transformToPresent')).toHaveLength(1);
-    expect(s.fake.calls.filter((c) => c.body.forced_amount === 10)).toHaveLength(1);
-    expect(s.fake.calls.some((c) => c.body.amount !== undefined)).toBe(false);
+    // Crédit forcé (fait foi) accompagné du montant payé en euros (statistiques du marchand).
+    const earn = s.fake.calls.filter((c) => c.body.forced_amount === 10);
+    expect(earn).toHaveLength(1);
+    expect(earn[0]?.body.amount).toBe(10.5);
+    expect(s.fake.calls.filter((c) => c.body.amount !== undefined)).toHaveLength(1);
     expect(s.backend.orders[0]?.loyaltySettled).toBe(true);
   });
 
@@ -383,5 +387,24 @@ describe('fidélité YouFID au back-office (lot 21)', () => {
       email: 'admin@splash360.test',
     });
     expect(await other.json()).toMatchObject({ ok: false });
+  });
+
+  it('YouFID « Duplicated user » : message générique, journal du back-office, pas de plantage', async () => {
+    const s = setup();
+    s.fake.state.duplicatedUser = true;
+    await post(s, '/loyalty/otp/start', { channel: 'sms', identifier: '06 99 88 77 66' });
+    const res = await post(s, '/loyalty/otp/verify', {
+      channel: 'sms',
+      identifier: '06 99 88 77 66',
+      code: s.code(),
+      name: 'Sam',
+      acceptedTerms: true,
+    });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ error: { code: 'loyalty_unavailable' } });
+    const entry = s.admin.audit.find((a) => a.action === 'loyalty.youfid_duplicate_user');
+    expect(entry).toMatchObject({ actorEmail: 'client', target: null });
+    expect(JSON.stringify(entry)).not.toContain('99 88');
+    expect(s.logs.some((l) => l.includes('Duplicated user'))).toBe(true);
   });
 });

@@ -83,6 +83,7 @@ const CREDIT_FAILURE: Record<Extract<AdjustResult, { ok: false }>['error'], stri
   insufficient_points: 'Solde insuffisant',
   unsupported: 'Opération non prise en charge par YouFID',
   daily_limit: 'YouFID : nombre de passages du jour atteint, à créditer à la main',
+  balance_cap: 'YouFID : plafond de solde atteint, aucun point crédité',
   already_processed: 'Crédit déjà en cours ou à vérifier (opérations YouFID)',
   provider_error: 'YouFID indisponible ou refus : voir les opérations à vérifier',
 };

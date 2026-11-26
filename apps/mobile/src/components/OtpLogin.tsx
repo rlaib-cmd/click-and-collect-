@@ -34,6 +34,8 @@ function errorText(e: unknown): string {
       return t.expiredCode;
     case 'rate_limited':
       return t.tooMany;
+    case 'loyalty_unavailable':
+      return t.accountUnavailable;
     default:
       return messages.tenant.networkError;
   }

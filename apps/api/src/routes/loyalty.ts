@@ -6,6 +6,7 @@ import type {
   StripeCustomerStore,
 } from '@splash360/db';
 import {
+  LoyaltyDuplicateCustomerError,
   LoyaltyUnsupportedError,
   type LoyaltyMember,
   type LoyaltyProvider,
@@ -84,6 +85,7 @@ async function joinOrRefuse(
   provider: LoyaltyProvider,
   tenant: LoyaltyTenant,
   input: Parameters<LoyaltyProvider['join']>[1],
+  deps: Pick<LoyaltyRoutesDeps, 'admin'>,
 ) {
   try {
     return await provider.join(tenant, input);
@@ -93,6 +95,24 @@ async function joinOrRefuse(
         c,
         'invalid_request',
         'Inscription au club par numéro de mobile uniquement : choisis « SMS »',
+      );
+    }
+    if (error instanceof LoyaltyDuplicateCustomerError) {
+      // YouFID « Duplicated user » (réponses du 26/11) : visible au journal du back-office, sans
+      // donnée personnelle ; l'équipe fait corriger la fiche par Splash360.
+      await deps.admin
+        ?.audit({
+          tenantId: tenant.id,
+          actor: CLIENT_ACTOR,
+          action: 'loyalty.youfid_duplicate_user',
+          target: null,
+          detail: { partner: 'youfid', route: 'registerCustomerByPhone' },
+        })
+        .catch(() => undefined);
+      return apiError(
+        c,
+        'loyalty_unavailable',
+        'Compte club non créé pour le moment : le restaurant est prévenu',
       );
     }
     throw error;
@@ -182,7 +202,7 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
     if (!parsed.success) return apiError(c, 'invalid_request', 'Inscription invalide');
     const ctx = await context(c);
     if (!ctx) return apiError(c, 'not_found', 'Pas de club fidélité');
-    const joined = await joinOrRefuse(c, ctx.provider, ctx.tenant, parsed.data);
+    const joined = await joinOrRefuse(c, ctx.provider, ctx.tenant, parsed.data, deps);
     if (joined instanceof Response) return joined;
     const { member, created } = joined;
     // Un e-mail déjà inscrit ne donne pas accès au compte sans vérification.
@@ -270,11 +290,17 @@ export function registerLoyaltyRoutes(app: Hono<Env>, deps: LoyaltyRoutesDeps & 
     if (!(await consumeOtp(otp, v.challengeId))) {
       return apiError(c, 'otp_expired', 'Code déjà utilisé : demande un nouveau code');
     }
-    const joined = await joinOrRefuse(c, ctx.provider, ctx.tenant, {
-      name: name && name.trim().length >= 2 ? name : DEFAULT_MEMBER_NAME,
-      phone: channel === 'sms' ? v.identifier : null,
-      email: channel === 'email' ? v.identifier : null,
-    });
+    const joined = await joinOrRefuse(
+      c,
+      ctx.provider,
+      ctx.tenant,
+      {
+        name: name && name.trim().length >= 2 ? name : DEFAULT_MEMBER_NAME,
+        phone: channel === 'sms' ? v.identifier : null,
+        email: channel === 'email' ? v.identifier : null,
+      },
+      deps,
+    );
     if (joined instanceof Response) return joined;
     return session(c, joined.member.id, joined.created, true);
   });

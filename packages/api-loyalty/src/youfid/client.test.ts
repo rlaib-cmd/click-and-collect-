@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { centsToEuros, createYoufidClient, YoufidError, youfidPhone } from './client';
+import { centsToEuros, createYoufidClient, scanRefusal, YoufidError, youfidPhone } from './client';
 import { createFakeYoufid, FAKE_MERCHANT_ID, FAKE_PIN } from './fake-youfid';
 import { decodeSessionKey, signYoufidRequest, youfidAuthorization } from './signature';
 
@@ -183,11 +183,13 @@ describe('client YouFID', () => {
       wonPoints: 125,
       totalPoints: 165,
       maximumScansReached: false,
+      refusal: null,
+      code: '',
     });
     expect(await client.findCustomer({ email: 'personne@example.fr' })).toBeNull();
   });
 
-  it('envoie le montant en euros exacts, ou un crédit forcé positif', async () => {
+  it('envoie le montant en euros exacts, un crédit forcé positif, ou les deux', async () => {
     const { fake, client } = setup();
     const c = fake.addCustomer({ phone: '+33633333333' });
     await client.scan({ qrCode: c.qrCode, usrId: String(c.usrId), amountCents: 1005 });
@@ -195,16 +197,29 @@ describe('client YouFID', () => {
     await client.scan({ qrCode: c.qrCode, usrId: String(c.usrId), forcedPoints: 50 });
     expect(fake.calls.at(-1)?.body).toMatchObject({ forced_amount: 50, usr_id: c.usrId });
     expect(fake.calls.at(-1)?.body).not.toHaveProperty('amount');
+    // Commande : forced_amount fait foi, amount (euros exacts) pour les statistiques du marchand.
+    const both = await client.scan({
+      qrCode: c.qrCode,
+      usrId: String(c.usrId),
+      forcedPoints: 12,
+      amountCents: 1299,
+    });
+    expect(fake.calls.at(-1)?.raw).toContain('"forced_amount":12,"amount":12.99');
+    expect(both.wonPoints).toBe(12);
+    // qr_code toujours envoyé en texte, jamais converti en nombre.
+    expect(fake.calls.at(-1)?.raw).toContain(`"qr_code":"${c.qrCode}"`);
     await expect(
       client.scan({ qrCode: c.qrCode, usrId: String(c.usrId), forcedPoints: -5 }),
     ).rejects.toThrow(RangeError);
   });
 
-  it('inscrit par téléphone au format national et distingue client existant et nouveau', async () => {
+  it('inscrit par téléphone au format E.164 et distingue client existant et nouveau', async () => {
     const { fake, client } = setup();
     const created = await client.registerByPhone('+33644444444');
     expect(created.existing).toBe(false);
-    expect(fake.calls.at(-1)?.body.phone).toBe('0644444444');
+    expect(fake.calls.at(-1)?.body.phone).toBe('+33644444444');
+    // QR code en texte (8 chiffres commençant par 1 pour un compte créé par téléphone).
+    expect(created.qrCode).toMatch(/^1\d{7}$/);
     const again = await client.registerByPhone('+33644444444');
     expect(again).toMatchObject({ existing: true, usrId: created.usrId, qrCode: created.qrCode });
   });
@@ -236,6 +251,23 @@ describe('client YouFID', () => {
     expect(pending?.profileQuestion).toEqual({ id: '8', type: 'EMAIL' });
     const t = await client.transformToPresent(String(c.usrId), []);
     expect(t.totalPoints).toBe(0);
+  });
+
+  it('route 5 : refus par `code` (status ok, won_pts « 0 ») ; route 10 : « Duplicated user »', async () => {
+    const { fake, client } = setup();
+    const c = fake.addCustomer({ phone: '+33677777777', points: 500 });
+    fake.state.balanceCap = 500;
+    const capped = await client.scan({ qrCode: c.qrCode, usrId: String(c.usrId), forcedPoints: 5 });
+    expect(capped).toMatchObject({
+      wonPoints: 0,
+      refusal: 'balance_cap',
+      code: 'MAX_POINTS_REACHED',
+      maximumScansReached: false,
+    });
+    fake.state.duplicatedUser = true;
+    const e = await client.registerByPhone('+33688888888').catch((x: unknown) => x as YoufidError);
+    expect(e).toBeInstanceOf(YoufidError);
+    expect(e).toMatchObject({ kind: 'api', duplicatedUser: true });
   });
 
   it('panne réseau ou réponse illisible : issue inconnue', async () => {
@@ -271,9 +303,18 @@ describe('conversions', () => {
     expect(() => centsToEuros(-1)).toThrow(RangeError);
   });
 
-  it('téléphone national pour la France, inchangé ailleurs', () => {
-    expect(youfidPhone('+33612345678', 'national')).toBe('0612345678');
-    expect(youfidPhone('+32470123456', 'national')).toBe('+32470123456');
-    expect(youfidPhone('+33612345678', 'e164')).toBe('+33612345678');
+  it('téléphone toujours en E.164 (jamais au format national 06…)', () => {
+    expect(youfidPhone('+33612345678')).toBe('+33612345678');
+    expect(youfidPhone('+33 6 12 34 56 78')).toBe('+33612345678');
+    expect(youfidPhone('+32470123456')).toBe('+32470123456');
+    expect(() => youfidPhone('0612345678')).toThrow(RangeError);
+  });
+
+  it('code de la route 5 → refus', () => {
+    expect(scanRefusal('MAX_POINTS_REACHED', false)).toBe('balance_cap');
+    expect(scanRefusal('MAX_SCAN_REACHED', true)).toBe('daily_limit');
+    expect(scanRefusal('AMOUNT_TOO_HIGH', false)).toBe('amount_too_high');
+    expect(scanRefusal('', false)).toBeNull();
+    expect(scanRefusal(null, true)).toBe('daily_limit');
   });
 });

@@ -51,6 +51,11 @@ export class YoufidError extends Error {
   get uncertain(): boolean {
     return this.kind === 'network' || this.kind === 'invalid_response';
   }
+
+  /** Route 10 : « Duplicated user » (le téléphone correspond à plusieurs clients chez YouFID). */
+  get duplicatedUser(): boolean {
+    return this.kind === 'api' && /duplicated user/i.test(this.message);
+  }
 }
 
 export interface YoufidCredentials {
@@ -67,11 +72,6 @@ export interface YoufidClientOptions extends YoufidCredentials {
   /** Générateur de nonce (défaut : 16 octets aléatoires en hexadécimal). */
   readonly nonce?: () => string;
   readonly timeoutMs?: number;
-  /**
-   * Format du téléphone envoyé à YouFID. Défaut « national » (06…), celui saisi sur la tablette
-   * en magasin ; à confirmer avec Splash360 (questions-en-attente, YouFID Y10).
-   */
-  readonly phoneFormat?: 'national' | 'e164';
 }
 
 // ——— Lecture tolérante des types (le serveur PHP renvoie parfois des nombres en texte) ———
@@ -158,6 +158,8 @@ const customer = z.object({
 });
 
 const scanResponse = z.object({
+  /** Refus métier avec `status` = ok (réponse de Splash360 du 26/11) : MAX_POINTS_REACHED… */
+  code: text,
   usr_id: id.nullish(),
   won_pts: int.nullish().transform((v) => v ?? 0),
   total_pts: int.nullish(),
@@ -230,11 +232,38 @@ export interface YoufidCustomer {
   readonly totalPoints: number;
 }
 
+/**
+ * Refus de la route 5 signalé par `code` alors que `status` vaut « ok » et `won_pts` « 0 »
+ * (Splash360, 26/11) : plafond de solde, passages du jour, montant trop élevé.
+ */
+export type YoufidScanRefusal = 'balance_cap' | 'daily_limit' | 'amount_too_high';
+
 export interface YoufidScanResult {
   readonly usrId: string | null;
   readonly wonPoints: number;
   readonly totalPoints: number | null;
   readonly maximumScansReached: boolean;
+  /** Refus signalé par `code` (vide = succès) ; un code inconnu est gardé tel quel. */
+  readonly refusal: YoufidScanRefusal | null;
+  /** Code brut de la réponse (« » si absent). */
+  readonly code: string;
+}
+
+/** `code` de la route 5 → refus (MAX_POINTS_REACHED, MAX_SCAN_REACHED, AMOUNT_TOO_HIGH). */
+export function scanRefusal(
+  code: string | null,
+  maximumScansReached: boolean,
+): YoufidScanRefusal | null {
+  switch ((code ?? '').trim().toUpperCase()) {
+    case 'MAX_POINTS_REACHED':
+      return 'balance_cap';
+    case 'MAX_SCAN_REACHED':
+      return 'daily_limit';
+    case 'AMOUNT_TOO_HIGH':
+      return 'amount_too_high';
+    default:
+      return maximumScansReached ? 'daily_limit' : null;
+  }
 }
 
 export interface YoufidRegistration {
@@ -267,8 +296,10 @@ export interface YoufidClient {
     by: { readonly qrCode: string } | { readonly email: string },
   ): Promise<YoufidCustomer | null>;
   /**
-   * Route 5 : passage client. `amountCents` (converti en euros exacts) ou `forcedPoints`
-   * (crédit tel quel, positif). L'API n'a pas de clé d'idempotence : voir le registre local.
+   * Route 5 : passage client. `forcedPoints` (crédit tel quel, positif) fait foi pour les points ;
+   * `amountCents` (converti en euros exacts) est envoyé avec lui pour une commande, il alimente
+   * les statistiques du marchand (Splash360, 26/11). L'API n'a pas de clé d'idempotence : voir le
+   * registre local.
    */
   scan(input: {
     readonly qrCode: string;
@@ -283,7 +314,12 @@ export interface YoufidClient {
   ): Promise<{ readonly totalPoints: number | null }>;
   /** Route 7 : recherche sur le nom, le prénom et l'e-mail (pas le téléphone). */
   listUsers(search: string, extendsSearch?: boolean): Promise<readonly YoufidListedUser[]>;
-  /** Route 10 : client retrouvé par téléphone (E.164), ou créé avec un QR code et 0 point. */
+  /**
+   * Route 10 : client retrouvé par téléphone, ou créé avec un QR code et 0 point. Téléphone
+   * envoyé en E.164 (+33612345678) : YouFID compare les chaînes, le format national créerait un
+   * doublon d'un client connu en magasin (Splash360, 26/11). « Duplicated user » : erreur `api`
+   * dont `duplicatedUser` est vrai.
+   */
   registerByPhone(phoneE164: string): Promise<YoufidRegistration>;
   /** Route 12 : réponse à une question de profil (répond « success »). */
   submitProfileResponse(
@@ -301,10 +337,11 @@ export function centsToEuros(cents: number): number {
   return Number(`${String(units)}.${String(rest).padStart(2, '0')}`);
 }
 
-/** +33612345678 → 0612345678 (format national) ; autre indicatif : inchangé. */
-export function youfidPhone(e164: string, format: 'national' | 'e164'): string {
-  if (format === 'national' && /^\+33[1-9]\d{8}$/.test(e164)) return `0${e164.slice(3)}`;
-  return e164;
+/** Téléphone attendu par YouFID : E.164 strict (+ et 8 à 15 chiffres). */
+export function youfidPhone(e164: string): string {
+  const phone = e164.replace(/[\s.-]/g, '');
+  if (!/^\+[1-9]\d{7,14}$/.test(phone)) throw new RangeError('Téléphone E.164 attendu');
+  return phone;
 }
 
 const numericId = (v: string): number | string => (/^\d{1,15}$/.test(v) ? Number(v) : v);
@@ -318,7 +355,6 @@ export function createYoufidClient(options: YoufidClientOptions): YoufidClient {
   const now = options.now ?? Date.now;
   const nonce = options.nonce ?? (() => randomBytes(16).toString('hex'));
   const timeoutMs = options.timeoutMs ?? YOUFID_TIMEOUT_MS;
-  const phoneFormat = options.phoneFormat ?? 'national';
   const base = (options.baseUrl?.trim() || YOUFID_DEFAULT_BASE_URL).replace(/\/*$/, '/');
   let current: CachedSession | null = null;
   let pending: Promise<CachedSession> | null = null;
@@ -546,7 +582,7 @@ export function createYoufidClient(options: YoufidClientOptions): YoufidClient {
         qr_code: input.qrCode,
         usr_id: numericId(input.usrId),
         ...(forced !== undefined ? { forced_amount: forced } : {}),
-        ...(amount !== undefined && forced === undefined ? { amount } : {}),
+        ...(amount !== undefined ? { amount } : {}),
       }));
       const r = read(scanResponse, json, route);
       return {
@@ -554,6 +590,8 @@ export function createYoufidClient(options: YoufidClientOptions): YoufidClient {
         wonPoints: r.won_pts,
         totalPoints: r.total_pts ?? null,
         maximumScansReached: r.maximum_scans_reached,
+        refusal: scanRefusal(r.code, r.maximum_scans_reached),
+        code: r.code?.trim() ?? '',
       };
     },
 
@@ -587,7 +625,7 @@ export function createYoufidClient(options: YoufidClientOptions): YoufidClient {
       const route = 'registerCustomerByPhone';
       const { json } = await call(route, (s) => ({
         merchant_id: s.merchantId,
-        phone: youfidPhone(phoneE164, phoneFormat),
+        phone: youfidPhone(phoneE164),
       }));
       const r = read(registerResponse, json, route);
       return {

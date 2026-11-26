@@ -69,3 +69,13 @@ Chaque étape est idempotente ; un membre inconnu ou déjà effacé ne produit n
   YouFID tant que Splash360 ne l'a pas effacée : c'est une nouvelle adhésion, voulue par le client.
 - Pas de migration : seules des requêtes d'effacement sont ajoutées ; `audit_logs.actor_id` était
   déjà facultatif.
+
+## Réponses du 26/11 (décision du propriétaire)
+
+- L'effacement d'un client **chez YouFID** est demandé **par e-mail à YouFID par l'enseigne
+  (le propriétaire)**, dans un délai d'**un mois au plus** (RGPD). Ce n'est pas une fonction de
+  l'application : aucune route YouFID n'est appelée et aucun envoi automatique n'est prévu.
+- L'application continue d'écrire `loyalty.erasure_requested` au journal du back-office : c'est le
+  **rappel** pour l'enseigne d'envoyer cet e-mail. Le délai annoncé au client reste celui de
+  `PARTNER_ERASURE_DAYS` (30 jours), compatible avec « un mois au plus » ; aucun changement de code.
+

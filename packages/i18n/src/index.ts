@@ -558,6 +558,9 @@ export const fr = {
     invalidCode: 'Code incorrect.',
     expiredCode: 'Code expiré ou trop d’essais : demande un nouveau code.',
     tooMany: 'Trop de codes demandés : réessaie dans quelques minutes.',
+    /** Compte club non créé (refus du partenaire de fidélité, ex. client en double chez YouFID). */
+    accountUnavailable:
+      'Ton compte club n’a pas pu être créé pour le moment. Le restaurant est prévenu : réessaie plus tard ou demande en caisse.',
     demoLogin: 'Recette : connexion de test par e-mail, sans code',
     backToCode: 'Revenir à la connexion par code',
   },

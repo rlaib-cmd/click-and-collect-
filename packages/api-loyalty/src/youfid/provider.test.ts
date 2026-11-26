@@ -5,7 +5,12 @@ import { createDemoLoyaltyProvider, createMemoryDemoLoyaltyStore } from '../demo
 import { createYoufidClient } from './client';
 import { parseYoufidAccounts, youfidDeviceId } from './config';
 import { createFakeYoufid, FAKE_PIN } from './fake-youfid';
-import { createYoufidLoyaltyProvider, rewardLabel, STALE_OPERATION_MS } from './provider';
+import {
+  createYoufidLoyaltyProvider,
+  LoyaltyDuplicateCustomerError,
+  rewardLabel,
+  STALE_OPERATION_MS,
+} from './provider';
 import { createMemoryYoufidStore } from './store';
 
 const NOW = Date.parse('2026-11-25T12:00:00Z');
@@ -71,7 +76,7 @@ describe('fournisseur YouFID', () => {
     expect(fake.calls.filter((c) => c.route === 'marchandGetMerchantDetailsV2')).toHaveLength(1);
   });
 
-  it('inscription avec un numéro au format national : enregistré en +33', async () => {
+  it('inscription avec un numéro au format national : envoyé et enregistré en +33 (E.164)', async () => {
     const { loyalty, fake } = setup();
     const { member } = await loyalty.join(tenant, {
       name: 'Léa',
@@ -79,7 +84,11 @@ describe('fournisseur YouFID', () => {
       phone: '06 12 34 56 78',
     });
     expect(member.phone).toBe('+33612345678');
-    expect(fake.customers.some((c) => c.phone === '0612345678')).toBe(true);
+    // YouFID compare les chaînes : le format national créerait un doublon (Splash360, 26/11).
+    expect(fake.calls.find((c) => c.route === 'registerCustomerByPhone')?.body.phone).toBe(
+      '+33612345678',
+    );
+    expect(fake.customers.some((c) => c.phone === '+33612345678')).toBe(true);
     await expect(
       loyalty.join(tenant, { name: 'Léa', email: null, phone: 'pas un numéro' }),
     ).rejects.toThrow();
@@ -96,7 +105,9 @@ describe('fournisseur YouFID', () => {
       phone: '+33612345678',
     });
     expect(created).toBe(true);
-    const yf = fake.customers.find((c) => c.phone === '0612345678');
+    const yf = fake.customers.find((c) => c.phone === '+33612345678');
+    // QR code d'un compte créé par téléphone : 8 chiffres commençant par 1, gardé en texte.
+    expect(member.cardCode).toMatch(/^1\d{7}$/);
     expect(member).toEqual({
       id: String(yf?.usrId),
       name: 'Léa',
@@ -199,9 +210,11 @@ describe('fournisseur YouFID', () => {
     expect((await loyalty.getMember(tenant, member.id))?.points).toBe(100 + 250 - 300 + 125);
     expect(fake.calls.filter((c) => c.route === 'transformToPresent')).toHaveLength(1);
     const scans = fake.calls.filter((c) => c.route === 'marchandCheckScanUser');
-    // Gain de la commande calculé par la règle de l'enseigne et envoyé en crédit forcé, sans montant.
+    // Gain de la commande calculé par la règle de l'enseigne et envoyé en crédit forcé ; le montant
+    // (euros exacts) l'accompagne pour les statistiques du marchand. Bienvenue et correction :
+    // crédit forcé seul.
     expect(scans.map((c) => c.body.forced_amount)).toEqual([100, 250, 125]);
-    expect(scans.every((c) => c.body.amount === undefined)).toBe(true);
+    expect(scans.map((c) => c.body.amount)).toEqual([undefined, undefined, 12.5]);
     const transform = fake.calls.find((c) => c.route === 'transformToPresent');
     expect(transform?.body.products).toEqual([{ id: 11, cost: 300, name: 'Frites offertes' }]);
     const history = await loyalty.history(tenant, member.id);
@@ -359,6 +372,92 @@ describe('fournisseur YouFID', () => {
       error: 'daily_limit',
     });
     expect(logs.some((l) => l.message.includes('passages du jour'))).toBe(true);
+  });
+
+  it('plafond de solde (MAX_POINTS_REACHED) : refus « balance_cap », à vérifier, pas « daily_limit »', async () => {
+    const { loyalty, fake, logs, store } = setup();
+    const { member } = await loyalty.join(tenant, {
+      name: 'Membre',
+      email: null,
+      phone: '+33663636363',
+    });
+    fake.state.balanceCap = 100;
+    expect(await loyalty.settleOrder(tenant, order(member.id, 'o-cap'))).toEqual({
+      ok: false,
+      error: 'balance_cap',
+    });
+    expect(await loyalty.adjustPoints(tenant, member.id, 50, 'Geste')).toEqual({
+      ok: false,
+      error: 'balance_cap',
+    });
+    const review = await store.operationsToReview(tenant.id, 10);
+    expect(review.map((o) => [o.status, o.error])).toEqual([
+      ['failed', 'balance_cap'],
+      ['failed', 'balance_cap'],
+    ]);
+    expect(logs.some((l) => l.message.includes('plafond de solde'))).toBe(true);
+    expect((await loyalty.getMember(tenant, member.id))?.points).toBe(100);
+  });
+
+  it('MAX_SCAN_REACHED → daily_limit ; AMOUNT_TOO_HIGH → refus ; code vide = succès', async () => {
+    const { loyalty, fake } = setup();
+    const { member } = await loyalty.join(tenant, {
+      name: 'Membre',
+      email: null,
+      phone: '+33664646464',
+    });
+    fake.state.maxAmount = 10;
+    expect(await loyalty.settleOrder(tenant, order(member.id, 'o-big'))).toEqual({
+      ok: false,
+      error: 'amount_too_high',
+    });
+    fake.state.maxAmount = null;
+    expect(await loyalty.settleOrder(tenant, order(member.id, 'o-ok'))).toEqual({ ok: true });
+    expect((await loyalty.getMember(tenant, member.id))?.points).toBe(225);
+  });
+
+  it('cadeau refusé par la route 6 (erreur générique) : « redeem_failed », visible au back-office', async () => {
+    const { loyalty, fake, store } = setup();
+    const { member } = await loyalty.join(tenant, {
+      name: 'Membre',
+      email: null,
+      phone: '+33665656565',
+    });
+    await loyalty.adjustPoints(tenant, member.id, 250, 'Geste');
+    fake.state.withdrawFails = true;
+    expect(await loyalty.settleOrder(tenant, order(member.id, 'o-w', { reward: true }))).toEqual({
+      ok: false,
+      error: 'redeem_failed',
+    });
+    const review = await store.operationsToReview(tenant.id, 10);
+    expect(review.map((o) => [o.kind, o.status, o.error])).toEqual([
+      ['redeem', 'failed', 'redeem_failed'],
+    ]);
+  });
+
+  it('route 10 « Duplicated user » : erreur claire, sans plantage ni lien local', async () => {
+    const { loyalty, fake, logs, store } = setup();
+    fake.state.duplicatedUser = true;
+    await expect(
+      loyalty.join(tenant, { name: 'Léa', email: null, phone: '+33666666666' }),
+    ).rejects.toBeInstanceOf(LoyaltyDuplicateCustomerError);
+    expect(logs.some((l) => l.message.includes('Duplicated user'))).toBe(true);
+    expect(await store.findLinkByPhone(tenant.id, '+33666666666')).toBeNull();
+  });
+
+  it('membre déjà lié : retrouvé par le lien local, sans nouvel appel à la route 10', async () => {
+    const { loyalty, fake } = setup();
+    await loyalty.join(tenant, { name: 'Léa', email: null, phone: '+33667676767' });
+    const before = fake.calls.filter((c) => c.route === 'registerCustomerByPhone').length;
+    expect(await loyalty.findByPhone(tenant, '+33667676767')).not.toBeNull();
+    expect(fake.calls.filter((c) => c.route === 'registerCustomerByPhone')).toHaveLength(before);
+  });
+
+  it('la durée de validité des points (route 2) n’est jamais exposée : les points n’expirent pas', async () => {
+    const { loyalty } = setup();
+    const program = await loyalty.getProgram(tenant);
+    expect(JSON.stringify(program)).not.toContain('validity');
+    expect(program).not.toHaveProperty('validity');
   });
 
   it('bonus ambassadeur : forced_amount, une seule fois par clé ; retrait refusé', async () => {
