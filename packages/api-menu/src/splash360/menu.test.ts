@@ -4,7 +4,7 @@ import type { Splash360Client } from './client';
 import { splash360MenuFixture } from './fixture';
 import { splash360MenuTastyFixture } from './fixture-tasty-v2';
 import { splash360MenuV2Fixture } from './fixture-v2';
-import { createSplash360MenuProvider, toMenu } from './menu';
+import { createSplash360MenuProvider, parseRuleValue, toMenu } from './menu';
 
 const BASE = 'https://api.splash360.fr';
 
@@ -263,5 +263,118 @@ describe('prix par mode, même option deux fois et étapes imbriquées (réponse
       pickup: 900,
       delivery: 1080,
     });
+  });
+});
+
+describe('promotions de catalogue (reglescatalogue, lot 24)', () => {
+  // Extrait réel (carte Chicken Street Siège du 25/11) : une copie de chaque règle par mode.
+  const real = [
+    {
+      reglecatalogue_id: 'modifier4_surplace',
+      type: 'catalogue',
+      mode: 'surplace',
+      start: 1780963200000,
+      end: 4936723199000,
+      min: 4,
+      max: 4,
+      quantite: 0,
+      produits: ['prd15178', 'prd15177', 'prd15176', 'prd15170', 'prd15169'],
+      selection: 'all',
+      valeur: '100%',
+      operation: -1,
+      nom: '3 acheter = 1',
+      taux: 0,
+    },
+    {
+      reglecatalogue_id: 'modifier4_emporter',
+      type: 'catalogue',
+      mode: 'emporter',
+      start: 1780963200000,
+      end: 4936723199000,
+      min: 4,
+      max: 4,
+      quantite: 0,
+      produits: ['prd15178', 'prd15177', 'prd15176', 'prd15170', 'prd15169'],
+      selection: 'all',
+      valeur: '100%',
+      operation: -1,
+      nom: '3 acheter = 1',
+      taux: 0,
+    },
+  ];
+
+  it('traduit les règles reçues, dans l’ordre, toutes copies comprises', () => {
+    const menu = toMenu({ ...splash360MenuFixture, reglescatalogue: real }, 'r', BASE);
+    expect(menu.catalogRules).toEqual([
+      expect.objectContaining({ id: 'modifier4_surplace', mode: 'surplace' }),
+      {
+        id: 'modifier4_emporter',
+        name: '3 acheter = 1',
+        mode: 'emporter',
+        startsAt: 1780963200000,
+        endsAt: 4936723199000,
+        min: 4,
+        max: 4,
+        quantity: 0,
+        productIds: ['prd15178', 'prd15177', 'prd15176', 'prd15170', 'prd15169'],
+        selection: 'all',
+        value: { kind: 'percent', hundredths: 10_000 },
+        valueLabel: '100%',
+        operation: -1,
+        vatRate: 0,
+      },
+    ]);
+  });
+
+  it('sans règle : pas de champ ; end = 0 : sans fin ; selection « one »', () => {
+    expect(toMenu(splash360MenuFixture, 'r', BASE).catalogRules).toBeUndefined();
+    const menu = toMenu(
+      {
+        ...splash360MenuFixture,
+        reglescatalogue: [
+          { ...real[1], end: 0, selection: 'one', valeur: '3.9€', operation: '1', produits: [] },
+        ],
+      },
+      'r',
+      BASE,
+    );
+    expect(menu.catalogRules?.[0]).toMatchObject({
+      endsAt: null,
+      selection: 'one',
+      value: { kind: 'fixed', cents: 390 },
+      valueLabel: '3.9€',
+      operation: 1,
+    });
+  });
+
+  it('tolérante : règle illisible écartée, champs inconnus ignorés, carte gardée', () => {
+    const menu = toMenu(
+      {
+        ...splash360MenuFixture,
+        reglescatalogue: [
+          'pas une règle',
+          { ...real[1], reglecatalogue_id: 'mode', mode: 'uber' },
+          { ...real[1], reglecatalogue_id: 'valeur', valeur: 'gratuit' },
+          { ...real[1], reglecatalogue_id: 'op', operation: 0 },
+          { ...real[1], reglecatalogue_id: 'ok', inconnu: { x: 1 }, min: 'x' },
+        ],
+      },
+      'r',
+      BASE,
+    );
+    expect(menu.catalogRules?.map((r) => [r.id, r.min])).toEqual([['ok', 0]]);
+    expect(
+      toMenu({ ...splash360MenuFixture, reglescatalogue: 'x' }, 'r', BASE).products.length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('valeur : pourcentage ou euros (point décimal, virgule tolérée)', () => {
+    expect(parseRuleValue('100%')).toEqual({ kind: 'percent', hundredths: 10_000 });
+    expect(parseRuleValue('10.5 %')).toEqual({ kind: 'percent', hundredths: 1050 });
+    expect(parseRuleValue('3,9€')).toEqual({ kind: 'fixed', cents: 390 });
+    expect(parseRuleValue('5€')).toEqual({ kind: 'fixed', cents: 500 });
+    expect(parseRuleValue('150%')).toEqual({ kind: 'percent', hundredths: 10_000 });
+    expect(parseRuleValue('-5€')).toBeNull();
+    expect(parseRuleValue(undefined)).toBeNull();
   });
 });

@@ -1,6 +1,8 @@
 import {
   cents,
   nestedOptionId,
+  type CatalogRule,
+  type CatalogRuleValue,
   type Menu,
   type MenuCategory,
   type MenuProduct,
@@ -31,8 +33,10 @@ import type { Splash360Client } from './client';
  * - `max_par_produit` : nombre de fois qu'une même option peut être choisie ;
  * - étapes imbriquées (`steps[].produit` = « ing…-typ… ») : groupes rattachés à l'option parente.
  *
- * Non traduit (questions-en-attente.md) : `composition`/`compo`, `groupes_alt`, `gifts` et
- * `reglescatalogue` (promotions de la caisse, forme insuffisante pour les appliquer en ligne).
+ * - promotions de catalogue (`reglescatalogue`, lot 24, ADR 0030) : traduites en `CatalogRule`
+ *   (`parseCatalogRules`), appliquées par `packages/core` comme en caisse.
+ *
+ * Non traduit (questions-en-attente.md) : `composition`/`compo`, `groupes_alt` et `gifts`.
  */
 const id = z.union([z.string(), z.number()]).transform(String);
 const flag = z.union([z.number(), z.boolean(), z.string()]).optional();
@@ -52,8 +56,31 @@ const modeArray = z
   .nullish()
   .catch(null);
 
+/**
+ * Règle de catalogue (réponse de Splash360 du 26/11) : lue avec tolérance, champs inconnus
+ * ignorés ; une règle illisible (mode, valeur ou opération inconnus) est écartée, jamais devinée.
+ */
+const catalogRuleSchema = z
+  .object({
+    reglecatalogue_id: id,
+    nom: z.string().optional(),
+    mode: z.string().optional(),
+    start: z.coerce.number().optional().catch(undefined),
+    end: z.coerce.number().optional().catch(undefined),
+    min: z.coerce.number().int().nonnegative().optional().catch(undefined),
+    max: z.coerce.number().int().nonnegative().optional().catch(undefined),
+    quantite: z.coerce.number().int().nonnegative().optional().catch(undefined),
+    produits: z.array(id).optional().catch(undefined),
+    selection: z.string().optional().catch(undefined),
+    valeur: z.union([z.string(), z.number()]).optional(),
+    operation: z.coerce.number().optional().catch(undefined),
+    taux: z.coerce.number().nullish().catch(null),
+  })
+  .loose();
+
 const schema = z
   .object({
+    reglescatalogue: z.array(catalogRuleSchema.nullable().catch(null)).nullish().catch(null),
     categories: z
       .array(z.object({ categorie_id: id, nom: z.string().optional() }).loose())
       .default([]),
@@ -191,7 +218,7 @@ function imageUrl(location: string | undefined, baseUrl: string): string | null 
 export function toMenu(raw: unknown, restaurantId: string, baseUrl: string): Menu {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) throw new MenuUnavailableError('Carte Splash360 illisible', parsed.error);
-  const { categories, groupes, produits, types, ingredients, steps } = parsed.data;
+  const { categories, groupes, produits, types, ingredients, steps, reglescatalogue } = parsed.data;
   const optionGroupsOf = buildOptionGroups(types, ingredients, steps);
 
   const parentRank = new Map(categories.map((c, i) => [c.categorie_id, i]));
@@ -245,13 +272,65 @@ export function toMenu(raw: unknown, restaurantId: string, baseUrl: string): Men
 
   // Une catégorie vide n'apparaît pas dans l'application.
   const used = new Set(products.map((p) => p.categoryId));
+  const catalogRules = parseCatalogRules(reglescatalogue);
   return {
     restaurantId,
     categories: menuCategories
       .filter((c) => used.has(c.id))
       .map((c, index) => ({ ...c, position: index + 1 })),
     products,
+    ...(catalogRules.length > 0 ? { catalogRules } : {}),
   };
+}
+
+const RULE_MODES = new Set(['surplace', 'emporter', 'livraison', 'all']);
+
+/**
+ * `valeur` d'une règle : « 100% » (pourcentage, centièmes de point), « 3.9€ » (euros, point
+ * décimal ; virgule tolérée). Autre forme : null (règle écartée).
+ */
+export function parseRuleValue(raw: string | number | undefined): CatalogRuleValue | null {
+  if (raw === undefined) return null;
+  const text = String(raw).trim().replace(',', '.').replace(/\s+/g, '');
+  const match = /^(\d+(?:\.\d+)?)(%|€)$/.exec(text);
+  if (!match?.[1]) return null;
+  const n = Number(match[1]);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return match[2] === '%'
+    ? { kind: 'percent', hundredths: Math.min(10_000, Math.round(n * 100)) }
+    : { kind: 'fixed', cents: cents(Math.round(n * 100)) };
+}
+
+type RawRules = z.infer<typeof schema>['reglescatalogue'];
+
+/** `reglescatalogue` → règles internes, dans l'ordre reçu (l'ordre fait la priorité). */
+export function parseCatalogRules(raw: RawRules): CatalogRule[] {
+  return (raw ?? []).flatMap((r) => {
+    if (!r) return [];
+    const mode = r.mode?.trim().toLowerCase() ?? '';
+    const value = parseRuleValue(r.valeur);
+    const operation = r.operation === 1 ? 1 : r.operation === -1 ? -1 : null;
+    if (!RULE_MODES.has(mode) || !value || operation === null) return [];
+    const end = r.end ?? 0;
+    return [
+      {
+        id: r.reglecatalogue_id,
+        name: r.nom ?? '',
+        mode: mode as CatalogRule['mode'],
+        startsAt: r.start ?? 0,
+        endsAt: end > 0 ? end : null,
+        min: r.min ?? 0,
+        max: r.max ?? 0,
+        quantity: r.quantite ?? 0,
+        productIds: r.produits ?? [],
+        selection: r.selection?.trim().toLowerCase() === 'one' ? 'one' : 'all',
+        value,
+        valueLabel: String(r.valeur).trim(),
+        operation,
+        vatRate: typeof r.taux === 'number' && Number.isFinite(r.taux) ? r.taux : null,
+      },
+    ];
+  });
 }
 
 type Parsed = z.infer<typeof schema>;
