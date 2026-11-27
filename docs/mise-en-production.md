@@ -177,6 +177,7 @@ fonction `api` qui les utilise) :
 | `20261127010000_loyalty_points_per_euro_default.sql` | 1 point par euro par défaut (lot 21) |
 | `20261128000000_splash360_webhooks.sql` | Webhooks Splash360 (lot 23) — **appliquée en production le 26/11** |
 | `20261129000000_catalog_promotions.sql` | Promotions de catalogue (lot 24) — **appliquée en production le 26/11** |
+| `20261130000000_loyalty_member_first_name.sql` | Prénom saisi gardé localement (YouFID, route 12) — **appliquée en production le 27/11** |
 
 **2. Secrets de la fonction `api` en production** (Supabase → Edge Functions → Secrets ; jamais
 dans le dépôt ni par message) :
