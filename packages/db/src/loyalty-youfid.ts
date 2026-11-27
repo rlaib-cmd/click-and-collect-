@@ -10,6 +10,7 @@ export interface YoufidLinkRecord {
   readonly qrCode: string;
   readonly phone: string | null;
   readonly email: string | null;
+  readonly firstName: string | null;
   readonly birthDate: string | null;
   readonly createdAt: string;
 }
@@ -49,7 +50,11 @@ export interface YoufidPostgresStore {
   updateLinkProfile(
     tenantId: string,
     usrId: string,
-    input: { readonly email?: string | null; readonly birthDate?: string | null },
+    input: {
+      readonly email?: string | null;
+      readonly birthDate?: string | null;
+      readonly firstName?: string | null;
+    },
   ): Promise<void>;
   deleteLink(tenantId: string, usrId: string): Promise<boolean>;
   claimOperation(
@@ -89,6 +94,7 @@ interface LinkRow {
   qr_code: string;
   phone: string | null;
   email: string | null;
+  first_name: string | null;
   birth_date: string | null;
   created_at: Date;
 }
@@ -116,6 +122,7 @@ const toLink = (r: LinkRow): YoufidLinkRecord => ({
   qrCode: r.qr_code,
   phone: r.phone,
   email: r.email,
+  firstName: r.first_name,
   birthDate: r.birth_date,
   createdAt: r.created_at.toISOString(),
 });
@@ -137,7 +144,8 @@ const toOp = (r: OpRow): LoyaltyOperationRecord => ({
 });
 
 export function createPostgresYoufidStore(sql: Sql): YoufidPostgresStore {
-  const linkCols = sql`usr_id, qr_code, phone, email, birth_date::text as birth_date, created_at`;
+  const linkCols = sql`usr_id, qr_code, phone, email, first_name,
+                       birth_date::text as birth_date, created_at`;
   const opCols = sql`id, op_key, kind, member_id, order_id, points, label, status, error,
                      response_points, attempts, created_at, updated_at`;
   return {
@@ -173,12 +181,20 @@ export function createPostgresYoufidStore(sql: Sql): YoufidPostgresStore {
       return rows.map(toLink);
     },
     async updateLinkProfile(tenantId, usrId, input) {
-      if (input.email === undefined && input.birthDate === undefined) return;
+      if (
+        input.email === undefined &&
+        input.birthDate === undefined &&
+        input.firstName === undefined
+      ) {
+        return;
+      }
       await sql`
         update public.loyalty_members_youfid set
           email = case when ${input.email !== undefined} then ${input.email ?? null} else email end,
           birth_date = case when ${input.birthDate !== undefined}
                        then ${input.birthDate ?? null}::date else birth_date end,
+          first_name = case when ${input.firstName !== undefined}
+                       then ${input.firstName ?? null} else first_name end,
           updated_at = now()
         where tenant_id = ${tenantId} and usr_id = ${usrId}`;
     },

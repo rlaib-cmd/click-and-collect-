@@ -15,6 +15,8 @@ export interface YoufidMemberLink {
   /** E.164, ou null si inconnu (client retrouvé par une recherche du back-office). */
   readonly phone: string | null;
   readonly email: string | null;
+  /** Prénom saisi dans l'application (YouFID ne l'enregistre pas toujours, route 12). */
+  readonly firstName: string | null;
   readonly birthDate: string | null;
   readonly createdAt: string;
 }
@@ -85,7 +87,11 @@ export interface YoufidStore {
   updateLinkProfile(
     tenantId: string,
     usrId: string,
-    input: { readonly email?: string | null; readonly birthDate?: string | null },
+    input: {
+      readonly email?: string | null;
+      readonly birthDate?: string | null;
+      readonly firstName?: string | null;
+    },
   ): Promise<void>;
   deleteLink(tenantId: string, usrId: string): Promise<boolean>;
 
@@ -156,6 +162,7 @@ export function createMemoryYoufidStore(now: () => Date = () => new Date()): You
             qrCode: link.qrCode,
             phone: link.phone,
             email: null,
+            firstName: null,
             birthDate: null,
             createdAt: now().toISOString(),
           };
@@ -187,6 +194,7 @@ export function createMemoryYoufidStore(now: () => Date = () => new Date()): You
               ...l,
               ...(input.email !== undefined ? { email: input.email } : {}),
               ...(input.birthDate !== undefined ? { birthDate: input.birthDate } : {}),
+              ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
             }
           : l,
       );

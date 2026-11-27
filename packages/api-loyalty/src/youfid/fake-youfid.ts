@@ -256,8 +256,17 @@ export function createFakeYoufid(options: { now: () => number }) {
     customerSubmitResponse(b) {
       const c = byId(b.user_id);
       if (!c) return { json: { status: 'error', message: 'User not found' } };
-      const q = b.question as { type: string };
+      const q = b.question as { type: string; id: number };
       if (!b.response) return err('Réponse vide', 'ERR0400', 400);
+      // Comme YouFID (27/11) : un identifiant de question inconnu (0) viole sa clé étrangère.
+      if (!q.id) {
+        return {
+          json: {
+            status: 'error',
+            message: 'SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update',
+          },
+        };
+      }
       if (q.type === 'NAME') c.prenom = String(b.response);
       if (q.type === 'EMAIL') c.email = String(b.response);
       return { json: { status: 'success', message: 'OK' } };

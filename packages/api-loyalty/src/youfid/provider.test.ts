@@ -192,6 +192,10 @@ describe('fournisseur YouFID', () => {
       ['BIRTH', 0, '1990-04-12'],
     ]);
     expect(fake.calls.some((c) => c.route === 'customerGetOrUpdateSmsOptin')).toBe(false);
+    // Question du prénom plus en attente : YouFID refuse (id 0), le prénom saisi reste affiché.
+    const again = await loyalty.updateProfile(tenant, member.id, { name: 'Mohamed' });
+    expect(again).toMatchObject({ ok: true, member: { name: 'Mohamed' } });
+    expect((await loyalty.getMember(tenant, member.id))?.name).toBe('Mohamed');
     expect(await loyalty.updateProfile(tenant, '12345', { name: 'X' })).toEqual({
       ok: false,
       error: 'unknown_member',

@@ -152,7 +152,9 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
       .join(' ');
     return {
       id: c.usrId,
-      name: name || defaultName,
+      // Prénom saisi dans l'application d'abord : YouFID ne l'enregistre que si sa question de
+      // profil est en attente (route 12), sinon il le refuse.
+      name: link?.firstName?.trim() || name || defaultName,
       email: link?.email ?? null,
       phone: (c.phone && normalizeFrenchPhone(c.phone)) ?? link?.phone ?? null,
       points: c.totalPoints,
@@ -283,7 +285,13 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
         await client.submitProfileResponse(usrId, { id, type }, response);
       } catch (error) {
         ok = false;
-        log('YouFID : profil non transmis', { field: type, error: errorCode(error) });
+        log('YouFID : profil non transmis', {
+          field: type,
+          error: errorCode(error),
+          // Message de YouFID (statut, code d'erreur), sans la réponse envoyée.
+          detail: error instanceof YoufidError ? error.message : null,
+          pending: pending ? `${pending.type}#${pending.id}` : null,
+        });
       }
     }
     return ok;
@@ -340,7 +348,10 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
       if (created) {
         const answers: [ProfileQuestionType, string][] = [];
         const name = input.name.trim();
-        if (name && name !== defaultName) answers.push(['NAME', name]);
+        if (name && name !== defaultName) {
+          answers.push(['NAME', name]);
+          await store.updateLinkProfile(tenant.id, reg.usrId, { firstName: name });
+        }
         const email = input.email?.trim().toLowerCase();
         if (email) {
           answers.push(['EMAIL', email]);
@@ -410,6 +421,7 @@ export function createYoufidLoyaltyProvider(options: YoufidProviderOptions): Loy
       await store.updateLinkProfile(tenant.id, link.usrId, {
         ...(email !== undefined ? { email } : {}),
         ...(input.birthDate !== undefined ? { birthDate: input.birthDate } : {}),
+        ...(name ? { firstName: name } : {}),
       });
       const member = await memberOf((await store.getLink(tenant.id, link.usrId)) ?? link);
       return member ? { ok: true, member } : { ok: false, error: 'unknown_member' };
